@@ -5,6 +5,7 @@ resolved relative to a configurable base directory and confined to it
 (path-traversal guard).
 """
 from __future__ import annotations
+import shutil
 from pathlib import Path
 from typing import List
 
@@ -19,7 +20,7 @@ class LocalFileSystemAdapter(IFileSystem):
     def _safe(self, absolute_path: "str | Path") -> Path:
         p = (self._base / Path(absolute_path)).resolve()
         # Confine to base directory (prevent traversal escape).
-        if self._base not in p.parents and p != self._base:
+        if self._base != p and self._base not in p.parents:
             raise ValueError(f"Path escapes base directory: {p}")
         return p
 
@@ -33,6 +34,21 @@ class LocalFileSystemAdapter(IFileSystem):
         target = self._safe(absolute_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
+        return True
+
+    def append(self, absolute_path: "str | Path", content: str) -> bool:
+        target = self._safe(absolute_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(target, "a", encoding="utf-8") as fh:
+            fh.write(content)
+        return True
+
+    def delete(self, absolute_path: "str | Path") -> bool:
+        p = self._safe(absolute_path)
+        if p.is_dir():
+            shutil.rmtree(p, ignore_errors=True)
+        elif p.exists():
+            p.unlink()
         return True
 
     def list_dir(self, absolute_path: "str | Path") -> List[str]:

@@ -54,6 +54,24 @@ python -c "import contracts, infrastructure, kernel, runtime, adapters"
   No event-sourcing runtime in this stage.
 - **No persistence:** Kernel starts from a clean slate on every restart.
   Wired capabilities live only in memory.
+- **Async model:** sync handlers run via `asyncio.to_thread`; `publish_sync` wraps
+  async handlers by best-effort (creates/borrows an event loop).
+
+## ЭТАП 9 — EventBus Persistence (JSONL via IFileSystem)
+
+`InMemoryEventBus(store=IFileSystem, base_path="events")` appends every
+published event to a human-readable JSONL file:
+`{base_path}/{topic}/{YYYY-MM-DD}.jsonl`. `get_history(topic)` merges the
+on-disk log with the in-memory buffer (survives a Kernel restart). `clear_history()`
+removes the `base_path/` tree. `IFileSystem` port gained `append()` and `delete()`.
+
+### HONEST LIMITATIONS (Stage 9)
+- **JSONL, not SQLite:** human-readable, but not indexed/queryable.
+- **Append-only, no rotation:** topic files grow unbounded.
+- **History read = full scan** of all topic files (O(n), not O(1)).
+- **No transactional guarantee:** a crash between publish and write loses that event.
+- **No compression/retention:** raw text, forever.
+
 - **Ports are independent ABCs:** IFileSystem / IEventBus / ICapabilityRegistry
   do NOT inherit IService (IService is the base for service components only).
   The spec item "all ports inherit IService" was interpreted as "all ports are
