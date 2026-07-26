@@ -51,26 +51,15 @@ _COMMANDS = (
 )
 
 
-def ensure_index(container, vault: str) -> None:
-    """Rebuild the in-memory ContentIndex if it is empty (Stage 18).
+def ensure_index(container, vault: str) -> None:  # pragma: no cover - legacy no-op
+    """REMOVED in Stage 19 (`feat(v5): Этап 19 — Index Persistence`).
 
-    The index lives in RAM only (honest limitation), so a fresh process has
-    an empty index even when the graph was restored from a snapshot AND the
-    incremental tracker reports up_to_date (which skips scanning entirely --
-    collision caught during Stage-18 integration). This helper re-reads all
-    .md files via the container-resolved ports (no adapter imports) and
-    indexes them, WITHOUT touching the graph or the crawl state file.
+    The ContentIndex is now restored from `data/index_snapshot.json` by
+    ``Kernel.initialize()``, so a cold CLI/REPL start is O(1) (no vault re-read).
+    Retained as a private, no-op stub for one release so external callers that
+    referenced it survive; it does nothing.
     """
-    index = container.resolve("ContentIndex")
-    if index.get_stats()["documents"] > 0:
-        return
-    fs = container.resolve("IFileSystem")
-    tracker = container.resolve("CrawlStateTracker")
-    for rel in tracker.scan_mtimes(vault):
-        try:
-            index.index_file(rel, fs.read_content(rel))
-        except Exception:
-            continue
+    return None
 
 
 class KnowledgeOSRepl:

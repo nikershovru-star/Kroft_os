@@ -80,7 +80,13 @@ class InMemoryGraphBuilder(IGraphBuilder):
                 "nodes": {nid: dict(node) for nid, node in self._nodes.items()},
                 "edges": [dict(e) for e in self._edges],
             }
-        fs.write_content(path, json.dumps(payload, ensure_ascii=False))
+        # Atomic write: temp file then rename onto the target (overwrite-safe).
+        tmp = path + ".tmp"
+        fs.write_content(tmp, json.dumps(payload, ensure_ascii=False))
+        if hasattr(fs, "rename"):
+            fs.rename(tmp, path)  # type: ignore[attr-defined]
+        else:  # pragma: no cover - ports without rename
+            fs.write_content(path, json.dumps(payload, ensure_ascii=False))
 
     def restore(self, fs, path: str) -> bool:
         """Load the graph from JSON via IFileSystem.

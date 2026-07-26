@@ -19,7 +19,7 @@ from typing import Optional
 from kernel import Kernel
 from infrastructure import ConfigLoader
 from services import VaultStreamCrawler, GraphQueryEngine
-from cli.repl import KnowledgeOSRepl, ensure_index
+from cli.repl import KnowledgeOSRepl
 
 # Template written by `init` if no config exists yet.
 _CONFIG_TEMPLATE = """\
@@ -113,18 +113,16 @@ def cmd_status(args, container) -> None:
 
 
 def cmd_search(args, container) -> None:
-    """Full-text search (Stage 18): AND-logic over the ContentIndex.
+    """Full-text search (Stage 19): AND-logic over the restored ContentIndex.
 
-    The index is IN-MEMORY ONLY (honest limitation), so a fresh CLI process
-    always starts with an empty index even when the graph snapshot restored
-    fine. ensure_index() rebuilds it by re-reading the vault's .md files via
-    the container ports (graph and crawl state are NOT touched).
+    The index is now RESTORED from `data/index_snapshot.json` by
+    ``Kernel.initialize()`` (Stage 19 removed the Stage-18 in-memory-only
+    rebuild). A cold start is O(1) — no vault re-read.
     """
     effective = _resolve_config(args, container)
     k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
-    k.initialize()  # restores graph from snapshot if present
+    k.initialize()  # restores graph + index from snapshot if present
     atexit.register(lambda: k.stop())
-    ensure_index(container, args.vault or ".")
     engine = container.resolve("GraphQueryEngine")
     _dump(engine.search(args.query))
 
@@ -162,10 +160,9 @@ def cmd_repl(args, container) -> None:
     k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
     k.initialize()
     k.start()
-    # Stage 18: the ContentIndex is in-memory only; if the incremental
-    # tracker makes `crawl` return up_to_date (no files rescanned), the
-    # index would stay empty in this fresh process — rebuild it up front.
-    ensure_index(container, args.vault or ".")
+    # Stage 19: the ContentIndex is restored from data/index_snapshot.json by
+    # Kernel.initialize() (cold start is O(1), no vault re-read). The old
+    # Stage-18 ensure_index() rebuild was removed.
     try:
         KnowledgeOSRepl(k, container).run()
     finally:

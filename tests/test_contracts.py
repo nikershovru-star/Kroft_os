@@ -21,7 +21,7 @@ def test_iservice_is_abstract_and_not_instantiable():
 
 def test_ifilesystem_is_abstract_port():
     assert issubclass(IFileSystem, abc.ABC)
-    expected = {"exists", "read_content", "write_content", "append", "delete", "list_dir"}
+    expected = {"exists", "read_content", "write_content", "append", "delete", "rename", "list_dir"}
     assert expected.issubset(IFileSystem.__abstractmethods__)
     with pytest.raises(TypeError):
         IFileSystem()

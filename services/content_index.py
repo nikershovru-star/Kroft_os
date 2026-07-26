@@ -23,6 +23,8 @@ import re
 from collections import Counter
 from typing import Dict, List, Set
 
+from contracts.snapshotable import ISnapshotable  # only new import (axis-clean)
+
 _TOKEN_RE = re.compile(r"\w+")
 _MIN_TOKEN_LEN = 2
 
@@ -35,7 +37,7 @@ def _tokenize(text: str) -> List[str]:
     ]
 
 
-class ContentIndex:
+class ContentIndex(ISnapshotable):
     """In-memory inverted index: word -> posting list of node_ids."""
 
     def __init__(self) -> None:
@@ -102,3 +104,25 @@ class ContentIndex:
 
     def get_stats(self) -> Dict[str, int]:
         return {"terms": len(self._index), "documents": len(self._doc_terms)}
+
+    # ----- Stage 19: ISnapshotable persistence (plain-dict, no file I/O) -----
+    def snapshot(self) -> Dict[str, Any]:
+        """Plain-dict for JSON serialization by an external store.
+
+        Only dict/list/scalar primitives so any JSON encoder round-trips it.
+        """
+        return {
+            "_index": {w: list(nodes) for w, nodes in self._index.items()},
+            "_doc_terms": {nid: dict(cnt) for nid, cnt in self._doc_terms.items()},
+        }
+
+    def restore(self, data: Dict[str, Any]) -> None:
+        """Full state replacement from a snapshot dict. O(terms + doc_terms)."""
+        self._index = {
+            w: set(nodes) for w, nodes in data.get("_index", {}).items()
+        }
+        self._doc_terms = {
+            nid: Counter(cnt) for nid, cnt in data.get("_doc_terms", {}).items()
+        }
+        # Drop any posting lists that came back empty (defensive).
+        self._index = {w: s for w, s in self._index.items() if s}

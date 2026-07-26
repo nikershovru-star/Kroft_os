@@ -22,6 +22,7 @@ class MockFS(IFileSystem):
     def write_content(self, p, c): return True
     def append(self, p, c): return True
     def delete(self, p): return True
+    def rename(self, src, dst): return True
     def list_dir(self, p):
         # Mirror the real LocalFileSystemAdapter: entries are paths RELATIVE
         # TO THE BASE (p is already relative to base). Bare child names are

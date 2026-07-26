@@ -5,6 +5,7 @@ resolved relative to a configurable base directory and confined to it
 (path-traversal guard).
 """
 from __future__ import annotations
+import os
 import shutil
 from pathlib import Path
 from typing import List
@@ -49,6 +50,14 @@ class LocalFileSystemAdapter(IFileSystem):
             shutil.rmtree(p, ignore_errors=True)
         elif p.exists():
             p.unlink()
+        return True
+
+    def rename(self, src: "str | Path", dst: "str | Path") -> bool:
+        # Atomic replace (overwrites dst) — os.replace has POSIX/Win semantics.
+        s = self._safe(src)
+        d = self._safe(dst)
+        d.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(s, d)
         return True
 
     def list_dir(self, absolute_path: "str | Path") -> List[str]:

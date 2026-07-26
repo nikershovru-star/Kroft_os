@@ -432,11 +432,13 @@ knowledgeos> search hello python
   `GraphQueryEngine` ЧИТАЕТ тот же инстанс (конвенция как с `IGraphBuilder`).
   Оба параметра duck-typed (`Optional[Any]`) — гейт
   `test_services_do_not_cross_import` запрещает sibling-импорт.
-- **`ensure_index` (cli/repl.py)**: пойманная коллизия интеграции — индекс
+- **`ensure_index` (cli/repl.py)**: ~~пойманная коллизия интеграции — индекс
   in-memory, а инкрементальный tracker при `up_to_date` вообще не сканирует
   файлы → в свежем процессе `search` был бы пуст. `cmd_search` и `cmd_repl`
   перед работой перестраивают пустой индекс, читая `.md` через порты
-  контейнера (граф и crawl-state не трогаются).
+  контейнера (граф и crawl-state не трогаются).~~ → **closed in STAGE 19**:
+  индекс восстанавливается из `data/index_snapshot.json` в `Kernel.initialize()`;
+  `ensure_index` удалён, cold start — O(1), без перечитывания vault.
 
 ### HONEST LIMITATIONS (Stage 18)
 - **Только `\w+` токенизация** — нет stemming, нет морфологии («run» и
@@ -446,15 +448,49 @@ knowledgeos> search hello python
   последовательность.
 - **Нет ранжирования TF-IDF** — результаты отсортированы по частоте
   совпадений, не по релевантности.
-- **In-memory only** — индекс в RAM, при рестарте перестраивается
+- ~~**In-memory only** — индекс в RAM, при рестарте перестраивается
   (`ensure_index` в CLI/REPL перечитывает весь vault; snapshot индекса — не
-  в этом этапе).
+  в этом этапе).~~ → **closed in STAGE 19** (snapshot/restore через `ISnapshotable`).
 - **Нет fuzzy search** — только exact match токенов.
+
+## STAGE 19 — Index Persistence (ISnapshotable + SnapshotStore)
+
+Цель: убить `ensure_index()` и сделать так, чтобы `ContentIndex` восстанавливался
+из snapshot вместе с графом. Cold start CLI/REPL стал мгновенным (O(1), без
+перечитывания vault).
+
+- **`contracts/ISnapshotable`** (Protocol, `runtime_checkable`):
+  `snapshot() -> Dict` / `restore(data: Dict) -> None`. Позволяет Kernel решать
+  «реализует ли сервис snapshot» без импорта конкретного `ContentIndex`.
+- **`services/content_index.py`** реализует `ISnapshotable` (единственный новый
+  импорт — `contracts.snapshotable`; arch-чисто: services → contracts + stdlib).
+  `snapshot()` отдаёт plain-dict (списки, не set — JSON-safe); `restore(data)`
+  делает полную замену состояния O(terms + doc_terms).
+- **`kernel/snapshot_store.py`** → `infrastructure/SnapshotStore`: атомарная
+  (tmp + `IFileSystem.rename`) запись версионированного plain-dict payload.
+  Не знает схему — Kernel собирает composite dict.
+- **`contracts/IFileSystem`** расширен `rename(src, dst)` (os.replace-семантика,
+  атомарно на POSIX+Win); реализован в `LocalFileSystemAdapter` и обоих тестовых
+  `MockFS`. `IGraphBuilder.snapshot()` тоже пишет атомарно (tmp + rename).
+- **`kernel/kernel.py`**: `initialize()` восстанавливает индекс через
+  `_try_restore_index()` (runtime_checkable `ISnapshotable` — ядро не импортирует
+  `ContentIndex`); `save()` / `stop()` / autosave пишут индекс в
+  `data/index_snapshot.json` через `SnapshotStore.save({"version": 2, "index": ...})`.
+  Граф по-прежнему персистится отдельно `IGraphBuilder` (отдельный файл, чтобы не
+  ломать Stage-12 тесты графа).
+- **Удалён `ensure_index`** из `cli/repl.py` (оставлен no-op-заглушкой на один
+  релиз для обратной совместимости внешних вызовов); `cmd_search` / `cmd_repl`
+  больше не перестраивают индекс вручную — он теперь в snapshot.
+
+### HONEST LIMITATIONS (Stage 19)
+- Snapshot не атомарен относительно краша во время записи (rename помогает, но не FS-транзакция).
+- Нет дельта-snapshot: при большом vault перезаписывается весь JSON.
+- Индекс-снапшот пишется в отдельный файл от граф-снапшота (composite-файл не использован — сохраняет существующие Stage-12 тесты графа).
 
 ## Test gates
 
 ```
-pytest tests/            # unit + e2e + arch gate (149 tests, all green)
+pytest tests/            # unit + e2e + arch gate (158 tests, all green)
 python -c "import contracts, infrastructure, kernel, runtime, adapters, services, cli"
 python -c "import services.incremental_tracker"  # exit 0
 python -c "import services.content_index"        # exit 0

@@ -27,4 +27,12 @@ class IFileSystem(ABC):
     def delete(self, absolute_path: "str | Path") -> bool: ...
 
     @abstractmethod
+    def rename(self, src: "str | Path", dst: "str | Path") -> bool:
+        """Atomically move src -> dst, overwriting dst if it exists.
+
+        Used by SnapshotStore for tear-free writes (os.replace semantics).
+        """
+        ...
+
+    @abstractmethod
     def list_dir(self, absolute_path: "str | Path") -> "list[str]": ...

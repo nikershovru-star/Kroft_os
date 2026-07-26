@@ -19,7 +19,8 @@ from enum import Enum, auto
 from typing import Any, Callable, Dict, Optional
 
 from infrastructure import DependencyContainer
-from contracts import ICapabilityRegistry, IEventBus, IGraphBuilder
+from infrastructure.snapshot_store import SnapshotStore
+from contracts import ISnapshotable, ICapabilityRegistry, IEventBus, IFileSystem, IGraphBuilder
 from runtime import RuntimeContext
 
 
@@ -47,6 +48,9 @@ class Kernel:
         # Core capabilities resolved from the container during initialize().
         self.wired: Dict[str, Any] = {}
         self._event_bus: Optional[IEventBus] = None
+        # Stage 19: composite snapshot store (graph restored in-place via
+        # IGraphBuilder.restore; ContentIndex restores through ISnapshotable).
+        self._snapshot_store: Optional["SnapshotStore"] = None
         # Stage 14: periodic autosave watchdog configuration.
         self._autosave_interval_sec = autosave_interval_sec
         self._sleep = sleep_fn if sleep_fn is not None else asyncio.sleep
@@ -73,10 +77,78 @@ class Kernel:
         self._event_bus = self.wired.get("IEventBus")
         if self._event_bus is not None:
             self._event_bus.start()
+        # Stage 19: composite snapshot store for ContentIndex (graph is
+        # persisted separately by IGraphBuilder — see _try_snapshot_graph).
+        fs = self.wired.get("IFileSystem")
+        if fs is not None:
+            self._snapshot_store = SnapshotStore(fs, self._index_snapshot_path())
         # Stage 12: attempt to recover the knowledge graph from persistent
         # storage so a kernel restart resumes where it stopped.
         self._try_restore_graph()
+        # Stage 19: restore the in-memory ContentIndex from its own snapshot
+        # so a fresh CLI/REPL process starts with a warm index (no re-crawl).
+        self._try_restore_index()
         self._state = LifecycleState.INITIALIZED
+
+    # ----- Stage 19: index persistence helpers -----
+    def _index_snapshot_path(self) -> str:
+        return "data/index_snapshot.json"
+
+    def _try_restore_index(self) -> None:
+        """Best-effort ContentIndex recovery on initialize().
+
+        Resolves a registered ContentIndex (or any ISnapshotable service keyed
+        "ContentIndex") and restores it from the index snapshot file. No-op if
+        no store / no index service, or the file is missing/corrupt (silent
+        fallback — a fresh process simply starts with an empty index).
+        """
+        store = self._snapshot_store
+        if store is None:
+            return
+        index = self._resolve_snapshotable("ContentIndex")
+        if index is None:
+            return
+        data = store.load()
+        if data is None or "index" not in data:
+            return
+        try:
+            index.restore(data["index"])
+            self.emit("IndexRestored", {"path": self._index_snapshot_path()})
+        except Exception:
+            # Corrupt index payload — leave the index empty, never crash boot.
+            pass
+
+    def _resolve_snapshotable(self, key: str):
+        """Return a registered service that implements ISnapshotable, else None.
+
+        Uses runtime_checkable typing.Protocol so we never import the concrete
+        ContentIndex at the kernel layer (axis-clean: kernel depends only on
+        contracts.ISnapshotable, not on services).
+        """
+        if not self.container.has(key):
+            return None
+        svc = self.container.resolve(key)
+        if isinstance(svc, ISnapshotable):
+            return svc
+        return None
+
+    def _try_snapshot_index(self) -> None:
+        """Best-effort ContentIndex persistence on save()/stop()/autosave.
+
+        Emits IndexSnapshotted via IEventBus. No-op if unwired; silent on write
+        failure (no backoff, no retry).
+        """
+        store = self._snapshot_store
+        if store is None:
+            return
+        index = self._resolve_snapshotable("ContentIndex")
+        if index is None:
+            return
+        try:
+            store.save({"version": 2, "index": index.snapshot()})
+            self.emit("IndexSnapshotted", {"path": self._index_snapshot_path()})
+        except Exception:
+            pass
 
     # ----- Stage 12: graph persistence helpers -----
     def _graph_snapshot_path(self) -> str:
@@ -115,6 +187,8 @@ class Kernel:
             self.emit("GraphSnapshotted", {"path": self._graph_snapshot_path()})
         except Exception:
             pass
+        # Stage 19: persist the ContentIndex alongside the graph.
+        self._try_snapshot_index()
 
     def start(self) -> None:
         """Bring the kernel to RUNNING, initializing registered services."""

@@ -29,6 +29,11 @@ class MockFS(IFileSystem):
         self._store.pop(p, None)
         self.deleted.append(p)
         return True
+    def rename(self, src, dst):
+        if src in self._store:
+            self._store[dst] = self._store.pop(src)
+        self.written.append(dst)  # record the final (post-rename) path
+        return True
     def list_dir(self, p):
         return [k.split("/")[-1] for k in self._store if k.startswith(str(p) + "/")]
 

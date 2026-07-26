@@ -227,3 +227,35 @@
 - HONEST LIMITATIONS (Stage 18): see README "HONEST LIMITATIONS (Stage 18)"
   (\w+ only, no stemming; no stop-words; no phrase search; no TF-IDF; RAM
   only -- rebuilt per process; no fuzzy match).
+
+## v5.0.0 (Stage 19)
+- `contracts.ISnapshotable` (Protocol, runtime_checkable): `snapshot() -> dict`
+  / `restore(data) -> None`. Lets the Kernel decide "does this service
+  implement snapshot?" without importing the concrete class.
+- `services.ContentIndex` now implements `ISnapshotable`: `snapshot()` returns a
+  plain-dict (lists, not sets — JSON-safe); `restore()` does a full state
+  replacement O(terms + doc_terms). Single new import: `contracts.snapshotable`
+  (axis-clean: services -> contracts + stdlib only).
+- `infrastructure.SnapshotStore`: atomic (tmp + rename via `IFileSystem.rename`)
+  JSON read/write of an arbitrary plain-dict payload. Does NOT know the schema
+  — the Kernel builds the composite dict.
+- `contracts.IFileSystem` gains `rename(src, dst)` (os.replace semantics,
+  atomic on POSIX+Win); implemented in `LocalFileSystemAdapter` and both test
+  MockFS ports. Graph `snapshot()` now also writes atomically (tmp + rename).
+- `Kernel` persists the index: `save()` / `stop()` / autosave call
+  `_try_snapshot_index()` -> `SnapshotStore.save({"version": 2, "index": ...})`
+  at `data/index_snapshot.json`. Graph still persisted separately by
+  `IGraphBuilder` (no composite file — preserves Stage-12 graph tests).
+- `Kernel.initialize()` restores the index from the snapshot via
+  `_try_restore_index()` using `runtime_checkable ISnapshotable` — the kernel
+  never imports `ContentIndex`. Cold CLI/REPL start is now O(1) (no vault
+  re-read); the Stage-18 `ensure_index()` RAM-rebuild was REMOVED.
+- Backward compatible: a v1 snapshot (no `index` key) loads with an empty
+  index; `GraphQueryEngine(..., index=None)` still returns [] for search.
+- 9 new tests (tests/test_index_persistence.py): snapshot round-trip / atomic
+  write / store load / ISnapshotable contract / Kernel restores index from v2
+  snapshot / Kernel saves v2 snapshot / v1 backward-compat / remove-after-restore
+  / engine-without-index regression. Full suite now 158 green; Arch Gate green.
+- HONEST LIMITATIONS (Stage 19): see README "HONEST LIMITATIONS (Stage 19)"
+  (snapshot not crash-atomic vs FS; no delta-snapshot — whole JSON rewritten on
+  each save; index snapshot separate from graph snapshot file).
