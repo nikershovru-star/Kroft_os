@@ -7,6 +7,7 @@ from .i_file_system import IFileSystem
 from .i_event_bus import IEventBus
 from .i_capability_registry import ICapabilityRegistry
 from .igraph_builder import IGraphBuilder
+from .igraph_query import IGraphQuery
 
 __all__ = [
     "IService",
@@ -14,4 +15,5 @@ __all__ = [
     "IEventBus",
     "ICapabilityRegistry",
     "IGraphBuilder",
+    "IGraphQuery",
 ]

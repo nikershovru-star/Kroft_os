@@ -104,3 +104,33 @@ def test_each_layer_respects_its_axis():
     }
     for pkg, expected in expectations.items():
         assert ALLOWED[pkg] == expected
+
+
+def test_services_do_not_cross_import():
+    """Stage 11 gate: service modules must not import sibling service modules.
+
+    Application services communicate ONLY through shared contracts.* ports
+    (e.g. VaultStreamCrawler writes to an IGraphBuilder, GraphQueryEngine reads
+    from the same IGraphBuilder). A direct `from services.X import ...` inside a
+    service module is a forbidden cross-service dependency.
+    """
+    services_dir = ROOT / "services"
+    violations = []
+    for py in services_dir.rglob("*.py"):
+        tree = ast.parse(py.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                mod = node.module or ""
+                if mod.split(".")[0] == "services":
+                    violations.append(
+                        f"{py.relative_to(ROOT)}:{node.lineno} imports '{mod}'"
+                    )
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split(".")[0] == "services":
+                        violations.append(
+                            f"{py.relative_to(ROOT)}:{node.lineno} imports '{alias.name}'"
+                        )
+    assert not violations, (
+        "SERVICE CROSS-IMPORT GATE FAILED:\n" + "\n".join(violations)
+    )

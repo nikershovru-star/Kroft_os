@@ -32,3 +32,15 @@
 - EventBus merge dedup hardened: keyed by full record content (not topic+timestamp)
   to avoid collapsing distinct sub-microsecond events (fixes intermittent
   test_history_merge_memory_and_disk).
+
+## v5.0.0 (Stage 11)
+- NEW application service `services.GraphQueryEngine` (2nd IService) implementing
+  `contracts.IGraphQuery` (backlinks / forward_links / nodes_by_tag / orphan_nodes
+  / path[BFS] / cluster_by_tag / stats). Pure read-only, snapshot-on-read.
+- NEW port `contracts.IGraphQuery` (inherits IService).
+- Service-to-service proof: VaultStreamCrawler WRITES + GraphQueryEngine READS the
+  same shared IGraphBuilder (no direct cross-service imports). E2E test + new arch
+  gate `test_services_do_not_cross_import` enforce the contract.
+- 14 new tests (10 unit + 4 e2e); full suite now 85 green. Arch Gate 3/3 green.
+- HONEST LIMITATIONS: in-memory graph only, structural (not semantic) queries,
+  exact-match BFS path, no pagination, no caching, no transactions, orphan = zero-degree.

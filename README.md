@@ -76,10 +76,49 @@ get_neighbors / clear). Implemented by `infrastructure.InMemoryGraphBuilder`
   dangling reference) — graph still contains the node, edges only exist where
   a source file was actually crawled.
 
+## STAGE 11 — Graph Query Engine (second application IService)
+
+`services/graph_query_engine.py` → `GraphQueryEngine` implements
+`contracts.IGraphQuery`. It is a PURE READ-ONLY engine: every query pulls a
+fresh deep-copy snapshot via `IGraphBuilder.get_graph()` and never mutates the
+graph (safe to run while VaultStreamCrawler is still writing).
+
+New port: `contracts.IGraphQuery` (inherits IService) — `backlinks`,
+`forward_links`, `nodes_by_tag`, `orphan_nodes`, `path` (BFS shortest path
+with `max_depth` guard), `cluster_by_tag`, `stats`.
+
+### Service-to-service via shared port (hexagonal proof)
+`VaultStreamCrawler` WRITES to a shared `IGraphBuilder`; `GraphQueryEngine`
+READS from the SAME instance. The two services never import each other — they
+are coupled only through ports. `tests/test_graph_query_e2e.py` proves the
+crawler can build a graph and the query engine answers correctly against it,
+while `tests/test_architecture.py::test_services_do_not_cross_import` enforces
+that no service module imports another service module.
+
+### HONEST LIMITATIONS (Stage 11)
+- **In-memory graph only:** no persistence — on restart the graph is empty.
+  The query engine has nothing to query until a crawler rebuilds it.
+- **Structural, not semantic:** queries are link/tag topology only. No LLM,
+  no embeddings, no fuzzy/semantic search. `path()` matches exact node IDs.
+- **Exact-match path:** BFS over exact `from`/`to` IDs. A dangling wiki-link
+  target (`[[MissingNote]]`) is a real node only if the crawler added it as a
+  node; otherwise `path()` to it returns None.
+- **No pagination:** `nodes_by_tag` / `cluster_by_tag` return full lists.
+- **No caching:** every query re-scans the snapshot (O(n) or O(edges) for most
+  operations; `path()` is O(V+E) BFS).
+- **No transactions:** the crawler may mutate the live graph mid-query; the
+  engine operates on a point-in-time snapshot, so results reflect the graph
+  state at query start (no partial-update visibility).
+- **orphan_nodes semantics:** a node is an "orphan" only if it has ZERO edges
+  (in-degree 0 AND out-degree 0). A node that links out but is never linked to
+  (e.g. the vault "hub") is NOT counted as orphan. (Documented divergence from
+  the prose "no back-links" definition — the Stage-11 test suite defines the
+  contract as zero-degree.)
+
 ## Test gates
 
 ```
-pytest tests/            # unit + e2e + arch gate (69 tests, all green)
+pytest tests/            # unit + e2e + arch gate (85 tests, all green)
 python -c "import contracts, infrastructure, kernel, runtime, adapters, services"
 ```
 
