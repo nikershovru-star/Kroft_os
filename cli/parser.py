@@ -15,6 +15,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     pc = sub.add_parser("crawl", help="Crawl a Vault and build the knowledge graph")
     pc.add_argument("--vault", required=True, help="Path to the vault directory")
+    pc.add_argument("--autosave", type=float, default=60.0,
+                    help="Graph autosave interval in seconds (default 60; 0 disables)")
 
     pq = sub.add_parser("query", help="Query the knowledge graph")
     pq.add_argument("--vault", required=True, help="Path to the vault directory")
@@ -26,6 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     ps = sub.add_parser("status", help="Show kernel state and graph size")
     ps.add_argument("--vault", required=True, help="Path to the vault directory")
+    ps.add_argument("--autosave", type=float, default=60.0,
+                    help="Graph autosave interval in seconds (default 60; 0 disables)")
 
     pst = sub.add_parser("stop", help="Graceful shutdown (pid-file only; no daemon)")
     pst.add_argument("--vault", required=True, help="Path to the vault directory")

@@ -5,6 +5,7 @@ drive Kernel init -> start -> stop, print a JSON result to stdout. There is NO
 long-running daemon -- every invocation spins the Kernel up and tears it down.
 """
 from __future__ import annotations
+import atexit
 import asyncio
 import json
 import os
@@ -27,9 +28,12 @@ def cmd_init(args, container: Optional[object] = None) -> None:
 
 
 def cmd_crawl(args, container) -> None:
-    k = Kernel(container)
+    k = Kernel(container, autosave_interval_sec=getattr(args, "autosave", None))
     k.initialize()
     k.start()
+    # Stage 14: guarantee a final snapshot on graceful exit
+    # (sys.exit / normal return / KeyboardInterrupt / SIGTERM).
+    atexit.register(lambda: k.stop())
     crawler = container.resolve("VaultStreamCrawler")
     asyncio.run(crawler.crawl())
     k.stop()  # persists snapshot before teardown
@@ -37,8 +41,11 @@ def cmd_crawl(args, container) -> None:
 
 
 def cmd_query(args, container) -> None:
-    k = Kernel(container)
+    k = Kernel(container, autosave_interval_sec=getattr(args, "autosave", None))
     k.initialize()  # restores graph from snapshot if present
+    # Stage 14: atexit guarantees snapshot on graceful exit if the command
+    # mutates/owns the graph lifecycle.
+    atexit.register(lambda: k.stop())
     engine = container.resolve("GraphQueryEngine")
     if args.backlinks is not None:
         result = engine.backlinks(args.backlinks)
@@ -54,8 +61,9 @@ def cmd_query(args, container) -> None:
 
 
 def cmd_status(args, container) -> None:
-    k = Kernel(container)
+    k = Kernel(container, autosave_interval_sec=getattr(args, "autosave", None))
     k.initialize()  # restores graph from snapshot if present
+    atexit.register(lambda: k.stop())
     graph = container.resolve("IGraphBuilder")
     _dump({
         "state": k.state.name,

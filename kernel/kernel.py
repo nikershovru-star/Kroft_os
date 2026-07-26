@@ -4,10 +4,19 @@ The kernel owns a single DependencyContainer (the composition root) and
 drives a strict lifecycle state machine. It does NOT import concrete
 adapters; everything is resolved through the container (including the
 event bus, referenced only via contracts.IEventBus).
+
+Stage 14: a background autosave watchdog can be enabled via
+`autosave_interval_sec`. While RUNNING, a dedicated daemon thread drives its
+own asyncio event loop running `_autosave_loop()`, which snapshots the graph
+every interval and emits `GraphAutosaved`. The timer is injectable (sleep_fn /
+clock) so tests can drive ticks without real wall-clock waiting.
 """
 from __future__ import annotations
+import asyncio
+import threading
+from datetime import datetime, timezone
 from enum import Enum, auto
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from infrastructure import DependencyContainer
 from contracts import ICapabilityRegistry, IEventBus, IGraphBuilder
@@ -24,7 +33,13 @@ class LifecycleState(Enum):
 class Kernel:
     """Microkernel: composition root + lifecycle state machine."""
 
-    def __init__(self, container: Optional[DependencyContainer] = None) -> None:
+    def __init__(
+        self,
+        container: Optional[DependencyContainer] = None,
+        autosave_interval_sec: Optional[float] = None,
+        sleep_fn: Optional[Callable[[float], Any]] = None,
+        clock: Optional[Callable[[], Any]] = None,
+    ) -> None:
         self.container = container if container is not None else DependencyContainer()
         self._state = LifecycleState.UNINITIALIZED
         self._services: Dict[str, Any] = {}
@@ -32,6 +47,13 @@ class Kernel:
         # Core capabilities resolved from the container during initialize().
         self.wired: Dict[str, Any] = {}
         self._event_bus: Optional[IEventBus] = None
+        # Stage 14: periodic autosave watchdog configuration.
+        self._autosave_interval_sec = autosave_interval_sec
+        self._sleep = sleep_fn if sleep_fn is not None else asyncio.sleep
+        self._clock = clock if clock is not None else (lambda: datetime.now(timezone.utc))
+        self._autosave_task: Optional["asyncio.Task[None]"] = None
+        self._autosave_event_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._autosave_thread: Optional[threading.Thread] = None
 
     @property
     def state(self) -> LifecycleState:
@@ -79,9 +101,10 @@ class Kernel:
             self.emit("GraphRestored", {"path": self._graph_snapshot_path()})
 
     def _try_snapshot_graph(self) -> None:
-        """Best-effort graph persistence on stop().
+        """Best-effort graph persistence on stop()/autosave.
 
         Emits GraphSnapshotted via IEventBus. No-op if graph/fs unwired.
+        On write failure the snapshot is silently skipped (no backoff, no retry).
         """
         graph = self.wired.get("IGraphBuilder")
         fs = self.wired.get("IFileSystem")
@@ -104,11 +127,26 @@ class Kernel:
             self._services[name] = svc
         self.emit("kernel.lifecycle", {"type": "kernel.started"})
         self._state = LifecycleState.RUNNING
+        # Stage 14: launch the background autosave watchdog (no-op unless configured).
+        self._start_autosave()
 
     def stop(self) -> None:
-        """Halt the kernel."""
+        """Halt the kernel.
+
+        Idempotent: calling stop() again (e.g. an atexit hook firing after an
+        explicit stop(), or on an UNINITIALIZED kernel) is a safe no-op. This
+        is required for the Stage 14 atexit guarantee — a graceful exit must
+        not raise if the command already tore the kernel down.
+        """
+        if self._state == LifecycleState.STOPPED:
+            return
         if self._state != LifecycleState.RUNNING:
-            raise RuntimeError(f"stop() called in {self._state.name}")
+            # UNINITIALIZED/INITIALIZED: nothing was started; nothing to stop.
+            self._state = LifecycleState.STOPPED
+            return
+        # Stage 14: cancel the autosave watchdog first so it does not race with
+        # (or outlive) the final shutdown snapshot.
+        self._stop_autosave()
         # Stage 12: persist the knowledge graph before halting.
         self._try_snapshot_graph()
         self.emit("kernel.lifecycle", {"type": "kernel.stopped"})
@@ -116,6 +154,68 @@ class Kernel:
         if self._event_bus is not None:
             self._event_bus.stop()
         self._state = LifecycleState.STOPPED
+
+    # ----- Stage 14: periodic autosave watchdog -----
+    def _start_autosave(self) -> None:
+        """Launch the background autosave timer (no-op unless configured).
+
+        Only runs when autosave_interval_sec > 0 AND both IGraphBuilder and
+        IFileSystem are wired (persistence requires both). Runs a dedicated
+        asyncio event loop on a daemon thread so the watchdog keeps ticking
+        while the synchronous CLI command continues.
+        """
+        if self._autosave_interval_sec is None or self._autosave_interval_sec <= 0:
+            return
+        if self.wired.get("IGraphBuilder") is None or self.wired.get("IFileSystem") is None:
+            return
+        if self._autosave_task is not None:
+            return
+        self._autosave_event_loop = asyncio.new_event_loop()
+        self._autosave_task = self._autosave_event_loop.create_task(self._autosave_loop())
+        self._autosave_thread = threading.Thread(
+            target=self._run_autosave_loop, daemon=True
+        )
+        self._autosave_thread.start()
+
+    def _run_autosave_loop(self) -> None:
+        """Target for the watchdog daemon thread: drive its own event loop."""
+        loop = self._autosave_event_loop
+        if loop is None:
+            return
+        try:
+            loop.run_forever()
+        finally:
+            loop.close()
+
+    async def _autosave_loop(self) -> None:
+        """Background coroutine: snapshot the graph every interval while RUNNING.
+
+        Uses an injectable sleep (self._sleep) so tests can drive ticks without
+        real wall-clock waiting, and an injectable clock (self._clock) for the
+        GraphAutosaved timestamp. Cancellation at shutdown breaks the loop.
+        """
+        interval = self._autosave_interval_sec
+        while self._state == LifecycleState.RUNNING:
+            try:
+                await self._sleep(interval)
+            except asyncio.CancelledError:
+                break
+            if self._state != LifecycleState.RUNNING:
+                break
+            self._try_snapshot_graph()
+            self.emit("GraphAutosaved", {"timestamp": self._clock().isoformat()})
+
+    def _stop_autosave(self) -> None:
+        """Cancel the watchdog task and stop its thread/loop (best effort)."""
+        task = self._autosave_task
+        loop = self._autosave_event_loop
+        self._autosave_task = None
+        if task is not None and loop is not None:
+            loop.call_soon_threadsafe(task.cancel)
+            loop.call_soon_threadsafe(loop.stop)
+        if self._autosave_thread is not None:
+            self._autosave_thread.join(timeout=2.0)
+            self._autosave_thread = None
 
     def emit(self, topic: str, event: dict) -> None:
         """Proxy to the wired event bus. No-op if no bus registered."""

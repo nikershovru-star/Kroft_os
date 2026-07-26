@@ -198,6 +198,44 @@ python main.py status --vault ./my-vault
   `IFileSystem` (base=vault), поэтому восстановление cwd-независимо, но
   требует того же `--vault` при перезапуске.
 
+## STAGE 14 — Periodic Autosave & Watchdog
+
+Закрыто честное ограничение Этапа 13: «Snapshot — только на Kernel.stop().
+Crash между вызовами = потеря данных.» Теперь граф автоматически снимется
+по таймеру, и гарантирован final-snapshot при graceful exit.
+
+- `Kernel(autosave_interval_sec=…)`: при `start()` (если задан интервал > 0
+  и wired IGraphBuilder + IFileSystem) запускает фоновый watchdog — отдельный
+  daemon-поток со своим asyncio-loop, крутящий `_autosave_loop()`. Каждые N
+  секунд: `graph.snapshot()` + emit `GraphAutosaved {timestamp}`.
+- `stop()` идемпотентен: повторный вызов (atexit после явного stop, или на
+  UNINITIALIZED) — безопасный no-op, не бросает RuntimeError.
+- `atexit` hook: `cli/commands.py` регистрирует `atexit.register(lambda: k.stop())`
+  после `k.start()`, гарантируя snapshot при sys.exit / KeyboardInterrupt /
+  SIGTERM (частично — см. ограничения).
+- CLI: `--autosave SECONDS` у команд `crawl` и `status` (default 60; 0 — выкл).
+
+```bash
+python main.py crawl --vault ./my-vault --autosave 30   # snapshot каждые 30s
+python main.py status --vault ./my-vault --autosave 30
+```
+
+### HONEST LIMITATIONS (Stage 14)
+- **Autosave — только graph snapshot**, не полное состояние Kernel (capabilities,
+  event-bus history, runtime-context вне scope).
+- **Интервал — wall-clock через injectable sleep** (`asyncio.sleep` по умолчанию),
+  не точный real-time: дрейфует при долгих операциях и при выгрузке потока.
+- **atexit не ловит `kill -9` (SIGKILL):** гарантия только для graceful exit
+  (normal return, sys.exit, KeyboardInterrupt, SIGTERM). При SIGKILL данные
+  теряются между snapshot.
+- **Нет backoff при ошибке записи:** при fail `snapshot()` просто пропускается
+  (тихий no-op, без повтора и без алерта).
+- **Нет differential save:** всё ещё FULL JSON snapshot каждый раз (O(n+m)),
+  как в Этапе 12.
+- **Watchdog — daemon-поток:** при жёстком завершении процесса не дожидается
+  финального тика; последний гарантированный snapshot — либо по таймеру, либо
+  по atexxit/stop.
+
 ## Test gates
 
 ```

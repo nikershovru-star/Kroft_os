@@ -77,3 +77,23 @@
 - 12 new tests (8 unit + 4 e2e); full suite now 109 green. Arch Gate 4/4
   (cli allowed: {contracts, infrastructure, kernel, services}).
 - HONEST LIMITATIONS (Stage 13): see README "HONEST LIMITATIONS (Stage 13)".
+
+## v5.0.0 (Stage 14)
+- Periodic Autosave & Watchdog: Kernel gains `autosave_interval_sec`. On
+  start() (if interval > 0 AND IGraphBuilder + IFileSystem wired) launches a
+  background daemon-thread asyncio loop running `_autosave_loop()` that calls
+  `graph.snapshot()` every N seconds and emits `GraphAutosaved {timestamp}`.
+- `Kernel.stop()` is now IDEMPOTENT (re-call on STOPPED/UNINITIALIZED is a
+  safe no-op) — required so the atexit hook cannot raise on a kernel already
+  torn down.
+- atexit hook in cli/commands.py: `atexit.register(lambda: k.stop())` after
+  k.start() guarantees a final snapshot on graceful exit (sys.exit /
+  KeyboardInterrupt / SIGTERM).
+- CLI: `--autosave SECONDS` added to `crawl` and `status` (default 60; 0 off).
+  Passed into Kernel via main.build_container wiring.
+- No new ports / no new layer (kernel + cli + main only). Arch gate unchanged.
+- 6 new tests (test_autosave.py); full suite now 115 green. Arch Gate 4/4.
+- HONEST LIMITATIONS (Stage 14): graph-snapshot only (not full Kernel state);
+  wall-clock injectable interval (not exact real-time); atexit does NOT catch
+  SIGKILL; no backoff on write failure (silent skip); still full JSON snapshot
+  (no differential); watchdog is a daemon thread (no final tick on hard kill).
