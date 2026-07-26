@@ -6,6 +6,7 @@ Enforces the hexagonal dependency contract:
   kernel.*          -> contracts, infrastructure, runtime + stdlib (NEVER adapters)
   runtime.*         -> contracts + stdlib
   adapters.*        -> contracts + stdlib
+  services.*        -> contracts + stdlib  (application layer, NEVER adapters/infra)
 """
 import ast
 import sys
@@ -15,7 +16,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 
-PROJECT_PKGS = {"contracts", "infrastructure", "kernel", "runtime", "adapters"}
+PROJECT_PKGS = {"contracts", "infrastructure", "kernel", "runtime", "adapters", "services"}
 
 ALLOWED = {
     "contracts": set(),
@@ -23,6 +24,7 @@ ALLOWED = {
     "kernel": {"contracts", "infrastructure", "runtime"},
     "runtime": {"contracts"},
     "adapters": {"contracts"},
+    "services": {"contracts"},
 }
 
 STDLIB_BASES = {
@@ -38,10 +40,8 @@ def _file_package(path: Path) -> str:
 
 
 def _imported_project_packages(node: ast.AST, file_pkg: str):
-    """Yield project package names this import node depends on."""
     if isinstance(node, ast.ImportFrom):
         if node.level and node.level > 0:
-            # relative import -> same package (always allowed)
             return
         if node.module is None:
             return
@@ -94,13 +94,13 @@ def test_no_forbidden_cross_layer_imports():
 
 
 def test_each_layer_respects_its_axis():
-    # Explicit, readable per-layer assertion.
     expectations = {
         "contracts": set(),
         "infrastructure": {"contracts"},
         "kernel": {"contracts", "infrastructure", "runtime"},
         "runtime": {"contracts"},
         "adapters": {"contracts"},
+        "services": {"contracts"},
     }
     for pkg, expected in expectations.items():
         assert ALLOWED[pkg] == expected

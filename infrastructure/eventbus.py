@@ -133,12 +133,12 @@ class InMemoryEventBus(IEventBus):
                 return [dict(e) for e in self._history]
             return [dict(e) for e in self._history if e.get("topic") == topic]
         disk = self._read_disk(topic)
-        merged: Dict[Any, dict] = {}
+        merged: Dict[str, dict] = {}
         for e in disk:
-            merged[(e.get("topic"), e.get("timestamp"))] = e
+            merged[json.dumps(e, sort_keys=True)] = e
         for e in self._history:
             if e.get("topic") == topic:
-                merged.setdefault((e.get("topic"), e.get("timestamp")), e)
+                merged.setdefault(json.dumps(e, sort_keys=True), e)
         return sorted(merged.values(), key=lambda x: x.get("timestamp") or "")
 
     def clear_history(self) -> None:

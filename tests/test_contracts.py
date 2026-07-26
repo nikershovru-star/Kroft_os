@@ -8,12 +8,12 @@ from contracts import (
     IFileSystem,
     IEventBus,
     ICapabilityRegistry,
+    IGraphBuilder,
 )
 
 
 def test_iservice_is_abstract_and_not_instantiable():
     assert issubclass(IService, abc.ABC)
-    # ABC with abstract methods cannot be instantiated directly.
     with pytest.raises(TypeError):
         IService()
 
@@ -22,7 +22,6 @@ def test_ifilesystem_is_abstract_port():
     assert issubclass(IFileSystem, abc.ABC)
     expected = {"exists", "read_content", "write_content", "append", "delete", "list_dir"}
     assert expected.issubset(IFileSystem.__abstractmethods__)
-    # base cannot be instantiated -> abstract methods unimplemented
     with pytest.raises(TypeError):
         IFileSystem()
 
@@ -43,12 +42,26 @@ def test_icapabilityregistry_is_abstract_port():
         ICapabilityRegistry()
 
 
+def test_igraph_builder_is_service_port():
+    # IGraphBuilder is a SERVICE-style port: it inherits IService.
+    assert issubclass(IGraphBuilder, IService)
+    assert issubclass(IGraphBuilder, abc.ABC)
+    expected = {
+        "add_node", "add_edge", "get_graph", "get_neighbors", "clear",
+        "name", "initialize", "execute",
+    }
+    assert expected.issubset(IGraphBuilder.__abstractmethods__)
+    with pytest.raises(TypeError):
+        IGraphBuilder()
+
+
 def test_all_ports_are_abstract_base_contracts():
-    # DESIGN NOTE (hexagonal, per Stage 2): sibling ports are independent
-    # ABCs and do NOT inherit IService. IService is the canonical base for
-    # *service* components only. The user spec item "all ports inherit
-    # IService" is interpreted here as "all ports are abstract base
-    # contracts". Flagged for architectural review - no fake pass.
-    for port in (IService, IFileSystem, IEventBus, ICapabilityRegistry):
+    # Sibling ports are independent ABCs and do NOT inherit IService.
+    sibling_ports = (IFileSystem, IEventBus, ICapabilityRegistry)
+    for port in sibling_ports:
         assert issubclass(port, abc.ABC)
+        assert not issubclass(port, IService)
+    # Service-style ports DO inherit IService (IGraphBuilder, services).
+    assert issubclass(IGraphBuilder, IService)
+    assert issubclass(IGraphBuilder, abc.ABC)
     assert issubclass(IService, abc.ABC)
