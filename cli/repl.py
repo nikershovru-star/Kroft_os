@@ -43,11 +43,34 @@ _COMMANDS = (
     ("query path FROM TO", "shortest path FROM -> TO (BFS)"),
     ("query orphans", "nodes with zero edges"),
     ("query tags TAG", "nodes carrying <TAG>"),
+    ("search QUERY", "full-text AND-search over indexed .md content"),
     ("status", "show kernel state + graph size"),
     ("save", "force a graph snapshot (GraphSnapshotted)"),
     ("exit / quit", "graceful shutdown and leave the REPL"),
     ("help", "show this command list"),
 )
+
+
+def ensure_index(container, vault: str) -> None:
+    """Rebuild the in-memory ContentIndex if it is empty (Stage 18).
+
+    The index lives in RAM only (honest limitation), so a fresh process has
+    an empty index even when the graph was restored from a snapshot AND the
+    incremental tracker reports up_to_date (which skips scanning entirely --
+    collision caught during Stage-18 integration). This helper re-reads all
+    .md files via the container-resolved ports (no adapter imports) and
+    indexes them, WITHOUT touching the graph or the crawl state file.
+    """
+    index = container.resolve("ContentIndex")
+    if index.get_stats()["documents"] > 0:
+        return
+    fs = container.resolve("IFileSystem")
+    tracker = container.resolve("CrawlStateTracker")
+    for rel in tracker.scan_mtimes(vault):
+        try:
+            index.index_file(rel, fs.read_content(rel))
+        except Exception:
+            continue
 
 
 class KnowledgeOSRepl:
@@ -132,6 +155,9 @@ class KnowledgeOSRepl:
         if verb == "query":
             self._do_query(parts[1:])
             return
+        if verb == "search":
+            self._do_search(parts[1:])
+            return
         # Unknown command: report and continue (does NOT crash the session).
         print(
             f"unknown command: {verb!r} (type 'help' for the command list)",
@@ -181,6 +207,14 @@ class KnowledgeOSRepl:
             "graph_nodes": len(g["nodes"]),
             "graph_edges": len(g["edges"]),
         }, ensure_ascii=False))
+
+    def _do_search(self, args: List[str]) -> None:
+        """Full-text AND-search (Stage 18) via the shared ContentIndex."""
+        if not args:
+            print("search: missing QUERY", file=sys.stderr)
+            return
+        engine = self._container.resolve("GraphQueryEngine")
+        print(json.dumps(engine.search(" ".join(args)), ensure_ascii=False))
 
     def _do_save(self) -> None:
         """Force a graph snapshot while the kernel keeps running."""

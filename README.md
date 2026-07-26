@@ -71,8 +71,9 @@ get_neighbors / clear). Implemented by `infrastructure.InMemoryGraphBuilder`
   → persistence closed in **STAGE 12** (snapshot/restore); incremental crawl
   closed in **STAGE 17** (`CrawlStateTracker`, mtime-based differential update).
 - **Single vault:** one root path per crawl. No multi-vault federation.
-- **No content indexing:** the crawler stores node labels + extracted tags in
-  metadata but does NOT index full file text for search.
+- **No content indexing:** ~~the crawler stores node labels + extracted tags in
+  metadata but does NOT index full file text for search.~~
+  → closed in **STAGE 18** (`ContentIndex`, inverted index + `search` command).
 - **No dedup of wiki-link targets:** a `[[MissingNote]]` with no backing file
   becomes a node with no inbound graph edge from the filesystem (recorded as a
   dangling reference) — graph still contains the node, edges only exist where
@@ -393,12 +394,70 @@ python main.py crawl --vault ./my-vault
 - **`remove_node` — O(edges):** при удалении ноды сканируются все рёбра
   (индекса from/to нет).
 
+## STAGE 18 — Content Indexing & Full-Text Search
+
+Закрыто честное ограничение Этапа 10: «No content indexing — crawler stores
+node labels + extracted tags in metadata but does NOT index full file text
+for search». Новый сервис `services/content_index.py` → `ContentIndex`:
+инвертированный индекс (word → posting list of node_ids) по полному тексту
+`.md` файлов, searchable через `GraphQueryEngine.search()`.
+
+```bash
+python main.py crawl --vault ./my-vault      # строит граф + индекс
+python main.py search "hello" --vault ./my-vault
+# -> ["A.md", "B.md"]
+python main.py search "hello python" --vault ./my-vault
+# -> ["B.md"]                                # AND: оба слова в одном файле
+
+python main.py repl --vault ./my-vault
+knowledgeos> search hello python
+# -> ["B.md"]
+```
+
+Как это работает:
+- **Токенизация**: regex `\w+`, lowercase, минимум 2 символа. Без stemming,
+  без стоп-слов (honest limitations).
+- **`index_file(node_id, text)`** — replace-семантика: старые термы документа
+  сбрасываются перед индексацией, поэтому reindex (full или incremental)
+  никогда не оставляет stale-постингов.
+- **`search(query)`** — AND-логика: intersection posting lists всех токенов
+  запроса; результат отсортирован по суммарной частоте совпадений (desc),
+  затем по node_id (детерминизм). Пустой запрос / отсутствующий терм → `[]`.
+- **`remove_file(node_id)`** — через reverse-map `_doc_terms`: O(термов
+  документа), пустые posting lists выпиливаются (stats честные).
+- **Интеграция с crawler**: full crawl индексирует всё; incremental path —
+  changed → `remove_file` + reindex, deleted → `remove_file`. `index=None` →
+  zero regression (ничего не индексируется, `search` → `[]`).
+- **DI**: `ContentIndex` — singleton в `main.build_container`; crawler ПИШЕТ,
+  `GraphQueryEngine` ЧИТАЕТ тот же инстанс (конвенция как с `IGraphBuilder`).
+  Оба параметра duck-typed (`Optional[Any]`) — гейт
+  `test_services_do_not_cross_import` запрещает sibling-импорт.
+- **`ensure_index` (cli/repl.py)**: пойманная коллизия интеграции — индекс
+  in-memory, а инкрементальный tracker при `up_to_date` вообще не сканирует
+  файлы → в свежем процессе `search` был бы пуст. `cmd_search` и `cmd_repl`
+  перед работой перестраивают пустой индекс, читая `.md` через порты
+  контейнера (граф и crawl-state не трогаются).
+
+### HONEST LIMITATIONS (Stage 18)
+- **Только `\w+` токенизация** — нет stemming, нет морфологии («run» и
+  «running» — разные термы).
+- **Нет стоп-слов** — «the», «and» индексируются как обычные слова.
+- **Нет phrase search** — только AND по отдельным словам, не
+  последовательность.
+- **Нет ранжирования TF-IDF** — результаты отсортированы по частоте
+  совпадений, не по релевантности.
+- **In-memory only** — индекс в RAM, при рестарте перестраивается
+  (`ensure_index` в CLI/REPL перечитывает весь vault; snapshot индекса — не
+  в этом этапе).
+- **Нет fuzzy search** — только exact match токенов.
+
 ## Test gates
 
 ```
-pytest tests/            # unit + e2e + arch gate (141 tests, all green)
+pytest tests/            # unit + e2e + arch gate (149 tests, all green)
 python -c "import contracts, infrastructure, kernel, runtime, adapters, services, cli"
 python -c "import services.incremental_tracker"  # exit 0
+python -c "import services.content_index"        # exit 0
 python main.py --help   # exit 0
 python main.py repl --help  # exit 0
 ```

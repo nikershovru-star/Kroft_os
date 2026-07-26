@@ -19,11 +19,16 @@ from contracts import IService, IGraphBuilder, IGraphQuery
 class GraphQueryEngine(IGraphQuery):
     """Pure read-only structural query engine over a shared IGraphBuilder."""
 
-    def __init__(self, graph: IGraphBuilder) -> None:
+    def __init__(self, graph: IGraphBuilder, index: Optional[Any] = None) -> None:
         # Snapshot-on-read: every query pulls a fresh deep-copy snapshot via
         # graph.get_graph(), so the crawler may mutate the live graph (add
         # nodes/edges) between our calls without corrupting an in-flight query.
         self._graph = graph
+        # Stage 18: optional ContentIndex (duck-typed — the services
+        # cross-import gate forbids importing the sibling service; the DI
+        # composition root wires the SAME instance the crawler writes to).
+        # index=None => zero regression: search() returns [].
+        self._index = index
 
     # ----- IService -----
     def name(self) -> str:
@@ -142,3 +147,14 @@ class GraphQueryEngine(IGraphQuery):
             "avg_degree": avg_degree,
             "orphan_count": orphan_count,
         }
+
+    # ----- full-text search (Stage 18, not part of IGraphQuery) -----
+    def search(self, query: str) -> List[str]:
+        """Full-text AND-search over the shared ContentIndex.
+
+        Proxy to ContentIndex.search(); [] when no index is wired
+        (zero regression for engines built without an index).
+        """
+        if self._index is None:
+            return []
+        return self._index.search(query)

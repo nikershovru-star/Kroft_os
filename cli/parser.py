@@ -30,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
     pq.add_argument("--orphans", action="store_true", help="Orphan nodes (zero-degree)")
     pq.add_argument("--tags", metavar="TAG", help="Nodes carrying <TAG>")
 
+    pse = sub.add_parser("search", help="Full-text search over indexed .md content (Stage 18)")
+    pse.add_argument("query", help="Search query (AND-logic over \\w+ tokens, case-insensitive)")
+    pse.add_argument("--vault", default=None,
+                     help="Path to the vault directory (or read from knowledgeos.yaml)")
+
     ps = sub.add_parser("status", help="Show kernel state and graph size")
     ps.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")

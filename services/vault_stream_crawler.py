@@ -29,6 +29,7 @@ class VaultStreamCrawler(IService):
         graph: IGraphBuilder,
         vault_path: str,
         tracker: Optional[Any] = None,
+        index: Optional[Any] = None,
     ) -> None:
         self._fs = fs
         self._bus = bus
@@ -38,6 +39,9 @@ class VaultStreamCrawler(IService):
         # forbids sibling-service imports, so no type import here).
         # tracker=None => zero regression: full rescan exactly as in Stage 10.
         self._tracker = tracker
+        # Stage 18: optional ContentIndex (same duck-typed DI convention).
+        # index=None => zero regression: no full-text indexing at all.
+        self._index = index
         self._stats: Dict[str, int] = {}
 
     # ----- IService -----
@@ -100,6 +104,10 @@ class VaultStreamCrawler(IService):
             return stats
         # Drop nodes of deleted files (differential — no clear()).
         self._tracker.apply_to_graph(self._graph, deleted)
+        # Stage 18: purge deleted files from the full-text index too.
+        if self._index is not None:
+            for fpath in deleted:
+                self._index.remove_file(_norm(fpath))
         # Changed files: drop their stale node+edges before rescanning,
         # otherwise re-adding would duplicate outgoing edges (edge storage
         # is a list). COLLISION caught in smoke: remove_node also drops
@@ -114,6 +122,11 @@ class VaultStreamCrawler(IService):
                 if e["to"] == nid and e["from"] not in changed_ids
             ]
             self._graph.remove_node(nid)
+            # Stage 18: drop stale terms before reindexing (index_file has
+            # replace semantics anyway — this keeps the intent explicit even
+            # if a changed file becomes unreadable and is skipped by the scan).
+            if self._index is not None:
+                self._index.remove_file(nid)
             for e in incoming:
                 self._graph.add_edge(e["from"], e["to"], e["relation"])
         self._scan_files(changed)
@@ -142,6 +155,11 @@ class VaultStreamCrawler(IService):
             tags = re.findall(r"#(\w+)", text)
             links = re.findall(r"\[\[(.*?)\]\]", text)
             self._graph.add_node(fpath, label=fpath, meta={"tags": tags})
+            # Stage 18: full-text index (replace semantics — safe for both
+            # full re-crawl and incremental changed-file rescan). index=None
+            # => zero regression: nothing is indexed.
+            if self._index is not None:
+                self._index.index_file(fpath, text)
             for link in links:
                 target = _norm(link.strip())
                 if target:

@@ -188,3 +188,42 @@
   (mtime not content-hash; no rename detection; visible state file in vault
   root; no concurrent-crawl protection; symlink mtime blind spot;
   remove_node O(edges)).
+
+## v5.0.0 (Stage 18)
+- Content Indexing & Full-Text Search: closed Stage-10 limitation "no
+  content indexing -- full file text is not searchable". NEW
+  `services/content_index.py` -> `ContentIndex`: in-memory inverted index
+  (word -> set[node_id] posting lists) + reverse map (node_id ->
+  Counter(word)) for O(doc-terms) removal and match-frequency sorting.
+  - Tokenization: regex \w+, lowercased, min 2 chars. No stemming, no
+    stop-words (honest limitations).
+  - `index_file(node_id, text)`: REPLACE semantics (old terms dropped
+    first) -- reindex never leaves stale postings.
+  - `search(query)`: AND-logic posting-list intersection; sorted by total
+    match frequency desc, then node_id (deterministic). Empty query or any
+    missing term -> [].
+  - `remove_file(node_id)`: prunes empty posting lists (stats stay honest).
+  - `get_stats()`: {"terms": N, "documents": M}.
+- `VaultStreamCrawler(..., index=None)`: new optional duck-typed param.
+  Full crawl indexes every scanned file; incremental path: changed ->
+  remove_file + reindex, deleted -> remove_file. index=None -> ZERO
+  REGRESSION (Stage-17 behavior, nothing indexed).
+- `GraphQueryEngine(..., index=None)`: new `search(query)` method -- proxy
+  to ContentIndex.search(); [] when no index wired (zero regression).
+- DI: `ContentIndex` singleton in `main.build_container`; crawler WRITES,
+  query engine READS the same instance (same convention as IGraphBuilder).
+- CLI: NEW `main.py search QUERY --vault PATH` subcommand; REPL: NEW
+  `search QUERY` command (+ help entry).
+- NEW `ensure_index(container, vault)` in cli/repl.py -- integration
+  collision caught: the index is RAM-only and the incremental tracker's
+  up_to_date fast path skips scanning entirely, so a fresh process would
+  search an empty index. cmd_search/cmd_repl rebuild an empty index by
+  re-reading .md files via container ports (graph + crawl state untouched).
+- 8 new tests (tests/test_content_index.py): index adds terms / AND logic /
+  case-insensitive / remove clears / no match / stats / incremental
+  reindex (stale terms gone, deleted files leave index) / zero regression
+  without index. Full suite now 149 green; Arch Gate green (content_index
+  in services/, stdlib-only imports).
+- HONEST LIMITATIONS (Stage 18): see README "HONEST LIMITATIONS (Stage 18)"
+  (\w+ only, no stemming; no stop-words; no phrase search; no TF-IDF; RAM
+  only -- rebuilt per process; no fuzzy match).
