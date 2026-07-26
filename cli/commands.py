@@ -14,6 +14,7 @@ import atexit
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -149,6 +150,53 @@ def cmd_stop(args, container: Optional[object] = None) -> None:
     else:
         _dump({"stopped": False,
                "reason": "no running daemon (Kernel runs per-command)"})
+
+
+def cmd_watch(args, container) -> None:
+    """Watch the vault and auto-recrawl on every ``.md`` change (Stage 27).
+
+    Builds + initializes a Kernel (restores graph/index from snapshot), then
+    starts the WatchService. The WatchService resolves the FileWatcher (an
+    adapter) from the DI container -- cli/ never imports adapters directly
+    (arch gate). Runs until KeyboardInterrupt, then stops the watcher and
+    kernel.
+    """
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
+    k.initialize()
+    k.start()
+    watch = container.resolve("WatchService")
+    # Inject the live Kernel so each recrawl persists a snapshot (duck-typed;
+    # WatchService never imports kernel). CLI --interval / --no-watchdog
+    # override the FileWatcher defaults.
+    watch._kernel = k
+    watcher = container.resolve("FileWatcher")
+    try:
+        watcher._interval = max(0.05, float(args.interval))
+    except (AttributeError, TypeError, ValueError):
+        pass
+    if getattr(args, "no_watchdog", False):
+        watcher._use_watchdog = False
+    atexit.register(lambda: _safe_stop_watch(watch, k))
+    try:
+        print("watching... (Ctrl+C to stop)", file=sys.stderr)
+        watch.watch()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        watch.stop()
+        k.stop()
+
+
+def _safe_stop_watch(watch, k) -> None:
+    try:
+        watch.stop()
+    except Exception:
+        pass
+    try:
+        k.stop()
+    except Exception:
+        pass
 
 
 def cmd_repl(args, container) -> None:

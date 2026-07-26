@@ -72,6 +72,14 @@ def build_parser() -> argparse.ArgumentParser:
     pex.add_argument("--vault", default=None,
                      help="Path to the vault directory (or read from knowledgeos.yaml)")
 
+    pw = sub.add_parser("watch", help="Watch a vault and auto-recrawl on .md change (Stage 27)")
+    pw.add_argument("--vault", default=None,
+                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+    pw.add_argument("--interval", type=float, default=2.0,
+                    help="Polling interval in seconds (default 2.0; ignored if watchdog active)")
+    pw.add_argument("--no-watchdog", action="store_true",
+                    help="Force polling fallback even if watchdog is installed")
+
     return p
 
 

@@ -577,6 +577,31 @@ python main.py export --format gexf --output g.gexf  # Gephi GEXF 1.3
 - Экспорт не потоковый — весь граф держится в памяти (OK для масштаба vault).
 - Абсолютный `--output` вне vault обходит traversal-гард `IFileSystem`.
 
+## STAGE 27 — Watch Mode (auto-recrawl)
+
+Процесс следит за `.md` файлами vault и перекроуливает граф при изменении:
+
+```bash
+python main.py watch --vault ./my-vault            # polling (2.0s)
+python main.py watch --vault ./my-vault --interval 1.0 --no-watchdog
+```
+
+- `adapters/file_watcher.py` — `FileWatcher`: polling-фолбэк (`os.walk` +
+  `os.stat` каждые `--interval`, daemon-thread) **всегда работает**; опциональный
+  `watchdog`-observer используется только если установлен и не `--no-watchdog`.
+- `services/watch_service.py` — `WatchService` (IService), duck-typed триггер
+  `crawler.crawl()` по изменению. Импортирует только `contracts` + stdlib.
+- Crawler — coroutine; вотчер стреляет из фонового потока → `trigger()` гонит
+  crawl в **свежем event loop** (`asyncio.new_event_loop().run_until_complete`)
+  — потокобезопасно. После crawl персистит snapshot через инъектированный Kernel.
+- REPL: `watch` / `watch stop`.
+
+### HONEST LIMITATIONS (Stage 27)
+- Нет debounce: N быстрых сохранений → N crawl'ов.
+- Polling — O(files) каждый интервал (OK для десятков/сотен, тяжело для тысяч).
+- Snapshot персистится после каждого recrawl (не транзакционно).
+- `watchdog` — бонус; если не установлен, работает только polling.
+
 ## Test gates
 
 ```

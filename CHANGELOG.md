@@ -331,3 +331,35 @@
   GEXF exports `directed` edges only (the kernel graph is directed); export does
   not stream — the whole graph is held in memory (fine for vault-scale graphs);
   absolute `--output` outside the vault escapes the FS-adapter traversal guard.
+
+## v5.0.0 (Stage 27)
+- Watch Mode: `python main.py watch --vault ./vault` follows `.md` files and
+  auto-recrawls the vault on every change (closes the Stage-10 limitation
+  "no incremental crawl — always full rescan" at the process level).
+  - `adapters/file_watcher.py` — `FileWatcher`: polling fallback (`os.walk` +
+    `os.stat` every `--interval`, default 2.0s, on a daemon thread) ALWAYS
+    available; optional `watchdog` observer used only if installed AND
+    `--no-watchdog` not passed. The watcher is duck-typed against a
+    `callback` -- it knows nothing about crawlers/kernel.
+  - `services/watch_service.py` — `WatchService` (IService): wires the
+    watcher callback to `crawler.crawl()`. The crawler + watcher are INJECTED
+    (duck-typed); the module imports ONLY `contracts` + stdlib (arch-clean).
+    An optional Kernel reference (also injected, duck-typed) persists a graph
+    snapshot after each recrawl so a crash loses at most one interval.
+  - Thread-safety: `VaultStreamCrawler.crawl()` is a coroutine, and the watcher
+    may fire from a background thread (polling daemon or watchdog). So
+    `WatchService.trigger()` runs it in a FRESH event loop
+    (`asyncio.new_event_loop().run_until_complete`) -- thread-isolated and
+    loop-safe, unlike `asyncio.run` which binds to the caller's context.
+- CLI: `watch --interval SEC [--no-watchdog]` -- blocking process, Ctrl+C stops.
+- REPL: `watch` / `watch stop` verb (starts the WatchService in a background
+  thread; the REPL loop keeps accepting commands; `watch stop` halts it).
+- 8 new tests (tests/test_watch_mode.py): polling detects new file / edit,
+  stop idempotent, watchdog-missing fallback, WatchService trigger (async +
+  sync crawler + swallows crawl errors + starts watcher and triggers on change).
+  Full suite now 195 green; Arch Gate green.
+- HONEST LIMITATIONS (Stage 27): no debounce -- N rapid file saves => N crawls;
+  polling is O(files) every interval (fine for tens/hundreds, heavy for
+  thousands); snapshot persisted per recrawl (not transactional); watchdog is
+  a bonus -- if uninstalled, polling is the only path; on Windows the stock
+  `watchdog` needs the `pywin32` extra to offer the real OS watcher.

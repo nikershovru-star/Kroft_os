@@ -48,6 +48,7 @@ _COMMANDS = (
     ("search QUERY", "full-text AND-search + DSL filters (tag:X, from:X, to:X, is:orphan)"),
     ("fuzzy QUERY", "fuzzy full-text search (e.g. 'fuzzy pithon')"),
     ("export FORMAT [OUTPUT]", "export graph to dot/json/gexf (FORMAT in dot/json/gexf; OUTPUT file or '-' stdout)"),
+    ("watch [--interval N]", "start auto-recrawl on .md change (background thread; stop with 'watch stop')"),
     ("status", "show kernel state + graph size"),
     ("save", "force a graph snapshot (GraphSnapshotted)"),
     ("exit / quit", "graceful shutdown and leave the REPL"),
@@ -197,6 +198,9 @@ class KnowledgeOSRepl:
         if verb == "export":
             self._do_export(parts[1:])
             return
+        if verb == "watch":
+            self._do_watch(parts[1:])
+            return
         # Unknown command: report and continue (does NOT crash the session).
         print(
             f"unknown command: {verb!r} (type 'help' for the command list)",
@@ -287,6 +291,31 @@ class KnowledgeOSRepl:
             print(data)
         else:
             self._container.resolve("IFileSystem").write_content(output, data)
+
+    def _do_watch(self, args: List[str]) -> None:
+        """Start the WatchService in a background thread (REPL stays live).
+
+        Honors `watch stop` to halt it. Uses the DI-resolved WatchService +
+        FileWatcher (cli/ never imports adapters directly). The watch runs in
+        its own daemon thread so the REPL loop keeps accepting commands.
+        """
+        if args and args[0] in ("stop", "off"):
+            ws = getattr(self, "_repl_watch", None)
+            if ws is not None:
+                ws.stop()
+                self._repl_watch = None
+                print("watch stopped", file=sys.stderr)
+            else:
+                print("watch: not running", file=sys.stderr)
+            return
+        if getattr(self, "_repl_watch", None) is not None:
+            print("watch: already running (use 'watch stop')", file=sys.stderr)
+            return
+        ws = self._container.resolve("WatchService")
+        ws.start()
+        self._repl_watch = ws
+        backend = "watchdog" if getattr(self._container.resolve("FileWatcher"), "using_watchdog", False) else "polling"
+        print(f"watch started ({backend} backend); 'watch stop' to halt", file=sys.stderr)
 
     def _do_save(self) -> None:
         """Force a graph snapshot while the kernel keeps running."""

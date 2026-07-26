@@ -13,12 +13,13 @@ from infrastructure import (
 from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter
 from adapters.exporters import export_dot, export_json, export_gexf
+from adapters.file_watcher import FileWatcher
 
 from cli.parser import parse_args
 from cli.commands import (
-    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export,
+    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch,
 )
-from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex
+from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService
 
 
 def build_container(vault_path: str) -> DependencyContainer:
@@ -67,6 +68,21 @@ def build_container(vault_path: str) -> DependencyContainer:
     c.register_instance("export_dot", export_dot)
     c.register_instance("export_json", export_json)
     c.register_instance("export_gexf", export_gexf)
+    # Stage 27: file watcher (adapter) + watch service. The watcher is an
+    # adapter, so it is referenced HERE (composition root) only; cli/services
+    # resolve it by name. WatchService gets the crawler + watcher injected.
+    c.register_factory(
+        "FileWatcher",
+        lambda: FileWatcher(vault_path, interval=2.0),
+    )
+    c.register_factory(
+        "WatchService",
+        lambda: WatchService(
+            c.resolve("VaultStreamCrawler"),
+            c.resolve("FileWatcher"),
+            kernel=None,  # cmd_watch injects the live Kernel after build
+        ),
+    )
     return c
 
 
@@ -88,6 +104,8 @@ def main(argv=None) -> None:
         cmd_repl(args, build_container(args.vault))
     elif args.command == "export":
         cmd_export(args, build_container(args.vault))
+    elif args.command == "watch":
+        cmd_watch(args, build_container(args.vault))
 
 
 if __name__ == "__main__":
