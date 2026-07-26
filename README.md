@@ -547,6 +547,36 @@ python main.py search "tag:python from:A.md"    # множественные ф�
 - Нет phrase search (кавычки не парсятся как литералы).
 - При сканировании всех нод (только фильтры, без текста) — O(nodes), не O(1).
 
+## STAGE 23 — Graph Export (DOT / JSON / GEXF)
+
+Сериализация графа знаний в стандартные форматы визуализации:
+
+```bash
+python main.py export --format json                 # stdout (pretty JSON)
+python main.py export --format dot --output g.dot    # Graphviz digraph
+python main.py export --format gexf --output g.gexf  # Gephi GEXF 1.3
+```
+
+- Экспортеры живут в `adapters/exporters/` (единственное место, трогающее
+  внешние форматы). Каждый принимает `{"nodes": [...], "edges": [...]}` и
+  возвращает `str`. Только stdlib.
+- `--output -` (по умолчанию) — stdout; `--output FILE` — запись на диск.
+  Пути внутри vault идут через порт `IFileSystem`; абсолютный путь ВНЕ vault
+  пишется напрямую (честное ограничение — обходит traversal-гард адаптера).
+- `export` восстанавливает граф из `data/graph_snapshot.json` перед
+  сериализацией (cold start работает, как у `query`/`search`).
+- REPL: `export FORMAT [OUTPUT]`.
+- Интеграция arch-clean: `cli/` не импортирует `adapters` напрямую — экспортеры
+  зарегистрированы в DI-контейнере (`main.build_container`) и резолвятся по
+  имени `export_<fmt>`.
+
+### HONEST LIMITATIONS (Stage 23)
+- Экспортеры сериализуют только универсальный граф-словарь (id/label/meta/
+  relation); Obsidian-специфика больше не добавляется.
+- GEXF — только направленные рёбра (`directed`), ядро-граф направленный.
+- Экспорт не потоковый — весь граф держится в памяти (OK для масштаба vault).
+- Абсолютный `--output` вне vault обходит traversal-гард `IFileSystem`.
+
 ## Test gates
 
 ```

@@ -12,10 +12,11 @@ from infrastructure import (
 )
 from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter
+from adapters.exporters import export_dot, export_json, export_gexf
 
 from cli.parser import parse_args
 from cli.commands import (
-    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search,
+    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export,
 )
 from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex
 
@@ -60,6 +61,12 @@ def build_container(vault_path: str) -> DependencyContainer:
             index=c.resolve("ContentIndex"),
         ),
     )
+    # Stage 23: graph exporters registered as instances. The composition root
+    # (main.py) is the ONLY place adapters are referenced; cli/ resolves them
+    # by name, so cli/ stays arch-clean (it must NOT import adapters directly).
+    c.register_instance("export_dot", export_dot)
+    c.register_instance("export_json", export_json)
+    c.register_instance("export_gexf", export_gexf)
     return c
 
 
@@ -79,6 +86,8 @@ def main(argv=None) -> None:
         cmd_stop(args)
     elif args.command == "repl":
         cmd_repl(args, build_container(args.vault))
+    elif args.command == "export":
+        cmd_export(args, build_container(args.vault))
 
 
 if __name__ == "__main__":

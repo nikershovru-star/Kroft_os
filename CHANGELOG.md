@@ -301,3 +301,33 @@
 - HONEST LIMITATIONS (Stage 21): see README "HONEST LIMITATIONS (Stage 21)"
   (AND-only — no OR/NOT/parens; filters are exact-match; no phrase search;
   filter-only scan is O(nodes), not O(1)).
+
+## v5.0.0 (Stage 23)
+- Graph Export: `adapters/exporters/` — DOT (Graphviz), JSON, GEXF (Gephi).
+  Each exporter takes the `{"nodes": [...], "edges": [...]}` graph dict
+  (shape of `IGraphBuilder.get_graph()`) and returns a `str`. `adapters/` is
+  the ONLY place that touches external serialization formats; exporters use
+  stdlib only (no third-party graph libs).
+  - `export_dot()` -> Graphviz `digraph` (quotes in labels/relations escaped).
+  - `export_json()` -> pretty-printed JSON (UTF-8 safe, `ensure_ascii=False`).
+  - `export_gexf()` -> GEXF 1.3 XML (namespaced, `defaultedgetype="directed"`,
+    edges get sequential 0-based ids; pretty-printed via `minidom`).
+- CLI: `export --format {dot,json,gexf} [--output FILE]` — `python main.py
+  export --format dot` prints to stdout; `--output FILE` writes to disk.
+  Output paths inside the vault go through the `IFileSystem` port; absolute
+  paths OUTSIDE the vault are written directly (honest limitation — bypasses
+  the FS adapter's traversal guard). `export` restores the graph from
+  `data/graph_snapshot.json` before serializing (cold start works).
+- REPL: new `export FORMAT [OUTPUT]` verb (same semantics).
+- Arch-clean integration: `cli/` does NOT import `adapters` directly. The three
+  exporter functions are registered in the DI container by `main.build_container`
+  (the composition root, the only place adapters are referenced) and resolved by
+  `cli/commands.py` / `cli/repl.py` via `container.resolve("export_<fmt>")`.
+- 6 new tests (tests/test_exporters.py): dot basic + empty / json round-trip +
+  no-mutation / gexf valid XML / gexf sequential edge ids. Full suite now 187
+  green; Arch Gate green.
+- HONEST LIMITATIONS (Stage 23): exporters handle only the generic graph dict
+  (no Obsidian-specific attributes beyond id/label/meta/relation are serialized);
+  GEXF exports `directed` edges only (the kernel graph is directed); export does
+  not stream — the whole graph is held in memory (fine for vault-scale graphs);
+  absolute `--output` outside the vault escapes the FS-adapter traversal guard.

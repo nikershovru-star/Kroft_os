@@ -47,6 +47,7 @@ _COMMANDS = (
     ("query tags TAG", "nodes carrying <TAG>"),
     ("search QUERY", "full-text AND-search + DSL filters (tag:X, from:X, to:X, is:orphan)"),
     ("fuzzy QUERY", "fuzzy full-text search (e.g. 'fuzzy pithon')"),
+    ("export FORMAT [OUTPUT]", "export graph to dot/json/gexf (FORMAT in dot/json/gexf; OUTPUT file or '-' stdout)"),
     ("status", "show kernel state + graph size"),
     ("save", "force a graph snapshot (GraphSnapshotted)"),
     ("exit / quit", "graceful shutdown and leave the REPL"),
@@ -193,6 +194,9 @@ class KnowledgeOSRepl:
         if verb == "fuzzy":
             self._do_fuzzy(parts[1:])
             return
+        if verb == "export":
+            self._do_export(parts[1:])
+            return
         # Unknown command: report and continue (does NOT crash the session).
         print(
             f"unknown command: {verb!r} (type 'help' for the command list)",
@@ -258,6 +262,31 @@ class KnowledgeOSRepl:
             return
         engine = self._container.resolve("GraphQueryEngine")
         print(json.dumps(engine.fuzzy_search(" ".join(args)), ensure_ascii=False))
+
+    def _do_export(self, args: List[str]) -> None:
+        """Export the live graph to dot/json/gexf (Stage 23).
+
+        `export FORMAT [OUTPUT]` — FORMAT in {dot, json, gexf}; OUTPUT is a
+        file path, or '-' / omitted for stdout. The exporter is resolved from
+        the DI container by name (cli/ must not import adapters directly).
+        """
+        if not args:
+            print("export: missing FORMAT (dot|json|gexf)", file=sys.stderr)
+            return
+        fmt = args[0].lower()
+        if fmt not in ("dot", "json", "gexf"):
+            print(f"export: unknown format {fmt!r} (use dot|json|gexf)",
+                  file=sys.stderr)
+            return
+        output = args[1] if len(args) >= 2 else "-"
+        engine = self._container.resolve("GraphQueryEngine")
+        graph = engine._snapshot()
+        exporter = self._container.resolve(f"export_{fmt}")
+        data = exporter(graph)
+        if output == "-":
+            print(data)
+        else:
+            self._container.resolve("IFileSystem").write_content(output, data)
 
     def _do_save(self) -> None:
         """Force a graph snapshot while the kernel keeps running."""

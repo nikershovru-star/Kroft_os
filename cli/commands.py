@@ -14,6 +14,7 @@ import atexit
 import asyncio
 import json
 import os
+from pathlib import Path
 from typing import Optional
 
 from kernel import Kernel
@@ -172,3 +173,52 @@ def cmd_repl(args, container) -> None:
     finally:
         # Guarantee shutdown even if the REPL loop propagates unexpectedly.
         k.stop()
+
+
+def cmd_export(args, container) -> None:
+    """Export the live graph to dot/json/gexf (Stage 23).
+
+    The exporter functions live in ``adapters/exporters/`` -- the ONLY place
+    that touches external serialization formats. cli/ must NOT import adapters
+    directly (arch gate), so the exporter is resolved from the DI container by
+    name (registered in main.build_container, the composition root).
+
+    Output resolution:
+      * ``--output -``          -> print to stdout.
+      * relative / vault-absolute path -> written via the IFileSystem port
+        (confined to the vault, same as every other file op).
+      * absolute path OUTSIDE the vault -> written directly with open() (an
+        honest limitation: exporting out of the vault bypasses the FS adapter).
+    """
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
+    # Restore the graph (and index) from data/graph_snapshot.json if a prior
+    # crawl persisted one -- without this the in-memory IGraphBuilder is empty
+    # and export would emit a 0-node graph. Mirrors cmd_query/cmd_search.
+    k.initialize()
+    atexit.register(lambda: k.stop())
+    engine = container.resolve("GraphQueryEngine")
+    graph = engine._snapshot()  # existing method on GraphQueryEngine
+    exporter = container.resolve(f"export_{args.format}")
+    data = exporter(graph)
+
+    if args.output == "-":
+        print(data)
+        return
+
+    output = args.output
+    fs = container.resolve("IFileSystem")
+    base = getattr(fs, "_base", None)
+    # Decide whether the output lives inside the vault (FS-adapter-safe).
+    is_outside = False
+    if base is not None and os.path.isabs(output):
+        try:
+            fs._safe(output)  # raises ValueError if it escapes the vault
+        except (ValueError, Exception):
+            is_outside = True
+    if is_outside:
+        # Honest path: export to an absolute location outside the vault.
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(data, encoding="utf-8")
+    else:
+        fs.write_content(output, data)

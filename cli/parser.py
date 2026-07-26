@@ -64,6 +64,14 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 
+    pex = sub.add_parser("export", help="Export graph to dot/json/gexf (Stage 23)")
+    pex.add_argument("--format", choices=["dot", "json", "gexf"], default="json",
+                     help="Export format (default: json)")
+    pex.add_argument("--output", default="-",
+                     help="Output file path ('-' for stdout)")
+    pex.add_argument("--vault", default=None,
+                     help="Path to the vault directory (or read from knowledgeos.yaml)")
+
     return p
 
 
