@@ -260,6 +260,23 @@
   (snapshot not crash-atomic vs FS; no delta-snapshot — whole JSON rewritten on
   each save; index snapshot separate from graph snapshot file).
 
+## v5.0.0 (Stage 20)
+- `ContentIndex.suggest(prefix, limit)` — prefix autocomplete via `bisect`
+  over a maintained sorted term list. O(log V + k), V = vocabulary size.
+- `ContentIndex.fuzzy_search(query, cutoff=0.6)` — fuzzy AND-search via
+  `difflib.get_close_matches`. Each query token is expanded to up to 3 close
+  indexed terms; generalized AND-intersection across token groups. Results
+  ranked by total matched-term frequency (same tiebreaker as exact search).
+- `GraphQueryEngine.fuzzy_search(query)` — proxy to index; [] when no index.
+- CLI: `search QUERY --fuzzy` enables fuzzy matching.
+- REPL: new `fuzzy QUERY` verb; Tab autocomplete for commands and indexed
+  terms (via `readline`, graceful fallback on Windows without pyreadline3).
+- 11 new tests (tests/test_fuzzy_search.py, incl. snapshot round-trip).
+  Full suite now 181 green. Arch Gate green (services/ = contracts + stdlib).
+- HONEST LIMITATIONS (Stage 20): see README "HONEST LIMITATIONS (Stage 20)"
+  (fuzzy + DSL filters not combined; readline needs pyreadline3 on Windows;
+  no relevance ranking of fuzzy matches, only term frequency).
+
 ## v5.0.0 (Stage 21)
 - `GraphQueryEngine.search()` now supports a mini-DSL combining full-text
   AND-search with structural graph filters — all in one query string.

@@ -228,6 +228,18 @@ class GraphQueryEngine(IGraphQuery):
             result.append(nid)
         return result
 
+    def fuzzy_search(self, query: str) -> List[str]:
+        """Fuzzy full-text AND-search over the shared ContentIndex (Stage 20).
+
+        Proxy to ``ContentIndex.fuzzy_search``. Text-only: DSL filters
+        (tag:/from:/to:/is:) are NOT combined with fuzzy — that intersection
+        is deferred to Stage 22+. With ``index=None`` (no index wired) the
+        engine returns [] (zero regression).
+        """
+        if self._index is None:
+            return []
+        return self._index.fuzzy_search(query)
+
     @staticmethod
     def _matches_filters(node: dict, filters: Dict[str, str], edges: List[dict]) -> bool:
         nid = node["id"]

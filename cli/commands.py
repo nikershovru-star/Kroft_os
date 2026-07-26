@@ -113,8 +113,10 @@ def cmd_status(args, container) -> None:
 
 
 def cmd_search(args, container) -> None:
-    """Full-text search (Stage 21): AND-logic + optional structural filters.
-       Examples:  'python', 'tag:todo python', 'from:A.md', 'is:orphan'.
+    """Full-text search (Stage 21 DSL / Stage 20 --fuzzy).
+
+       Examples: 'python', 'tag:todo python', 'from:A.md', 'is:orphan',
+                  'pithon --fuzzy' (fuzzy match to 'python').
        The index is RESTORED from data/index_snapshot.json by Kernel.initialize()
        (Stage 19), so a cold start is O(1) — no vault re-read.
     """
@@ -123,7 +125,10 @@ def cmd_search(args, container) -> None:
     k.initialize()  # restores graph + index from snapshot if present
     atexit.register(lambda: k.stop())
     engine = container.resolve("GraphQueryEngine")
-    _dump(engine.search(args.query))
+    if getattr(args, "fuzzy", False):
+        _dump(engine.fuzzy_search(args.query))
+    else:
+        _dump(engine.search(args.query))
 
 
 def cmd_stop(args, container: Optional[object] = None) -> None:

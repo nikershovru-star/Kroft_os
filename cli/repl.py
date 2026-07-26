@@ -11,6 +11,8 @@ Commands:
     query path FROM TO             -> GraphQueryEngine.path(FROM, TO) (JSON)
     query orphans                  -> GraphQueryEngine.orphan_nodes()  (JSON)
     query tags TAG                 -> GraphQueryEngine.nodes_by_tag(TAG) (JSON)
+    search QUERY                   -> full-text AND-search + DSL filters (JSON)
+    fuzzy QUERY                   -> fuzzy full-text search (e.g. 'fuzzy pithon')
     status                         -> Kernel state + graph size (JSON)
     save                           -> force graph.snapshot() + GraphSnapshotted emit
     exit / quit                    -> graceful shutdown (snapshot + stop) + loop exit
@@ -44,6 +46,7 @@ _COMMANDS = (
     ("query orphans", "nodes with zero edges"),
     ("query tags TAG", "nodes carrying <TAG>"),
     ("search QUERY", "full-text AND-search + DSL filters (tag:X, from:X, to:X, is:orphan)"),
+    ("fuzzy QUERY", "fuzzy full-text search (e.g. 'fuzzy pithon')"),
     ("status", "show kernel state + graph size"),
     ("save", "force a graph snapshot (GraphSnapshotted)"),
     ("exit / quit", "graceful shutdown and leave the REPL"),
@@ -83,16 +86,56 @@ class KnowledgeOSRepl:
 
     # ----- readline (optional) -----
     def _setup_readline(self) -> None:
-        """Enable in-memory command history if readline is available.
+        """Enable in-memory command history + Tab autocomplete if readline is
+        available.
 
         History is IN-MEMORY ONLY -- we never call read_history_file /
         write_history_file, so nothing is persisted across sessions.
+
+        Stage 20: Tab autocomplete via readline.set_completer. Completes
+        command verbs at the start of the line, and indexed terms after
+        ``search``/``fuzzy``. The completer resolves ``ContentIndex`` from
+        the DI container (never importing the sibling service directly).
         """
         try:  # pragma: no cover - platform dependent
             import readline  # noqa: F401  (importing enables arrow-key recall)
+            readline.set_completer(self._completer)
+            readline.parse_and_bind("tab: complete")
             self._history_enabled = True
         except ImportError:  # pragma: no cover - e.g. stock Windows python
             self._history_enabled = False
+
+    def _completer(self, text: str, state: int):
+        """readline completer: commands, or indexed terms (after search/fuzzy).
+
+        Caches candidates for a given line in ``self._matches`` (readline calls
+        this repeatedly with state=0,1,2... until it returns None).
+        """
+        if state == 0:
+            try:
+                line = readline.get_line_buffer()  # type: ignore[name-defined]
+            except Exception:
+                line = ""
+            parts = line.strip().split()
+            if len(parts) >= 1 and parts[0] in ("search", "fuzzy"):
+                # Complete indexed terms by the last token prefix.
+                prefix = parts[-1] if len(parts) >= 2 else ""
+                try:
+                    index = self._container.resolve("ContentIndex")
+                    self._matches = index.suggest(prefix, limit=20) if index else []
+                except Exception:
+                    self._matches = []
+            else:
+                # Complete command verbs.
+                cmds = [
+                    "crawl", "query", "search", "fuzzy", "status",
+                    "save", "exit", "quit", "help",
+                ]
+                self._matches = [c for c in cmds if c.startswith(text)]
+        try:
+            return self._matches[state]
+        except (IndexError, AttributeError):
+            return None
 
     def _default_read(self) -> str:
         return input(self._prompt)
@@ -147,6 +190,9 @@ class KnowledgeOSRepl:
         if verb == "search":
             self._do_search(parts[1:])
             return
+        if verb == "fuzzy":
+            self._do_fuzzy(parts[1:])
+            return
         # Unknown command: report and continue (does NOT crash the session).
         print(
             f"unknown command: {verb!r} (type 'help' for the command list)",
@@ -198,12 +244,20 @@ class KnowledgeOSRepl:
         }, ensure_ascii=False))
 
     def _do_search(self, args: List[str]) -> None:
-        """Full-text AND-search (Stage 18) via the shared ContentIndex."""
+        """Full-text AND-search (Stage 18/21) via the shared ContentIndex."""
         if not args:
             print("search: missing QUERY", file=sys.stderr)
             return
         engine = self._container.resolve("GraphQueryEngine")
         print(json.dumps(engine.search(" ".join(args)), ensure_ascii=False))
+
+    def _do_fuzzy(self, args: List[str]) -> None:
+        """Fuzzy full-text search (Stage 20) via ContentIndex.fuzzy_search."""
+        if not args:
+            print("fuzzy: missing QUERY", file=sys.stderr)
+            return
+        engine = self._container.resolve("GraphQueryEngine")
+        print(json.dumps(engine.fuzzy_search(" ".join(args)), ensure_ascii=False))
 
     def _do_save(self) -> None:
         """Force a graph snapshot while the kernel keeps running."""

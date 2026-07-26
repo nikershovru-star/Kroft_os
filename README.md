@@ -487,6 +487,37 @@ knowledgeos> search hello python
 - Нет дельта-snapshot: при большом vault перезаписывается весь JSON.
 - Индекс-снапшот пишется в отдельный файл от граф-снапшота (composite-файл не использован — сохраняет существующие Stage-12 тесты графа).
 
+## STAGE 20 — Fuzzy Search & Autocomplete
+
+`ContentIndex` получил два stdlib-примитива поверх Stage-18 инвертированного
+индекса:
+
+- **Prefix suggest** — `ContentIndex.suggest(prefix, limit)` возвращает
+  отсортированные термы, начинающиеся с `prefix`, через `bisect_left` по
+  поддерживаемому `_sorted_terms`. O(log V + k), V = размер словаря.
+  Используется REPL Tab-автодополнением.
+- **Fuzzy search** — `ContentIndex.fuzzy_search(query, cutoff=0.6)` —
+  нечёткий AND-поиск через `difflib.get_close_matches`. Каждый токен
+  запроса расширяется до ≤3 близких индексных термов (своя AND-группа);
+  финальный результат — пересечение групп (документ должен матчить хотя бы
+  один терм из КАЖДОЙ группы). Ранжирование по суммарной частоте
+  совпавших термов (тот же tiebreaker, что у точного поиска).
+
+`GraphQueryEngine.fuzzy_search(query)` — proxy к `ContentIndex.fuzzy_search()`;
+`[]` когда индекс не подключён (zero regression).
+
+CLI: `python main.py search "pithon" --fuzzy` находит `python`
+(и другие близкие термы). REPL: новый глагол `fuzzy QUERY`; Tab-автодополнение
+для команд и индексных термов (через `readline`, тихий fallback на Windows без
+`pyreadline3`).
+
+### HONEST LIMITATIONS (Stage 20)
+- Fuzzy + DSL-фильтры (`tag:`, `from:`, `to:`, `is:`) одновременно — НЕ
+  поддерживаются (fuzzy_search чисто текстовый; пересечение отложено на Stage 22+).
+- `readline` на Windows требует `pyreadline3` (не в stdlib); без него
+  autocomplete молча отключается.
+- Нет ранжирования по релевантности fuzzy-match (только частота термов).
+
 ## STAGE 21 — Query Language (structural + full-text DSL)
 
 `GraphQueryEngine.search()` теперь поддерживает мини-DSL, объединяющий
