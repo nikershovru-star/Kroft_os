@@ -58,3 +58,26 @@ python -c "import contracts, infrastructure, kernel, runtime, adapters"
   do NOT inherit IService (IService is the base for service components only).
   The spec item "all ports inherit IService" was interpreted as "all ports are
   abstract base contracts" — see tests/test_contracts.py design note.
+
+## ETAП 8 — IEventBus (in-memory async)
+
+`infrastructure/eventbus.py` → `InMemoryEventBus` implements `contracts.IEventBus`.
+Wired into Kernel lifecycle via DI Container (kernel resolves `IEventBus` in
+`initialize()`; emits `kernel.started` / `kernel.stopped` in `start()` / `stop()`).
+
+### HONEST LIMITATIONS (Stage 8)
+- **In-memory only:** the event log is lost on Kernel restart. The optional
+  `store: IFileSystem` parameter is accepted for DI symmetry but persistence is
+  NOT implemented in this stage.
+- **No distributed event bus:** single process, not a cluster.
+- **At-most-once delivery:** if a handler raises, the event is lost for that
+  handler (but isolated — other handlers still run).
+- **No backpressure:** unlimited subscriber queues.
+- **Error isolation:** errors are logged to stdout (print), not to a structured log.
+- **Async model:** sync handlers run via `asyncio.to_thread`; `publish_sync` wraps
+  async handlers by best-effort (creates/borrows an event loop).
+
+- **Ports are independent ABCs:** IFileSystem / IEventBus / ICapabilityRegistry
+  do NOT inherit IService (IService is the base for service components only).
+  The spec item "all ports inherit IService" was interpreted as "all ports are
+  abstract base contracts" — see tests/test_contracts.py design note.

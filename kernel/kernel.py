@@ -2,14 +2,15 @@
 
 The kernel owns a single DependencyContainer (the composition root) and
 drives a strict lifecycle state machine. It does NOT import concrete
-adapters; everything is resolved through the container.
+adapters; everything is resolved through the container (including the
+event bus, referenced only via contracts.IEventBus).
 """
 from __future__ import annotations
 from enum import Enum, auto
 from typing import Any, Dict, Optional
 
 from infrastructure import DependencyContainer
-from contracts import ICapabilityRegistry
+from contracts import ICapabilityRegistry, IEventBus
 from runtime import RuntimeContext
 
 
@@ -30,6 +31,7 @@ class Kernel:
         self.runtime_context: Optional[RuntimeContext] = None
         # Core capabilities resolved from the container during initialize().
         self.wired: Dict[str, Any] = {}
+        self._event_bus: Optional[IEventBus] = None
 
     @property
     def state(self) -> LifecycleState:
@@ -40,11 +42,15 @@ class Kernel:
         if self._state != LifecycleState.UNINITIALIZED:
             raise RuntimeError(f"initialize() called in {self._state.name}")
         self.runtime_context = RuntimeContext()
-        for cap_name in ("ICapabilityRegistry", "IFileSystem"):
+        # Resolve optional core capabilities if registered in the container.
+        for cap_name in ("ICapabilityRegistry", "IFileSystem", "IEventBus"):
             if self.container.has(cap_name):
                 self.wired[cap_name] = self.container.resolve(cap_name)
         if "ICapabilityRegistry" in self.wired:
             self.runtime_context.capabilities = self.wired["ICapabilityRegistry"]
+        self._event_bus = self.wired.get("IEventBus")
+        if self._event_bus is not None:
+            self._event_bus.start()
         self._state = LifecycleState.INITIALIZED
 
     def start(self) -> None:
@@ -56,14 +62,24 @@ class Kernel:
             if hasattr(svc, "initialize"):
                 svc.initialize()
             self._services[name] = svc
+        self.emit("kernel.lifecycle", {"type": "kernel.started"})
         self._state = LifecycleState.RUNNING
 
     def stop(self) -> None:
         """Halt the kernel."""
         if self._state != LifecycleState.RUNNING:
             raise RuntimeError(f"stop() called in {self._state.name}")
+        self.emit("kernel.lifecycle", {"type": "kernel.stopped"})
         self._services.clear()
+        if self._event_bus is not None:
+            self._event_bus.stop()
         self._state = LifecycleState.STOPPED
+
+    def emit(self, topic: str, event: dict) -> None:
+        """Proxy to the wired event bus. No-op if no bus registered."""
+        if self._event_bus is None:
+            return
+        self._event_bus.publish_sync(topic, event)
 
     def service(self, name: str) -> Any:
         if name not in self._services:

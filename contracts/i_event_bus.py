@@ -1,21 +1,30 @@
 """Event bus port.
 
-Enables the event-driven / event-sourcing model. Services publish and
-subscribe through this abstraction; the kernel wires a concrete bus.
+Decouples publishers from subscribers. The kernel emits lifecycle events
+through this abstraction; concrete async/in-memory buses implement it.
 """
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import Callable, Dict, List, Optional
 
 
 class IEventBus(ABC):
     """Contract for publish/subscribe messaging."""
 
     @abstractmethod
-    def publish(self, event_type: str, payload: Any) -> None: ...
+    def subscribe(self, topic: str, handler: Callable) -> None: ...
 
     @abstractmethod
-    def subscribe(self, event_type: str, handler: Callable[[Any], None]) -> None: ...
+    def publish(self, topic: str, event: dict) -> None: ...
+
+    @abstractmethod
+    def publish_sync(self, topic: str, event: dict) -> None: ...
+
+    @abstractmethod
+    def get_history(self, topic: Optional[str] = None) -> List[dict]: ...
+
+    @abstractmethod
+    def clear_history(self) -> None: ...
 
     @abstractmethod
     def start(self) -> None: ...
