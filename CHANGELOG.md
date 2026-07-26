@@ -148,3 +148,43 @@
   kernel, services}; intra-package cli->cli import is NOT a cross-layer
   violation -- gate updated to skip same-package imports).
 - HONEST LIMITATIONS (Stage 16): see README "HONEST LIMITATIONS (Stage 16)".
+
+## v5.0.0 (Stage 17)
+- Incremental Crawl: closed Stage-10 limitation "no incremental crawl --
+  always full rescan". NEW `services/incremental_tracker.py` ->
+  `CrawlStateTracker(fs, state_path=".crawl_state.json")`: tracks per-file
+  mtimes in a JSON state file (via the IFileSystem port), detects
+  changed/new/deleted `.md` files and updates the graph DIFFERENTIALLY --
+  no full rescan, no `graph.clear()`.
+  - `load_state()` -> {} on missing/corrupt JSON (never raises);
+    `save_state(mtimes)`; `get_changed_files(vault)` -> (changed_or_new,
+    deleted); `apply_to_graph(graph, deleted)` -> remove_node per file.
+- NEW port method `IGraphBuilder.remove_node(node_id) -> bool` (abstract);
+  `InMemoryGraphBuilder` implementation drops the node and every edge where
+  it is `from` or `to` (True if the node existed). O(edges) linear scan --
+  honest limitation. snapshot/restore untouched (test_graph_persistence
+  still green); test_contracts asserts remove_node in __abstractmethods__.
+- `VaultStreamCrawler(..., tracker=None)`: new optional param (duck-typed
+  Optional[Any] -- the services cross-import gate forbids importing the
+  sibling service; wiring happens in the DI composition root).
+  - tracker set: `crawl()` scans ONLY changed files; deleted files ->
+    remove_node; second crawl with zero changes -> instant
+    `{"status": "up_to_date", "files_scanned": 0, ...}`; fresh mtimes saved
+    after every non-up_to_date crawl. Incoming edges from unchanged
+    neighbors are preserved across a changed-file rescan (collision caught
+    in smoke: remove_node would otherwise drop edges nobody rescans).
+  - tracker=None: ZERO REGRESSION -- Stage-10 behavior (clear + full
+    rescan), no state file (test_zero_regression_without_tracker).
+- DI: `main.build_container` registers `CrawlStateTracker` and injects it
+  into `VaultStreamCrawler` -- both batch `crawl` and the REPL `crawl`
+  command are incremental now (second crawl in a row -> up_to_date).
+- 8 new tests (tests/test_incremental.py): empty/corrupt state, new file,
+  modified file (os.utime-forced mtime bump), deleted file, unchanged
+  ignored, up_to_date fast path, incremental merge (graph correctness incl.
+  edges + refreshed tag meta + differential delete), zero regression.
+  Full suite now 141 green; Arch Gate green (tracker in services/, imports
+  contracts + stdlib only).
+- HONEST LIMITATIONS (Stage 17): see README "HONEST LIMITATIONS (Stage 17)"
+  (mtime not content-hash; no rename detection; visible state file in vault
+  root; no concurrent-crawl protection; symlink mtime blind spot;
+  remove_node O(edges)).

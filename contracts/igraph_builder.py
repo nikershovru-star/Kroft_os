@@ -32,6 +32,15 @@ class IGraphBuilder(IService):
     def clear(self) -> None: ...
 
     @abstractmethod
+    def remove_node(self, node_id: str) -> bool:
+        """Remove a single node AND every edge touching it (from or to).
+
+        Returns True if the node existed, False otherwise. Enables
+        differential graph updates (Stage 17 incremental crawl) without
+        a full clear()+rebuild.
+        """
+
+    @abstractmethod
     def snapshot(self, fs: "IFileSystem", path: str) -> None:
         """Persist current graph to JSON at `path` via the IFileSystem port."""
 

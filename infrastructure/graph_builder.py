@@ -53,6 +53,21 @@ class InMemoryGraphBuilder(IGraphBuilder):
             self._nodes.clear()
             self._edges.clear()
 
+    def remove_node(self, node_id: str) -> bool:
+        """Remove `node_id` and all edges where it is either endpoint.
+
+        Honest complexity note (Stage 17): O(edges) — the edge list is
+        scanned linearly; there is no from/to index.
+        """
+        with self._lock:
+            existed = node_id in self._nodes
+            self._nodes.pop(node_id, None)
+            self._edges = [
+                e for e in self._edges
+                if e["from"] != node_id and e["to"] != node_id
+            ]
+            return existed
+
     # ----- persistence (Stage 12) -----
     def snapshot(self, fs, path: str) -> None:
         """Serialize the whole graph to JSON via the IFileSystem port.

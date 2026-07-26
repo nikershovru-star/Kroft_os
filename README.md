@@ -67,7 +67,9 @@ get_neighbors / clear). Implemented by `infrastructure.InMemoryGraphBuilder`
 - **Markdown only:** only `.md` files are crawled. No `.canvas`, `.pdf`,
   images, or other Obsidian artifacts.
 - **In-memory graph:** `InMemoryGraphBuilder` holds the whole graph in RAM.
-  No persistence, no incremental update — re-crawl rebuilds from scratch.
+  ~~No persistence, no incremental update — re-crawl rebuilds from scratch.~~
+  → persistence closed in **STAGE 12** (snapshot/restore); incremental crawl
+  closed in **STAGE 17** (`CrawlStateTracker`, mtime-based differential update).
 - **Single vault:** one root path per crawl. No multi-vault federation.
 - **No content indexing:** the crawler stores node labels + extracted tags in
   metadata but does NOT index full file text for search.
@@ -334,11 +336,69 @@ knowledgeos> exit        # graceful shutdown (snapshot + stop)
   на `atexit` из Этапа 14 (как и раньше) — собственного try/except KeyboardInterrupt
   в них нет; граф сохранится по atexit, если прерывание произошло после start().
 
+## STAGE 17 — Incremental Crawl
+
+Закрыто честное ограничение Этапа 10: «Нет инкрементального crawl — всегда
+full rescan». Новый сервис `services/incremental_tracker.py` →
+`CrawlStateTracker`: отслеживает mtime всех `.md` файлов между crawl'ами,
+находит только изменённые/новые/удалённые файлы и обновляет граф
+**дифференциально** — без полного пересканирования vault'а и без
+`graph.clear()`.
+
+```bash
+python main.py crawl --vault ./my-vault
+# -> {"files_scanned": 3, "nodes": 3, "edges": 2}        # первый: full
+python main.py crawl --vault ./my-vault
+# -> {"status": "up_to_date", "files_scanned": 0, ...}   # без изменений: мгновенно
+# правим одну заметку...
+python main.py crawl --vault ./my-vault
+# -> {"files_scanned": 1, "nodes": 3, "edges": 3}        # рескан ТОЛЬКО её
+```
+
+Как это работает:
+- **State-файл** `.crawl_state.json` в корне vault'а: JSON `{filepath: mtime}`,
+  читается/пишется через порт `IFileSystem`. Отсутствует или битый → `{}`
+  (не падает), т.е. первый crawl всегда full.
+- **`get_changed_files(vault)`** → `(changed_or_new, deleted)`: файл не в
+  state или mtime отличается → changed; файл из state исчез с диска → deleted.
+- **Дифференциальный апдейт**: deleted → `remove_node` (нода + все её рёбра);
+  changed → `remove_node` + рескан только этого файла, при этом **входящие
+  рёбра от неизменённых соседей сохраняются** (пойманная коллизия: никто их
+  не рескачет — трекер их переносит).
+- **Новый метод порта** `IGraphBuilder.remove_node(node_id) -> bool`
+  (реализация в `InMemoryGraphBuilder`: удаляет ноду и все рёбра, где она
+  from или to; True если нода была). snapshot/restore не затронуты.
+- **DI**: `main.build_container` регистрирует `CrawlStateTracker` и передаёт
+  его в `VaultStreamCrawler(tracker=...)` — инкрементальность получают И
+  batch `crawl`, И REPL-команда `crawl` (второй crawl подряд → `up_to_date`).
+- **Zero regression**: `tracker=None` → поведение Этапа 10 (full rescan,
+  `clear()` + rebuild), state-файл не создаётся
+  (`test_zero_regression_without_tracker`).
+- Архитектурный контракт: трекер в `services/`, зависит ТОЛЬКО от
+  `contracts.IFileSystem` + `contracts.IGraphBuilder` + stdlib (`json`, `os`).
+  Crawler НЕ импортирует sibling-сервис (гейт `test_services_do_not_cross_import`):
+  tracker duck-typed (`Optional[Any]`), инъекция через DI.
+
+### HONEST LIMITATIONS (Stage 17)
+- **mtime, не content-hash:** если откатить файл к старой версии с тем же
+  mtime → crawler пропустит изменение.
+- **Нет обработки renamed файлов:** `old.md` удалён + `new.md` создан = два
+  события (удаление + добавление), не rename.
+- **State-файл видимый:** `.crawl_state.json` лежит в корне vault'а (рядом с
+  заметками), не в `data/`.
+- **Нет защиты от concurrent crawl:** два одновременных crawl могут испортить
+  state-файл (race condition).
+- **Нет обработки symlink changes:** если `.md` — symlink, mtime целевого
+  файла может не отражать изменение symlink'а.
+- **`remove_node` — O(edges):** при удалении ноды сканируются все рёбра
+  (индекса from/to нет).
+
 ## Test gates
 
 ```
-pytest tests/            # unit + e2e + arch gate (133 tests, all green)
+pytest tests/            # unit + e2e + arch gate (141 tests, all green)
 python -c "import contracts, infrastructure, kernel, runtime, adapters, services, cli"
+python -c "import services.incremental_tracker"  # exit 0
 python main.py --help   # exit 0
 python main.py repl --help  # exit 0
 ```

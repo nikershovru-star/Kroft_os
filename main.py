@@ -12,10 +12,10 @@ from infrastructure import (
 )
 from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter
-from services import VaultStreamCrawler, GraphQueryEngine
 
 from cli.parser import parse_args
 from cli.commands import cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl
+from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker
 
 
 def build_container(vault_path: str) -> DependencyContainer:
@@ -23,6 +23,10 @@ def build_container(vault_path: str) -> DependencyContainer:
 
     Adapters (LocalFileSystemAdapter) are referenced HERE only; commands
     receive fully-wired components via container.resolve(...).
+
+    Stage 17: a CrawlStateTracker is wired into the crawler, so `crawl`
+    (batch CLI and REPL alike) is INCREMENTAL — a second crawl with no
+    vault changes returns {"status": "up_to_date", "files_scanned": 0}.
     """
     c = DependencyContainer()
     c.register_instance("IFileSystem", LocalFileSystemAdapter(vault_path))
@@ -30,12 +34,17 @@ def build_container(vault_path: str) -> DependencyContainer:
     c.register_instance("IGraphBuilder", InMemoryGraphBuilder())
     c.register_instance("ICapabilityRegistry", CapabilityRegistry())
     c.register_factory(
+        "CrawlStateTracker",
+        lambda: CrawlStateTracker(c.resolve("IFileSystem"), ".crawl_state.json"),
+    )
+    c.register_factory(
         "VaultStreamCrawler",
         lambda: VaultStreamCrawler(
             c.resolve("IFileSystem"),
             c.resolve("IEventBus"),
             c.resolve("IGraphBuilder"),
             vault_path,
+            tracker=c.resolve("CrawlStateTracker"),
         ),
     )
     c.register_factory(

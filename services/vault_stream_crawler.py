@@ -28,11 +28,16 @@ class VaultStreamCrawler(IService):
         bus: IEventBus,
         graph: IGraphBuilder,
         vault_path: str,
+        tracker: Optional[Any] = None,
     ) -> None:
         self._fs = fs
         self._bus = bus
         self._graph = graph
         self._vault_path = vault_path
+        # Stage 17: optional CrawlStateTracker (duck-typed; the arch gate
+        # forbids sibling-service imports, so no type import here).
+        # tracker=None => zero regression: full rescan exactly as in Stage 10.
+        self._tracker = tracker
         self._stats: Dict[str, int] = {}
 
     # ----- IService -----
@@ -47,11 +52,87 @@ class VaultStreamCrawler(IService):
         return json.dumps(stats)
 
     # ----- crawl (async) -----
-    async def crawl(self) -> Dict[str, int]:
+    async def crawl(self) -> Dict[str, Any]:
+        if self._tracker is not None:
+            return await self._crawl_incremental()
+        return await self._crawl_full()
+
+    async def _crawl_full(self) -> Dict[str, Any]:
+        """Stage-10 behavior: clear + full rescan (tracker=None path)."""
         await self._bus.publish("crawl.started", {"vault": self._vault_path})
         self._graph.clear()
         files: List[str] = []
         await self._walk(self._vault_path, files)
+        self._scan_files(files)
+        g = self._graph.get_graph()
+        stats = {
+            "files_scanned": len(files),
+            "nodes": len(g["nodes"]),
+            "edges": len(g["edges"]),
+        }
+        self._stats = stats
+        await self._bus.publish(
+            "crawl.finished", {"files": len(files), "nodes": len(g["nodes"])}
+        )
+        return stats
+
+    async def _crawl_incremental(self) -> Dict[str, Any]:
+        """Stage 17: differential crawl driven by the CrawlStateTracker.
+
+        Never calls graph.clear(). Deleted files -> remove_node; changed
+        files -> remove_node (drop stale edges) + rescan; unchanged files
+        are not touched at all.
+        """
+        await self._bus.publish("crawl.started", {"vault": self._vault_path})
+        changed, deleted = self._tracker.get_changed_files(self._vault_path)
+        if not changed and not deleted and self._tracker.load_state():
+            g = self._graph.get_graph()
+            stats = {
+                "status": "up_to_date",
+                "files_scanned": 0,
+                "nodes": len(g["nodes"]),
+                "edges": len(g["edges"]),
+            }
+            self._stats = stats
+            await self._bus.publish(
+                "crawl.finished", {"files": 0, "nodes": len(g["nodes"])}
+            )
+            return stats
+        # Drop nodes of deleted files (differential — no clear()).
+        self._tracker.apply_to_graph(self._graph, deleted)
+        # Changed files: drop their stale node+edges before rescanning,
+        # otherwise re-adding would duplicate outgoing edges (edge storage
+        # is a list). COLLISION caught in smoke: remove_node also drops
+        # INCOMING edges from unchanged neighbors, which nobody rescans —
+        # so preserve and re-add them (unless the source is itself changed:
+        # its own rescan recreates them).
+        changed_ids = {_norm(f) for f in changed}
+        edges_before = self._graph.get_graph()["edges"]
+        for nid in changed_ids:
+            incoming = [
+                e for e in edges_before
+                if e["to"] == nid and e["from"] not in changed_ids
+            ]
+            self._graph.remove_node(nid)
+            for e in incoming:
+                self._graph.add_edge(e["from"], e["to"], e["relation"])
+        self._scan_files(changed)
+        # Persist fresh mtimes of ALL current files (not just changed).
+        self._tracker.save_state(self._tracker.scan_mtimes(self._vault_path))
+        g = self._graph.get_graph()
+        stats = {
+            "files_scanned": len(changed),
+            "nodes": len(g["nodes"]),
+            "edges": len(g["edges"]),
+        }
+        self._stats = stats
+        await self._bus.publish(
+            "crawl.finished", {"files": len(changed), "nodes": len(g["nodes"])}
+        )
+        return stats
+
+    def _scan_files(self, files: List[str]) -> None:
+        """Parse each .md file: node + tag meta + [[wiki-link]] edges."""
         for fpath in files:
             fpath = _norm(fpath)
             try:
@@ -65,17 +146,6 @@ class VaultStreamCrawler(IService):
                 target = _norm(link.strip())
                 if target:
                     self._graph.add_edge(fpath, target, "links_to")
-        g = self._graph.get_graph()
-        stats = {
-            "files_scanned": len(files),
-            "nodes": len(g["nodes"]),
-            "edges": len(g["edges"]),
-        }
-        self._stats = stats
-        await self._bus.publish(
-            "crawl.finished", {"files": len(files), "nodes": len(g["nodes"])}
-        )
-        return stats
 
     async def _walk(self, path: str, acc: List[str]) -> None:
         """Recursively collect .md files.

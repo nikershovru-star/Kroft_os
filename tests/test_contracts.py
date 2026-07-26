@@ -49,6 +49,7 @@ def test_igraph_builder_is_service_port():
     assert issubclass(IGraphBuilder, abc.ABC)
     expected = {
         "add_node", "add_edge", "get_graph", "get_neighbors", "clear",
+        "remove_node",
         "snapshot", "restore",
         "name", "initialize", "execute",
     }

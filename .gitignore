@@ -6,3 +6,4 @@ __pycache__/
 .env
 .sandbox/
 .e2e_sandbox/
+.coverage
