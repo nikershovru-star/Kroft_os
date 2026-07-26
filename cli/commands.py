@@ -113,11 +113,10 @@ def cmd_status(args, container) -> None:
 
 
 def cmd_search(args, container) -> None:
-    """Full-text search (Stage 19): AND-logic over the restored ContentIndex.
-
-    The index is now RESTORED from `data/index_snapshot.json` by
-    ``Kernel.initialize()`` (Stage 19 removed the Stage-18 in-memory-only
-    rebuild). A cold start is O(1) — no vault re-read.
+    """Full-text search (Stage 21): AND-logic + optional structural filters.
+       Examples:  'python', 'tag:todo python', 'from:A.md', 'is:orphan'.
+       The index is RESTORED from data/index_snapshot.json by Kernel.initialize()
+       (Stage 19), so a cold start is O(1) — no vault re-read.
     """
     effective = _resolve_config(args, container)
     k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])

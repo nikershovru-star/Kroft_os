@@ -43,7 +43,7 @@ _COMMANDS = (
     ("query path FROM TO", "shortest path FROM -> TO (BFS)"),
     ("query orphans", "nodes with zero edges"),
     ("query tags TAG", "nodes carrying <TAG>"),
-    ("search QUERY", "full-text AND-search over indexed .md content"),
+    ("search QUERY", "full-text AND-search + DSL filters (tag:X, from:X, to:X, is:orphan)"),
     ("status", "show kernel state + graph size"),
     ("save", "force a graph snapshot (GraphSnapshotted)"),
     ("exit / quit", "graceful shutdown and leave the REPL"),

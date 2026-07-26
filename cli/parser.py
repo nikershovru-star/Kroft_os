@@ -30,8 +30,10 @@ def build_parser() -> argparse.ArgumentParser:
     pq.add_argument("--orphans", action="store_true", help="Orphan nodes (zero-degree)")
     pq.add_argument("--tags", metavar="TAG", help="Nodes carrying <TAG>")
 
-    pse = sub.add_parser("search", help="Full-text search over indexed .md content (Stage 18)")
-    pse.add_argument("query", help="Search query (AND-logic over \\w+ tokens, case-insensitive)")
+    pse = sub.add_parser("search", help="Full-text + structural search over indexed .md (Stage 21 DSL)")
+    pse.add_argument("query",
+                     help="Search query (Stage 21 DSL): 'python' | 'tag:todo python' | "
+                          "'from:A.md' | 'to:A.md' | 'is:orphan' — text ANDed with filters")
     pse.add_argument("--vault", default=None,
                      help="Path to the vault directory (or read from knowledgeos.yaml)")
 

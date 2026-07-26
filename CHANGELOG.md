@@ -259,3 +259,28 @@
 - HONEST LIMITATIONS (Stage 19): see README "HONEST LIMITATIONS (Stage 19)"
   (snapshot not crash-atomic vs FS; no delta-snapshot — whole JSON rewritten on
   each save; index snapshot separate from graph snapshot file).
+
+## v5.0.0 (Stage 21)
+- `GraphQueryEngine.search()` now supports a mini-DSL combining full-text
+  AND-search with structural graph filters — all in one query string.
+  - `_parse_query()` splits `key:value` filters from text tokens (filters are
+    stripped BEFORE tokenization, since `\w+` would otherwise split `tag:todo`).
+  - Filters: `tag:X` (node.meta.tags contains X, case-insensitive),
+    `from:X` (node is an outgoing edge target of X), `to:X` (node has an
+    incoming edge from X — backlinks), `is:orphan` (zero-degree node).
+  - Syntax: `[filter:value ...] [text tokens ...]` — every condition ANDed.
+  - Text tokens forwarded to `ContentIndex.search()` (frequency sort preserved);
+    structural filters applied as a post-filter retaining index order.
+  - Filter-only queries (no text tokens) scan ALL graph nodes, so `is:orphan`
+    works even with `index=None` (collision-safe: Stage-18 behavior of
+    `search("text")` returning [] with no index is preserved).
+- Zero regression: plain text queries behave exactly as Stage 18; unknown
+  filter keys are silently ignored. No new CLI commands, no new services,
+  no new package imports (only `re` + `typing.Tuple` in graph_query_engine.py).
+- 9 new tests (tests/test_query_language.py): pure-text regression / tag
+  filter / from filter / to filter / is:orphan / multiple filters / filter-only
+  / excludes-all / case-insensitive tag / unknown-filter ignored / empty query
+  / filter-only-without-index. Full suite now 170 green; Arch Gate green.
+- HONEST LIMITATIONS (Stage 21): see README "HONEST LIMITATIONS (Stage 21)"
+  (AND-only — no OR/NOT/parens; filters are exact-match; no phrase search;
+  filter-only scan is O(nodes), not O(1)).

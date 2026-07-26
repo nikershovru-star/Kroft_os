@@ -10,10 +10,27 @@ services never reference each other -- they are coupled only through the
 contracts.IGraphBuilder / contracts.IGraphQuery ports.
 """
 from __future__ import annotations
+import re
 from collections import deque
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from contracts import IService, IGraphBuilder, IGraphQuery
+
+
+# Stage 21: local tokenizer (mirror of ContentIndex._tokenize). Sibling-import
+# into services/ is forbidden by the arch gate, so the regex is duplicated
+# here rather than imported from content_index.
+_TOKEN_RE = re.compile(r"\w+")
+_MIN_TOKEN_LEN = 2
+
+
+def _tokenize(text: str) -> List[str]:
+    """\\w+ tokens, lowercased, len >= 2. No stemming / stop-words."""
+    return [t for t in _TOKEN_RE.findall((text or "").lower()) if len(t) >= _MIN_TOKEN_LEN]
+
+
+# Stage 21: filter syntax `key:value` (value is \S+ up to whitespace).
+_FILTER_RE = re.compile(r"\b(\w+):(\S+)\b")
 
 
 class GraphQueryEngine(IGraphQuery):
@@ -148,13 +165,88 @@ class GraphQueryEngine(IGraphQuery):
             "orphan_count": orphan_count,
         }
 
-    # ----- full-text search (Stage 18, not part of IGraphQuery) -----
-    def search(self, query: str) -> List[str]:
-        """Full-text AND-search over the shared ContentIndex.
+    # ----- full-text + structural search (Stage 21 DSL) -----
+    def _parse_query(self, query: str) -> Tuple[List[str], Dict[str, str]]:
+        """Split a query into (text_terms, structural_filters).
 
-        Proxy to ContentIndex.search(); [] when no index is wired
-        (zero regression for engines built without an index).
+        A ``key:value`` token is a structural filter; everything else is a
+        full-text term. Filters are stripped BEFORE tokenization because
+        ``\\w+`` would otherwise split ``tag:todo`` into ``tag`` / ``todo``.
         """
-        if self._index is None:
+        filters: Dict[str, str] = {}
+        for m in _FILTER_RE.finditer(query):
+            filters[m.group(1).lower()] = m.group(2)
+        text_only = _FILTER_RE.sub("", query).strip()
+        terms = _tokenize(text_only) if text_only else []
+        return terms, filters
+
+    def search(self, query: str) -> List[str]:
+        """Full-text AND-search with optional structural graph filters (Stage 21).
+
+        Syntax:  ``[filter:value ...] [text tokens ...]`` — all conditions ANDed.
+        Filters:
+          ``tag:X``     — node.meta.tags contains X (case-insensitive)
+          ``from:X``    — node is an OUTGOING edge target of X (X links_to node)
+          ``to:X``      — node has an INCOMING edge from X (X is a backlink of node)
+          ``is:orphan`` — node has zero edges (in or out)
+        Text tokens are forwarded to ``ContentIndex.search`` (frequency sort
+        preserved); structural filters are a post-filter retaining that order.
+        With no text tokens, candidates start from ALL graph nodes (so a
+        filter-only query like ``is:orphan`` works even with ``index=None``).
+        Unknown filter keys are silently ignored (zero regression).
+        """
+        terms, filters = self._parse_query(query)
+
+        # 1. Candidate set.
+        if terms:
+            if self._index is None:
+                return []
+            candidates = self._index.search(" ".join(terms))
+            if not candidates:
+                return []
+        elif filters:
+            # Filter-only query: scan all nodes (works without an index too).
+            candidates = [n["id"] for n in self._snapshot()["nodes"]]
+        else:
+            # Neither text nor filters (empty query) -> nothing to match.
             return []
-        return self._index.search(query)
+
+        # 2. Structural post-filter, preserving candidate order.
+        g = self._snapshot()
+        node_map = {n["id"]: n for n in g["nodes"]}
+        edges = g["edges"]
+
+        result: List[str] = []
+        for nid in candidates:
+            node = node_map.get(nid)
+            if node is None:
+                # Index leads the graph (crawl/index ahead of persist) — skip,
+                # never raise (integration-collision safety, same as Stage 18).
+                continue
+            if not self._matches_filters(node, filters, edges):
+                continue
+            result.append(nid)
+        return result
+
+    @staticmethod
+    def _matches_filters(node: dict, filters: Dict[str, str], edges: List[dict]) -> bool:
+        nid = node["id"]
+        for key, val in filters.items():
+            key = key.lower()
+            val = val.strip()
+            if key == "tag":
+                tags = [t.lower() for t in (node.get("meta") or {}).get("tags") or []]
+                if val.lower() not in tags:
+                    return False
+            elif key == "from":
+                if not any(e.get("from") == val and e.get("to") == nid for e in edges):
+                    return False
+            elif key == "to":
+                if not any(e.get("from") == nid and e.get("to") == val for e in edges):
+                    return False
+            elif key == "is" and val.lower() == "orphan":
+                degree = sum(1 for e in edges if e.get("from") == nid or e.get("to") == nid)
+                if degree != 0:
+                    return False
+            # Unknown filter key: ignored (zero regression).
+        return True

@@ -487,6 +487,35 @@ knowledgeos> search hello python
 - Нет дельта-snapshot: при большом vault перезаписывается весь JSON.
 - Индекс-снапшот пишется в отдельный файл от граф-снапшота (composite-файл не использован — сохраняет существующие Stage-12 тесты графа).
 
+## STAGE 21 — Query Language (structural + full-text DSL)
+
+`GraphQueryEngine.search()` теперь поддерживает мини-DSL, объединяющий
+полнотекстовый поиск и структурные фильтры графа в одной строке:
+
+```bash
+python main.py search "python"                  # Stage-18 behavior
+python main.py search "tag:todo python"         # AND: тег + текст
+python main.py search "from:A.md"               # исходящие ссылки из A
+python main.py search "to:A.md"                 # входящие ссылки в A (backlinks)
+python main.py search "is:orphan"               # ноды без рёбер
+python main.py search "tag:python from:A.md"    # множественные фильтры
+```
+
+- Вся логика DSL живёт в `GraphQueryEngine` (единственное место, где уже есть
+  и граф, и индекс). Никаких новых сервисов, никаких cross-imports в `services/`.
+- Текстовые токены передаются в `ContentIndex.search()` (сортировка по
+  частоте сохраняется). Структурные фильтры (`tag:`, `from:`, `to:`, `is:`)
+  накладываются как пост-фильтр на кандидатов от индекса.
+- Если текстовых токенов нет — сканируются все ноды графа (поэтому `is:orphan`
+  работает даже при `index=None`).
+- Неизвестные фильтры игнорируются (zero regression).
+
+### HONEST LIMITATIONS (Stage 21)
+- Только AND-логика — нет OR / NOT / скобок.
+- Фильтры exact match (`tag:todo` не найдёт `tag:todos`).
+- Нет phrase search (кавычки не парсятся как литералы).
+- При сканировании всех нод (только фильтры, без текста) — O(nodes), не O(1).
+
 ## Test gates
 
 ```
