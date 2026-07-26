@@ -115,10 +115,39 @@ that no service module imports another service module.
   the prose "no back-links" definition — the Stage-11 test suite defines the
   contract as zero-degree.)
 
+## STAGE 12 — Graph Persistence & Recovery
+
+`IGraphBuilder` gained `snapshot(fs, path)` / `restore(fs, path)` (Stage 12).
+`InMemoryGraphBuilder` persists the whole graph as a single JSON file via the
+`IFileSystem` port. The **Kernel lifecycle now recovers the graph on
+`initialize()` and persists it on `stop()`** — closing the "in-memory only,
+lost on restart" limitation. On successful restore, the kernel emits a
+`GraphRestored` event; on snapshot, a `GraphSnapshotted` event (both via the
+wired `IEventBus`).
+
+Also fixed (Stage 12, cross-platform): `VaultStreamCrawler` now normalizes path
+separators to `/` for all node ids and edge endpoints, so the graph is
+identical on Windows (`vault\A.md`) and POSIX (`vault/A.md`) — backlinks/
+queries match regardless of OS.
+
+### HONEST LIMITATIONS (Stage 12)
+- **JSON snapshot, not binary:** human-readable but slow on large graphs
+  (full re-serialize / re-parse every cycle).
+- **No incremental save:** always a FULL snapshot (O(n + m) nodes + edges).
+- **No snapshot versioning:** a single file (`data/graph_snapshot.json`) is
+  overwritten on every Kernel stop — the previous state is lost.
+- **No periodic autosave:** persistence happens ONLY on `Kernel.stop()`. A
+  crash between starts leaves the last good snapshot (or none).
+- **Corrupt JSON → silent fallback:** `restore()` returns False on missing or
+  unparseable files and leaves the graph EMPTY (no exception, no recovery).
+- **No compression:** raw JSON text on disk.
+- **No schema migration:** a snapshot written by an older graph schema will
+  fail to restore (returns False) if fields are incompatible.
+
 ## Test gates
 
 ```
-pytest tests/            # unit + e2e + arch gate (85 tests, all green)
+pytest tests/            # unit + e2e + arch gate (97 tests, all green)
 python -c "import contracts, infrastructure, kernel, runtime, adapters, services"
 ```
 

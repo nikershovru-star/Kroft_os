@@ -1,6 +1,7 @@
 """In-memory graph builder implementation of IGraphBuilder."""
 from __future__ import annotations
 import copy
+import json
 import threading
 from typing import Any, Dict, List
 
@@ -51,3 +52,52 @@ class InMemoryGraphBuilder(IGraphBuilder):
         with self._lock:
             self._nodes.clear()
             self._edges.clear()
+
+    # ----- persistence (Stage 12) -----
+    def snapshot(self, fs, path: str) -> None:
+        """Serialize the whole graph to JSON via the IFileSystem port.
+
+        Always a FULL snapshot (no incremental / no versioning): the single
+        file at `path` is overwritten each call.
+        """
+        with self._lock:
+            payload = {
+                "nodes": {nid: dict(node) for nid, node in self._nodes.items()},
+                "edges": [dict(e) for e in self._edges],
+            }
+        fs.write_content(path, json.dumps(payload, ensure_ascii=False))
+
+    def restore(self, fs, path: str) -> bool:
+        """Load the graph from JSON via IFileSystem.
+
+        Returns True on success. On missing file or corrupt JSON, returns
+        False and leaves the graph EMPTY (silent fallback, no exception leaks).
+        """
+        if not fs.exists(path):
+            return False
+        try:
+            raw = fs.read_content(path)
+            data = json.loads(raw)
+            nodes = data.get("nodes", {})
+            edges = data.get("edges", [])
+        except Exception:
+            return False
+        with self._lock:
+            self._nodes = {
+                str(nid): {
+                    "id": str(n.get("id", nid)),
+                    "label": n.get("label", str(nid)),
+                    "meta": dict(n.get("meta") or {}),
+                }
+                for nid, n in nodes.items()
+            }
+            self._edges = [
+                {
+                    "from": e.get("from"),
+                    "to": e.get("to"),
+                    "relation": e.get("relation", "links_to"),
+                }
+                for e in edges
+                if e.get("from") is not None
+            ]
+        return True

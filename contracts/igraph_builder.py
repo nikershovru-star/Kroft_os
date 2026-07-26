@@ -30,3 +30,15 @@ class IGraphBuilder(IService):
 
     @abstractmethod
     def clear(self) -> None: ...
+
+    @abstractmethod
+    def snapshot(self, fs: "IFileSystem", path: str) -> None:
+        """Persist current graph to JSON at `path` via the IFileSystem port."""
+
+    @abstractmethod
+    def restore(self, fs: "IFileSystem", path: str) -> bool:
+        """Load graph from JSON at `path` via IFileSystem.
+
+        Returns True on successful load, False if the file is missing or
+        corrupt (in which case the graph is left empty and no exception leaks).
+        """

@@ -9,10 +9,16 @@ it never imports adapters/infrastructure directly.
 from __future__ import annotations
 import asyncio
 import json
+import os
 import re
 from typing import Any, Dict, List, Optional
 
 from contracts import IService, IFileSystem, IEventBus, IGraphBuilder
+
+
+def _norm(p: str) -> str:
+    """Normalize path separators to '/' for OS-independent graph ids/edges."""
+    return p.replace("\\", "/")
 
 
 class VaultStreamCrawler(IService):
@@ -47,6 +53,7 @@ class VaultStreamCrawler(IService):
         files: List[str] = []
         await self._walk(self._vault_path, files)
         for fpath in files:
+            fpath = _norm(fpath)
             try:
                 text = self._fs.read_content(fpath)
             except Exception:
@@ -55,7 +62,7 @@ class VaultStreamCrawler(IService):
             links = re.findall(r"\[\[(.*?)\]\]", text)
             self._graph.add_node(fpath, label=fpath, meta={"tags": tags})
             for link in links:
-                target = link.strip()
+                target = _norm(link.strip())
                 if target:
                     self._graph.add_edge(fpath, target, "links_to")
         g = self._graph.get_graph()
@@ -84,6 +91,7 @@ class VaultStreamCrawler(IService):
         except Exception:
             return
         for e in entries:
+            e = _norm(e)
             if e.endswith(".md"):
                 acc.append(e)
             else:

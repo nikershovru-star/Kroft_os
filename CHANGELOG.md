@@ -44,3 +44,16 @@
 - 14 new tests (10 unit + 4 e2e); full suite now 85 green. Arch Gate 3/3 green.
 - HONEST LIMITATIONS: in-memory graph only, structural (not semantic) queries,
   exact-match BFS path, no pagination, no caching, no transactions, orphan = zero-degree.
+
+## v5.0.0 (Stage 12)
+- IGraphBuilder gained `snapshot(fs, path)` / `restore(fs, path)` (full JSON
+  persistence via IFileSystem). InMemoryGraphBuilder impl (thread-safe, lock).
+- Kernel lifecycle integration: graph RESTORED on initialize() (emits
+  GraphRestored on success), SNAPSHOTTED on stop() (emits GraphSnapshotted).
+  Closes the "in-memory only — lost on restart" limitation.
+- Crawler path-normalization fix (cross-platform): node ids / edge endpoints use
+  `/` separators on every OS, so backlinks/queries match on Windows too.
+- 12 new tests (8 persistence + 4 e2e); full suite now 97 green. Arch Gate 3/3.
+- HONEST LIMITATIONS: JSON not binary, full (no incremental), single file
+  (no versioning), stop-only autosave, corrupt JSON silent fallback, no
+  compression, no schema migration.

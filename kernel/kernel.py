@@ -10,7 +10,7 @@ from enum import Enum, auto
 from typing import Any, Dict, Optional
 
 from infrastructure import DependencyContainer
-from contracts import ICapabilityRegistry, IEventBus
+from contracts import ICapabilityRegistry, IEventBus, IGraphBuilder
 from runtime import RuntimeContext
 
 
@@ -43,7 +43,7 @@ class Kernel:
             raise RuntimeError(f"initialize() called in {self._state.name}")
         self.runtime_context = RuntimeContext()
         # Resolve optional core capabilities if registered in the container.
-        for cap_name in ("ICapabilityRegistry", "IFileSystem", "IEventBus"):
+        for cap_name in ("ICapabilityRegistry", "IFileSystem", "IEventBus", "IGraphBuilder"):
             if self.container.has(cap_name):
                 self.wired[cap_name] = self.container.resolve(cap_name)
         if "ICapabilityRegistry" in self.wired:
@@ -51,7 +51,47 @@ class Kernel:
         self._event_bus = self.wired.get("IEventBus")
         if self._event_bus is not None:
             self._event_bus.start()
+        # Stage 12: attempt to recover the knowledge graph from persistent
+        # storage so a kernel restart resumes where it stopped.
+        self._try_restore_graph()
         self._state = LifecycleState.INITIALIZED
+
+    # ----- Stage 12: graph persistence helpers -----
+    def _graph_snapshot_path(self) -> str:
+        return "data/graph_snapshot.json"
+
+    def _try_restore_graph(self) -> None:
+        """Best-effort graph recovery on initialize().
+
+        Only runs if both IGraphBuilder and IFileSystem are wired. Emits a
+        GraphRestored event (via IEventBus) when the restore succeeded; emits
+        nothing on a fresh/no-prior-snapshot start (silent no-op).
+        """
+        graph = self.wired.get("IGraphBuilder")
+        fs = self.wired.get("IFileSystem")
+        if graph is None or fs is None:
+            return
+        try:
+            ok = graph.restore(fs, self._graph_snapshot_path())
+        except Exception:
+            ok = False
+        if ok:
+            self.emit("GraphRestored", {"path": self._graph_snapshot_path()})
+
+    def _try_snapshot_graph(self) -> None:
+        """Best-effort graph persistence on stop().
+
+        Emits GraphSnapshotted via IEventBus. No-op if graph/fs unwired.
+        """
+        graph = self.wired.get("IGraphBuilder")
+        fs = self.wired.get("IFileSystem")
+        if graph is None or fs is None:
+            return
+        try:
+            graph.snapshot(fs, self._graph_snapshot_path())
+            self.emit("GraphSnapshotted", {"path": self._graph_snapshot_path()})
+        except Exception:
+            pass
 
     def start(self) -> None:
         """Bring the kernel to RUNNING, initializing registered services."""
@@ -69,6 +109,8 @@ class Kernel:
         """Halt the kernel."""
         if self._state != LifecycleState.RUNNING:
             raise RuntimeError(f"stop() called in {self._state.name}")
+        # Stage 12: persist the knowledge graph before halting.
+        self._try_snapshot_graph()
         self.emit("kernel.lifecycle", {"type": "kernel.stopped"})
         self._services.clear()
         if self._event_bus is not None:
