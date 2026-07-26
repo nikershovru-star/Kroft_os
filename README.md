@@ -144,11 +144,66 @@ queries match regardless of OS.
 - **No schema migration:** a snapshot written by an older graph schema will
   fail to restore (returns False) if fields are incompatible.
 
+## STAGE 13 — CLI Entrypoint (продукт, а не библиотека)
+
+Новый слой `cli/` + корневой `main.py` превращают ядро в запускаемый продукт:
+`python main.py <command>`. Каждая команда сама собирает DI-контейнер и гонит
+lifecycle ядра `init -> start -> stop`.
+
+### Команды
+
+```bash
+python main.py init   --vault PATH          # создать <vault>/ и <vault>/data/
+python main.py crawl  --vault PATH          # просканировать Vault, построить граф, вывести stats
+python main.py query  --vault PATH --backlinks ID   # узлы, ссылающиеся на ID
+python main.py query  --vault PATH --path FROM TO   # кратчайший путь (BFS)
+python main.py query  --vault PATH --orphans         # изолированные узлы
+python main.py query  --vault PATH --tags TAG        # узлы с тегом
+python main.py status --vault PATH          # состояние ядра + размер графа
+python main.py stop   --vault PATH          # graceful (нет демона — honest no-op / pid-file cleanup)
+```
+
+### NODE-ID contract (важно для query)
+
+`LocalFileSystemAdapter(base=vault_path)` отдаёт список файлов **относительно
+корня vault**, поэтому node-id в графе — `A.md`, `sub/B.md` (без префикса пути
+к vault). Wiki-ссылки резолвятся относительно vault root. **В `query` передаются
+голые id** (`C.md`), а не `vault/C.md`.
+
+### Пример
+
+```bash
+python main.py init --vault ./my-vault
+# положить A.md ("hub [[B.md]] [[C.md]]"), B.md, C.md в ./my-vault
+python main.py crawl --vault ./my-vault
+# -> {"files_scanned": 3, "nodes": 3, "edges": 2}
+python main.py query --vault ./my-vault --backlinks "C.md"
+# -> ["A.md"]
+python main.py status --vault ./my-vault
+# -> {"state": "INITIALIZED", "graph_nodes": 3, "graph_edges": 2}
+```
+
+### HONEST LIMITATIONS (Stage 13)
+- **Нет демон-режима:** каждая команда заново поднимает Kernel (init→start→stop).
+  Между вызовами состояние держится только в snapshot-файле (`data/graph_snapshot.json`
+  внутри vault, пишется при `stop()`/`crawl`-завершении).
+- **Нет конфиг-файла:** все параметры — только через CLI args (`--vault`).
+- **Нет логирования в файл:** только stdout/stderr (`json.dumps` результатов).
+- **Нет интерактивного REPL:** только batch-команды.
+- **Нет обработки SIGINT:** `main.py` не ловит KeyboardInterrupt — прерывание
+  может оставить граф без свежего snapshot (сохраняется последний успешный).
+- **PID-файл не создаётся:** нет защиты от double-run; `stop` — honest no-op,
+  если нет pid-файла.
+- **Snapshot — vault-relative:** `data/graph_snapshot.json` пишется через
+  `IFileSystem` (base=vault), поэтому восстановление cwd-независимо, но
+  требует того же `--vault` при перезапуске.
+
 ## Test gates
 
 ```
-pytest tests/            # unit + e2e + arch gate (97 tests, all green)
-python -c "import contracts, infrastructure, kernel, runtime, adapters, services"
+pytest tests/            # unit + e2e + arch gate (109 tests, all green)
+python -c "import contracts, infrastructure, kernel, runtime, adapters, services, cli"
+python main.py --help   # exit 0
 ```
 
 ## HONEST LIMITATIONS (Stage 7.8)

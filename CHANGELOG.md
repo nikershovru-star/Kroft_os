@@ -57,3 +57,23 @@
 - HONEST LIMITATIONS: JSON not binary, full (no incremental), single file
   (no versioning), stop-only autosave, corrupt JSON silent fallback, no
   compression, no schema migration.
+
+## v5.0.0 (Stage 13)
+- NEW `cli/` application layer (product entrypoint) + root `main.py`.
+  `python main.py <command>` is now the runnable interface to the kernel:
+  `init` / `crawl` / `query` / `status` / `stop`.
+- `cli/parser.py`: argparse with subcommands init, crawl, query, status, stop.
+  query variants: `--backlinks ID`, `--path FROM TO`, `--orphans`, `--tags TAG`.
+- `cli/commands.py`: each command owns its Kernel lifecycle (build DI container
+  -> initialize -> start -> run -> stop). Composition root lives ONLY in
+  `main.build_container` (wires LocalFileSystemAdapter + InMemoryEventBus +
+  InMemoryGraphBuilder + CapabilityRegistry + VaultStreamCrawler +
+  GraphQueryEngine). Adapters are NEVER imported by cli/commands.py (enforced
+  by test_cli_arch_no_adapters_import).
+- NODE-ID CONTRACT (fixed during Stage 13): with LocalFileSystemAdapter
+  (base=vault_path), node-ids are RELATIVE TO THE VAULT ROOT (e.g. "A.md",
+  "sub/B.md"); wiki-links resolve relative to vault root. Query args use bare
+  ids ("C.md"), NOT "vault/C.md".
+- 12 new tests (8 unit + 4 e2e); full suite now 109 green. Arch Gate 4/4
+  (cli allowed: {contracts, infrastructure, kernel, services}).
+- HONEST LIMITATIONS (Stage 13): see README "HONEST LIMITATIONS (Stage 13)".

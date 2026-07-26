@@ -16,7 +16,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 
-PROJECT_PKGS = {"contracts", "infrastructure", "kernel", "runtime", "adapters", "services"}
+PROJECT_PKGS = {"contracts", "infrastructure", "kernel", "runtime", "adapters", "services", "cli"}
 
 ALLOWED = {
     "contracts": set(),
@@ -25,6 +25,7 @@ ALLOWED = {
     "runtime": {"contracts"},
     "adapters": {"contracts"},
     "services": {"contracts"},
+    "cli": {"contracts", "infrastructure", "kernel", "services"},
 }
 
 STDLIB_BASES = {
@@ -101,6 +102,7 @@ def test_each_layer_respects_its_axis():
         "runtime": {"contracts"},
         "adapters": {"contracts"},
         "services": {"contracts"},
+        "cli": {"contracts", "infrastructure", "kernel", "services"},
     }
     for pkg, expected in expectations.items():
         assert ALLOWED[pkg] == expected
