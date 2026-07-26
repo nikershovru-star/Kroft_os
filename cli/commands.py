@@ -3,6 +3,11 @@
 Each command owns its Kernel lifecycle: build (or receive) a DI container,
 drive Kernel init -> start -> stop, print a JSON result to stdout. There is NO
 long-running daemon -- every invocation spins the Kernel up and tears it down.
+
+Stage 15: every command first loads ``knowledgeos.yaml`` (or .json) from the
+vault via the ``IFileSystem`` port and merges it with CLI args, so the config
+file closes the historical limitation "no config file -- all params via CLI".
+cli/ never imports adapters directly; it resolves ports through the container.
 """
 from __future__ import annotations
 import atexit
@@ -12,23 +17,55 @@ import os
 from typing import Optional
 
 from kernel import Kernel
+from infrastructure import ConfigLoader
 from services import VaultStreamCrawler, GraphQueryEngine
+
+# Template written by `init` if no config exists yet.
+_CONFIG_TEMPLATE = """\
+# KnowledgeOS v5 Configuration
+vault: .  # relative to this file's directory (the vault root)
+autosave_interval: 60  # seconds; 0 to disable periodic autosave
+features:
+  extract_tags: true
+  extract_wiki_links: true
+  full_text_index: false  # not yet implemented
+"""
 
 
 def _dump(obj) -> None:
     print(json.dumps(obj, ensure_ascii=False))
 
 
+def _resolve_config(args, container) -> dict:
+    """Load vault config and merge with CLI args. Returns effective config.
+
+    The IFileSystem registered in the container is rooted at the vault (see
+    main.build_container), so the config file is always read from the vault
+    root via a relative name. The ``vault:`` key inside the file is resolved
+    relative to that root; CLI --vault, when present, takes precedence.
+    """
+    loader = ConfigLoader()
+    fs = container.resolve("IFileSystem")
+    raw = loader.load(".", fs)
+    return loader.merge_with_cli(args, raw)
+
+
 def cmd_init(args, container: Optional[object] = None) -> None:
-    """Create <vault>/ and <vault>/data/ so the snapshot has a home."""
-    os.makedirs(args.vault, exist_ok=True)
-    data_dir = os.path.join(args.vault, "data")
+    """Create <vault>/ and <vault>/data/ and a knowledgeos.yaml template."""
+    vault = args.vault or "."
+    os.makedirs(vault, exist_ok=True)
+    data_dir = os.path.join(vault, "data")
     os.makedirs(data_dir, exist_ok=True)
-    _dump({"created": [args.vault, data_dir]})
+    config_path = os.path.join(vault, "knowledgeos.yaml")
+    if not os.path.exists(config_path):
+        with open(config_path, "w", encoding="utf-8") as fh:
+            fh.write(_CONFIG_TEMPLATE)
+    _dump({"created": [vault, data_dir], "config": config_path})
 
 
 def cmd_crawl(args, container) -> None:
-    k = Kernel(container, autosave_interval_sec=getattr(args, "autosave", None))
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
     k.initialize()
     k.start()
     # Stage 14: guarantee a final snapshot on graceful exit
@@ -41,7 +78,8 @@ def cmd_crawl(args, container) -> None:
 
 
 def cmd_query(args, container) -> None:
-    k = Kernel(container, autosave_interval_sec=getattr(args, "autosave", None))
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
     k.initialize()  # restores graph from snapshot if present
     # Stage 14: atexit guarantees snapshot on graceful exit if the command
     # mutates/owns the graph lifecycle.
@@ -61,7 +99,8 @@ def cmd_query(args, container) -> None:
 
 
 def cmd_status(args, container) -> None:
-    k = Kernel(container, autosave_interval_sec=getattr(args, "autosave", None))
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
     k.initialize()  # restores graph from snapshot if present
     atexit.register(lambda: k.stop())
     graph = container.resolve("IGraphBuilder")
@@ -78,7 +117,8 @@ def cmd_stop(args, container: Optional[object] = None) -> None:
     We honor a pid-file convention for compatibility: if one exists we remove
     it; otherwise we report honestly that no per-command instance is running.
     """
-    pid_path = os.path.join(args.vault, "kernel.pid")
+    vault = args.vault or "."
+    pid_path = os.path.join(vault, "kernel.pid")
     if os.path.exists(pid_path):
         try:
             os.remove(pid_path)

@@ -11,15 +11,19 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command")
 
     pi = sub.add_parser("init", help="Create data/ and vault/ directory structure")
-    pi.add_argument("--vault", required=True, help="Path to the vault directory")
+    pi.add_argument("--vault", default=None,
+                    help="Path to the vault directory (or read from knowledgeos.yaml)")
 
     pc = sub.add_parser("crawl", help="Crawl a Vault and build the knowledge graph")
-    pc.add_argument("--vault", required=True, help="Path to the vault directory")
-    pc.add_argument("--autosave", type=float, default=60.0,
-                    help="Graph autosave interval in seconds (default 60; 0 disables)")
+    pc.add_argument("--vault", default=None,
+                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+    pc.add_argument("--autosave", type=float, default=None,
+                    help="Graph autosave interval in seconds (default 60; 0 disables; "
+                         "overrides knowledgeos.yaml)")
 
     pq = sub.add_parser("query", help="Query the knowledge graph")
-    pq.add_argument("--vault", required=True, help="Path to the vault directory")
+    pq.add_argument("--vault", default=None,
+                    help="Path to the vault directory (or read from knowledgeos.yaml)")
     pq.add_argument("--backlinks", metavar="ID", help="Nodes that link TO <ID>")
     pq.add_argument("--path", nargs=2, metavar=("FROM", "TO"),
                     help="Shortest path FROM -> TO (BFS)")
@@ -27,12 +31,15 @@ def build_parser() -> argparse.ArgumentParser:
     pq.add_argument("--tags", metavar="TAG", help="Nodes carrying <TAG>")
 
     ps = sub.add_parser("status", help="Show kernel state and graph size")
-    ps.add_argument("--vault", required=True, help="Path to the vault directory")
-    ps.add_argument("--autosave", type=float, default=60.0,
-                    help="Graph autosave interval in seconds (default 60; 0 disables)")
+    ps.add_argument("--vault", default=None,
+                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+    ps.add_argument("--autosave", type=float, default=None,
+                    help="Graph autosave interval in seconds (default 60; 0 disables; "
+                         "overrides knowledgeos.yaml)")
 
     pst = sub.add_parser("stop", help="Graceful shutdown (pid-file only; no daemon)")
-    pst.add_argument("--vault", required=True, help="Path to the vault directory")
+    pst.add_argument("--vault", default=None,
+                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 
     return p
 

@@ -97,3 +97,27 @@
   wall-clock injectable interval (not exact real-time); atexit does NOT catch
   SIGKILL; no backoff on write failure (silent skip); still full JSON snapshot
   (no differential); watchdog is a daemon thread (no final tick on hard kill).
+
+## v5.0.0 (Stage 15)
+- Config File & Profiles: closed Stage-13 limitation "no config file -- all
+  params via CLI args". New `infrastructure/config_loader.py` (ConfigLoader)
+  reads `knowledgeos.yaml` (preferred) or `.json` (fallback) from the vault
+  root via the IFileSystem port.
+- `ConfigLoader.load(vault_path, fs)` -> dict; missing/broken file -> {} (never
+  raises). `merge_with_cli(cli_args, config)` -> dict with priority
+  CLI arg (if not None) > config > hardcoded default for `autosave_interval`
+  (60.0) and `vault`. Unknown top-level keys -> warnings.warn (not an error).
+- YAML via optional `pyyaml`; if absent, JSON fallback. ConfigLoader depends
+  only on contracts.IFileSystem + stdlib (json, warnings, typing) -> passes
+  the arch gate (infrastructure layer, no adapters/services deps).
+- CLI: `--vault` and `--autosave` made optional (default None). Every command
+  resolves IFileSystem from the container, loads config, merges with CLI args.
+  `init` writes a knowledgeos.yaml template (vault, autosave_interval, features).
+  `crawl`/`status`/`query` pass `effective["autosave_interval"]` into Kernel.
+  Config stays at CLI level (Kernel receives resolved params, not the loader).
+- 10 new tests (test_config_loader.py x6, test_cli_config.py x4); full suite
+  now 125 green. Arch Gate 4/4.
+- HONEST LIMITATIONS (Stage 15): pyyaml optional (JSON fallback); no schema
+  validation (unknown keys warned, ignored); no hot-reload (read once per
+  command); no env-var override (CLI + YAML only); `vault` in YAML is relative
+  to the YAML location; flat config, no sections/profiles.

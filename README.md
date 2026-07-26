@@ -236,6 +236,47 @@ python main.py status --vault ./my-vault --autosave 30
   финального тика; последний гарантированный snapshot — либо по таймеру, либо
   по atexxit/stop.
 
+## STAGE 15 — Config File & Profiles
+
+Закрыто честное ограничение Этапа 13: «Нет конфиг-файла — все параметры через
+CLI args.» Теперь каждый vault может хранить `knowledgeos.yaml` (или `.json`)
+в корне; CLI читает его автоматически, а аргументы командной строки
+переопределяют значения из файла.
+
+- `infrastructure/config_loader.py` — `ConfigLoader`:
+  - `load(vault_path, fs: IFileSystem) -> dict` ищет `knowledgeos.yaml` →
+    `knowledgeos.yml` → `knowledgeos.json` через порт (YAML preferred, JSON
+    fallback). Нет файла → `{}`. Битый/нет файла → `{}` (не падает).
+  - `merge_with_cli(cli_args, config) -> dict`: приоритет
+    **CLI arg (≠ None) > config > hardcoded default**.
+    `autosave_interval`: CLI `--autosave` > `autosave_interval` > `60.0`;
+    `vault`: CLI `--vault` > `vault` > `None`; `features`: dict из config.
+  - Валидация: unknown top-level keys → `warnings.warn` (не ошибка).
+  - Зависит только от `contracts.IFileSystem` + stdlib (json, warnings, typing).
+  - YAML через `pyyaml` (optional); при отсутствии — fallback на JSON.
+- CLI: `--vault` и `--autosave` стали опциональными (default `None`). Каждая
+  команда: `fs = container.resolve("IFileSystem")` →
+  `config = ConfigLoader().load(".", fs)` →
+  `effective = ConfigLoader().merge_with_cli(args, config)`.
+  - `init` пишет шаблон `knowledgeos.yaml` (vault, autosave_interval, features).
+  - `crawl`/`status`/`query` пробрасывают `effective["autosave_interval"]` в Kernel.
+- Конфиг остаётся на уровне CLI — Kernel получает уже готовые параметры
+  (не лезет в сервисы/контракты).
+
+```bash
+python main.py init  --vault ./my-vault      # создаёт knowledgeos.yaml
+python main.py crawl --vault ./my-vault       # читает autosave_interval из YAML
+python main.py crawl --vault ./my-vault --autosave 30   # CLI override
+```
+
+### HONEST LIMITATIONS (Stage 15)
+- **pyyaml optional** — если не установлен, fallback на JSON (`.json`).
+- **Нет schema validation:** unknown keys → `warn`, игнорируются (не ошибка).
+- **Нет hot-reload:** конфиг читается once per command.
+- **Нет env-var override:** только CLI и YAML.
+- **vault в YAML — relative to YAML location** (корень vault'а), резолвится CLI.
+- **Нет секций/profiles:** один flat config на vault.
+
 ## Test gates
 
 ```
