@@ -223,6 +223,17 @@ class Kernel:
             return
         self._event_bus.publish_sync(topic, event)
 
+    def save(self) -> None:
+        """Force a graph snapshot while the kernel keeps running (Stage 16).
+
+        Public, side-effect-light wrapper around the existing best-effort
+        persist helper used by ``stop()``. Emits ``GraphSnapshotted`` on
+        success, silent no-op when graph/fs are not wired or on write failure.
+        Safe to call repeatedly; does NOT change the lifecycle state, so the
+        REPL can keep serving commands after a save.
+        """
+        self._try_snapshot_graph()
+
     def service(self, name: str) -> Any:
         if name not in self._services:
             raise KeyError(name)

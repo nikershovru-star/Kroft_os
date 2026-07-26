@@ -41,6 +41,10 @@ def build_parser() -> argparse.ArgumentParser:
     pst.add_argument("--vault", default=None,
                      help="Path to the vault directory (or read from knowledgeos.yaml)")
 
+    pr = sub.add_parser("repl", help="Interactive REPL (kernel lives for the session)")
+    pr.add_argument("--vault", default=None,
+                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+
     return p
 
 

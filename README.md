@@ -161,6 +161,7 @@ python main.py query  --vault PATH --orphans         # изолированны�
 python main.py query  --vault PATH --tags TAG        # узлы с тегом
 python main.py status --vault PATH          # состояние ядра + размер графа
 python main.py stop   --vault PATH          # graceful (нет демона — honest no-op / pid-file cleanup)
+python main.py repl   --vault PATH          # интерактивный REPL (Kernel живёт весь сеанс)
 ```
 
 ### NODE-ID contract (важно для query)
@@ -186,12 +187,16 @@ python main.py status --vault ./my-vault
 ### HONEST LIMITATIONS (Stage 13)
 - **Нет демон-режима:** каждая команда заново поднимает Kernel (init→start→stop).
   Между вызовами состояние держится только в snapshot-файле (`data/graph_snapshot.json`
-  внутри vault, пишется при `stop()`/`crawl`-завершении).
+  внутри vault, пишется при `stop()`/`crawl`-завершении). *(Исключение: `repl`
+  держит Kernel весь сеанс — см. Этап 16.)*
 - **Нет конфиг-файла:** все параметры — только через CLI args (`--vault`).
+  *(Закрыто в Этапе 15.)*
 - **Нет логирования в файл:** только stdout/stderr (`json.dumps` результатов).
-- **Нет интерактивного REPL:** только batch-команды.
+- **Нет интерактивного REPL:** только batch-команды. *(Закрыто в Этапе 16 — `python main.py repl`.)*
 - **Нет обработки SIGINT:** `main.py` не ловит KeyboardInterrupt — прерывание
   может оставить граф без свежего snapshot (сохраняется последний успешный).
+  *(Частично закрыто в Этапе 16 для `repl` — Ctrl+C делает graceful save+stop;
+  batch-команды по-прежнему полагаются на atexit из Этапа 14.)*
 - **PID-файл не создаётся:** нет защиты от double-run; `stop` — honest no-op,
   если нет pid-файла.
 - **Snapshot — vault-relative:** `data/graph_snapshot.json` пишется через
@@ -277,12 +282,65 @@ python main.py crawl --vault ./my-vault --autosave 30   # CLI override
 - **vault в YAML — relative to YAML location** (корень vault'а), резолвится CLI.
 - **Нет секций/profiles:** один flat config на vault.
 
+## STAGE 16 — Interactive REPL
+
+Закрыто честное ограничение Этапа 13: «Нет интерактивного REPL — только
+batch-команды.» Новый слой `cli/repl.py` — `KnowledgeOSRepl`: долгоживущий
+построчный REPL-цикл. **Kernel (и DI-контейнер, и общий граф) создаётся ОДИН
+раз** в `cmd_repl` и живёт весь сеанс — он НЕ пересоздаётся на каждую команду
+(доказано `tests/test_repl.py::test_repl_kernel_lifecycle`).
+
+```bash
+python main.py repl --vault ./my-vault
+knowledgeos> crawl
+# -> {"files_scanned": 3, "nodes": 3, "edges": 2}
+knowledgeos> query backlinks "C.md"
+# -> ["A.md"]
+knowledgeos> query path "A.md" "C.md"
+# -> ["A.md", "C.md"]
+knowledgeos> query orphans
+# -> []
+knowledgeos> status
+# -> {"state": "RUNNING", "graph_nodes": 3, "graph_edges": 2}
+knowledgeos> save        # форсированный snapshot, Kernel остаётся RUNNING
+knowledgeos> exit        # graceful shutdown (snapshot + stop)
+```
+
+Новый публичный метод `Kernel.save()` (Stage 16): best-effort
+`graph.snapshot()` + emit `GraphSnapshotted` **пока Kernel RUNNING** (не меняет
+состояние жизненного цикла, REPL продолжает отвечать). Обратно совместим —
+тонкая обёртка над `_try_snapshot_graph`, которую уже вызывает `stop()`.
+
+`Ctrl+C` (KeyboardInterrupt): ловится И на промпте, И во время команды →
+`_handle_sigint()` делает save + stop, затем чистый выход (данные не теряются).
+`run()` также гарантирует `Kernel.stop()` на любом пути выхода.
+
+История команд — через `readline` (optional import), **только in-memory**:
+файл истории никогда не читается/пишется, поэтому между сессиями история не
+сохраняется.
+
+### HONEST LIMITATIONS (Stage 16)
+- **Нет автодополнения (tab completion):** только in-memory readline-история
+  (стрелки вверх/вниз для предыдущих команд), без автодополнения ввода.
+- **Нет многострочного ввода:** одна команда на строку, Enter сразу исполняет.
+- **Нет pipeline (`crawl | query`):** команды последовательные, вывод одной не
+  передаётся на вход другой — результаты только на stdout.
+- **Нет background jobs:** `crawl` блокирует REPL до завершения (синхронный
+  asyncio.run внутри команды); ввод других команд пока невозможен.
+- **Нет remote access:** только локальный stdin/stdout, без сети/сокетов.
+- **Нет сохранения истории между сессиями:** readline in-memory only, файл
+  истории не используется.
+- **SIGINT для batch-команд:** `cmd_crawl/query/status` по-прежнему полагаются
+  на `atexit` из Этапа 14 (как и раньше) — собственного try/except KeyboardInterrupt
+  в них нет; граф сохранится по atexit, если прерывание произошло после start().
+
 ## Test gates
 
 ```
-pytest tests/            # unit + e2e + arch gate (109 tests, all green)
+pytest tests/            # unit + e2e + arch gate (133 tests, all green)
 python -c "import contracts, infrastructure, kernel, runtime, adapters, services, cli"
 python main.py --help   # exit 0
+python main.py repl --help  # exit 0
 ```
 
 ## HONEST LIMITATIONS (Stage 7.8)

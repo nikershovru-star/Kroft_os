@@ -15,7 +15,7 @@ from adapters import LocalFileSystemAdapter
 from services import VaultStreamCrawler, GraphQueryEngine
 
 from cli.parser import parse_args
-from cli.commands import cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop
+from cli.commands import cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl
 
 
 def build_container(vault_path: str) -> DependencyContainer:
@@ -57,6 +57,8 @@ def main(argv=None) -> None:
         cmd_status(args, build_container(args.vault))
     elif args.command == "stop":
         cmd_stop(args)
+    elif args.command == "repl":
+        cmd_repl(args, build_container(args.vault))
 
 
 if __name__ == "__main__":

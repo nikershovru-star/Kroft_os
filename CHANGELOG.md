@@ -120,4 +120,31 @@
 - HONEST LIMITATIONS (Stage 15): pyyaml optional (JSON fallback); no schema
   validation (unknown keys warned, ignored); no hot-reload (read once per
   command); no env-var override (CLI + YAML only); `vault` in YAML is relative
-  to the YAML location; flat config, no sections/profiles.
+
+## v5.0.0 (Stage 16)
+- Interactive REPL: closed Stage-13 limitation "no interactive REPL -- only
+  batch commands". NEW `cli/repl.py` -> `KnowledgeOSRepl`: a long-running,
+  line-oriented REPL loop. The Kernel (and the DI container + shared graph)
+  is created ONCE by `cmd_repl` and lives for the ENTIRE session -- it is NOT
+  rebuilt per command (proven by tests/test_repl.py::test_repl_kernel_lifecycle).
+- Commands: `crawl` (VaultStreamCrawler.crawl + stats), `query backlinks ID`
+  / `query path FROM TO` / `query orphans` / `query tags TAG` (GraphQueryEngine,
+  JSON), `status` (Kernel state + graph size), `save` (force snapshot),
+  `exit`/`quit` (graceful shutdown), `help`.
+- NEW `Kernel.save()` public method (Stage 16): best-effort `graph.snapshot()`
+  + `GraphSnapshotted` emit WHILE RUNNING (does not change lifecycle state, so
+  the REPL keeps serving). Backward-compatible (thin wrapper over the existing
+  `_try_snapshot_graph` used by stop()).
+- Graceful KeyboardInterrupt (Ctrl+C): caught at the prompt AND during a
+  command -> `_handle_sigint()` does save + stop, then exits cleanly (no lost
+  data). `run()` also guarantees `Kernel.stop()` on every exit path.
+- readline history (optional import): in-memory only -- no history file is
+  ever read/written, so command history does NOT persist across sessions.
+- CLI: `main.py repl --vault PATH` subcommand added (parser + cmd_repl +
+  main dispatch). `--vault` optional (falls back to knowledgeos.yaml).
+- 8 new tests (tests/test_repl.py): crawl / query-backlinks / status / save /
+  help / unknown-command / keyboard-interrupt / kernel-lifecycle. Full suite
+  now 133 green. Arch Gate green (cli allowed: {contracts, infrastructure,
+  kernel, services}; intra-package cli->cli import is NOT a cross-layer
+  violation -- gate updated to skip same-package imports).
+- HONEST LIMITATIONS (Stage 16): see README "HONEST LIMITATIONS (Stage 16)".

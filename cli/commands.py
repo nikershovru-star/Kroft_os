@@ -19,6 +19,7 @@ from typing import Optional
 from kernel import Kernel
 from infrastructure import ConfigLoader
 from services import VaultStreamCrawler, GraphQueryEngine
+from cli.repl import KnowledgeOSRepl
 
 # Template written by `init` if no config exists yet.
 _CONFIG_TEMPLATE = """\
@@ -128,3 +129,24 @@ def cmd_stop(args, container: Optional[object] = None) -> None:
     else:
         _dump({"stopped": False,
                "reason": "no running daemon (Kernel runs per-command)"})
+
+
+def cmd_repl(args, container) -> None:
+    """Launch the interactive REPL (Stage 16).
+
+    The Kernel is created ONCE, initialized + started, and handed to a
+    ``KnowledgeOSRepl`` that drives it for the whole session. Every REPL
+    command resolves services from the SAME container, so the kernel (and the
+    shared graph) never gets rebuilt between commands. On REPL exit the kernel
+    is stopped (which snapshots the graph) -- closing the Stage-13 limitation
+    "no interactive REPL, only batch commands".
+    """
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
+    k.initialize()
+    k.start()
+    try:
+        KnowledgeOSRepl(k, container).run()
+    finally:
+        # Guarantee shutdown even if the REPL loop propagates unexpectedly.
+        k.stop()

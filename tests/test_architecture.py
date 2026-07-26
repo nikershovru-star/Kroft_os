@@ -65,6 +65,10 @@ def _check_file(path: Path):
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             for dep in _imported_project_packages(node, pkg):
+                # Intra-package imports (e.g. cli.commands importing cli.repl)
+                # are NOT cross-layer violations -- skip them.
+                if dep == pkg:
+                    continue
                 allowed = ALLOWED.get(pkg, set())
                 if dep not in allowed:
                     violations.append((dep, node.lineno))
