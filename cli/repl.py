@@ -50,6 +50,8 @@ _COMMANDS = (
     ("hybrid QUERY", "hybrid lexical+semantic RRF search (top-10 by default)"),
     ("desktop ACTION", "desktop automation: click x y | type text | screenshot | cursor | open app"),
     ("desktop open_note QUERY", "search+open top note in default app"),
+    ("agent COMMAND", "Hermes agent: find/open/show/export (try 'agent find python')"),
+    ("agent --dry-run COMMAND", "show execution plan without running"),
     ("desktop list_notes QUERY", "list top-k note candidates from hybrid search"),
     ("export FORMAT [OUTPUT]", "export graph to dot/json/gexf (FORMAT in dot/json/gexf; OUTPUT file or '-' stdout)"),
     ("watch [--interval N]", "start auto-recrawl on .md change (background thread; stop with 'watch stop')"),
@@ -208,6 +210,9 @@ class KnowledgeOSRepl:
             return
         if verb == "desktop":
             self._do_desktop(parts[1:])
+            return
+        if verb == "agent":
+            self._do_agent(parts[1:])
             return
         if verb == "export":
             self._do_export(parts[1:])
@@ -376,6 +381,27 @@ class KnowledgeOSRepl:
             print(json.dumps(result, ensure_ascii=False))
         else:
             print(f"desktop: unknown action {action}", file=sys.stderr)
+
+    def _do_agent(self, args: List[str]) -> None:
+        """Hermes agent: natural language command execution (Stage 33)."""
+        if not args:
+            print("agent: missing COMMAND", file=sys.stderr)
+            return
+        dry_run = False
+        if args[0] == "--dry-run":
+            dry_run = True
+            args = args[1:]
+        if not args:
+            print("agent: missing COMMAND after --dry-run", file=sys.stderr)
+            return
+        command = " ".join(args)
+        agent = self._container.resolve("IAgent")
+        if dry_run:
+            plan = agent._svc.plan(command)  # type: ignore[attr-defined]
+            print(json.dumps({"dry_run": True, "plan": plan}, ensure_ascii=False))
+        else:
+            result = agent.execute(command)
+            print(json.dumps(result, ensure_ascii=False))
 
     def _do_export(self, args: List[str]) -> None:
         """Export the live graph to dot/json/gexf (Stage 23).

@@ -123,6 +123,13 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     pd.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 
+    pa = sub.add_parser("agent", help="Hermes agent: natural language command (Stage 33)")
+    pa.add_argument("text", nargs="+", help="Natural language command")
+    pa.add_argument("--dry-run", action="store_true",
+                    help="Show plan without executing")
+    pa.add_argument("--vault", default=None,
+                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+
     # Stage 25: plugins add their own subcommands LAST (they can never
     # displace a built-in: argparse raises on duplicate names and the loader
     # records the error, skipping only the offender).

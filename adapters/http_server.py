@@ -207,6 +207,17 @@ class _Handler(BaseHTTPRequestHandler):
             orch = self._container.resolve("DesktopOrchestrator")
             result = orch.list_notes(data.get("query", ""), top_k=data.get("top_k", 5))
             self._json_response(result)
+        elif path == "/api/agent/execute":
+            body = self._read_body()
+            data = json.loads(body.decode("utf-8"))
+            agent = self._container.resolve("IAgent")
+            command = data.get("command", "")
+            if data.get("dry_run"):
+                plan = agent._svc.plan(command)  # type: ignore[attr-defined]
+                self._json_response({"dry_run": True, "plan": plan})
+            else:
+                result = agent.execute(command)
+                self._json_response(result)
         else:
             self.send_error(404)
 

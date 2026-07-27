@@ -226,6 +226,22 @@ def cmd_desktop(args, container) -> None:
         print(json.dumps(result, ensure_ascii=False))
 
 
+def cmd_agent(args, container) -> None:
+    """Hermes agent: execute natural language command (Stage 33)."""
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
+    k.initialize()
+    atexit.register(lambda: k.stop())
+    agent = container.resolve("IAgent")
+    command = " ".join(args.text)
+    if args.dry_run:
+        plan = agent._svc.plan(command)  # type: ignore[attr-defined]
+        print(json.dumps({"dry_run": True, "plan": plan}, ensure_ascii=False))
+    else:
+        result = agent.execute(command)
+        print(json.dumps(result, ensure_ascii=False))
+
+
 def cmd_stop(args, container: Optional[object] = None) -> None:
     """No daemon runs between commands, so there is nothing to signal.
 

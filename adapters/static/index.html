@@ -33,6 +33,11 @@
   <button onclick="desktopOpenNote()">Open Note</button>
   <button onclick="desktopListNotes()">List Notes</button>
   <div id="openNoteResult"></div>
+  <h2>Hermes Agent</h2>
+  <input id="agentCommand" type="text" placeholder="find python notes and open the best" autocomplete="off">
+  <button onclick="agentExecute()">Execute</button>
+  <button onclick="agentDryRun()">Dry Run</button>
+  <div id="agentResult"></div>
   <button onclick="loadGraph()">Show Graph</button>
   <button onclick="loadAnalytics()">Analytics</button>
   <button onclick="fetch('/api/logout').then(()=>location.href='/login.html')">Logout</button>
@@ -117,6 +122,26 @@
       });
       const j = await r.json();
       document.getElementById("openNoteResult").innerHTML = "<pre>" + JSON.stringify(j, null, 2) + "</pre>";
+    }
+    async function agentExecute() {
+      const cmd = document.getElementById("agentCommand").value;
+      const r = await fetch(`${API}/agent/execute`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({command: cmd})
+      });
+      const j = await r.json();
+      document.getElementById("agentResult").innerHTML = "<pre>" + JSON.stringify(j, null, 2) + "</pre>";
+    }
+    async function agentDryRun() {
+      const cmd = document.getElementById("agentCommand").value;
+      const r = await fetch(`${API}/agent/execute`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({command: cmd, dry_run: true})
+      });
+      const j = await r.json();
+      document.getElementById("agentResult").innerHTML = "<pre>DRY RUN\n" + JSON.stringify(j, null, 2) + "</pre>";
     }
 
     async function loadGraph() {

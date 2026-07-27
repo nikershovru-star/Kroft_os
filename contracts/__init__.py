@@ -12,6 +12,7 @@ from .snapshotable import ISnapshotable
 from .plugin import IPlugin
 from .embedding import IEmbedding
 from .desktop import IDesktop
+from .agent import IAgent, Tool
 
 __all__ = [
     "IService",
@@ -24,4 +25,6 @@ __all__ = [
     "IPlugin",
     "IEmbedding",
     "IDesktop",
+    "IAgent",
+    "Tool",
 ]

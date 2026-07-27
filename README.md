@@ -817,6 +817,35 @@ python main.py desktop list_notes "python" --top-k 5
   (Mock просто вызывает `os.system`, что в headless среде молча игнорируется).
 - Нет preview перед открытием — топ-1 открывается сразу.
 
+## STAGE 33 — Hermes Agent: Natural Language Commands
+
+Голосовой/текстовой интерфейс к KnowledgeOS — говоришь естественно, система понимает:
+
+```bash
+python main.py agent "find python notes"
+python main.py agent "find python notes and open the best"
+python main.py agent "what is the most central note"
+python main.py agent "export graph to dot"
+python main.py agent --dry-run "find python"   # показать план без выполнения
+# REPL:  agent find python
+#        agent --dry-run find python
+# HTTP:  POST /api/agent/execute {"command":"find python"}
+```
+
+- **`services.AgentService`** — rule-based intent router (regex patterns).
+- Поддерживает: `find X`, `find X and open`, `open X`, `show X`, `most central`,
+  `export graph to FMT`, `screenshot`, `cursor position`, `orphan`.
+- **`services.ToolRegistry`** — регистрация и вызов инструментов (search, open,
+  analytics, export, desktop) через единый API.
+- **`adapters.RuleBasedAgentAdapter`** — default wiring (zero ML deps).
+- Zero regression: неизвестная команда → `{"error":"unknown command", "hint":...}`.
+
+### HONEST LIMITATIONS (Stage 33)
+- Rule-based только — нет LLM/NLU. Команды должны примерно совпадать с шаблонами.
+- Английский язык (regex на латинице). Кириллица требует расширения паттернов.
+- `dry_run` в HTTP требует `dry_run: true` в JSON body (UI кнопка Dry Run).
+- Планировщик не умеет многошаговые цепочки (только single tool call).
+
 ## Test gates
 
 ```

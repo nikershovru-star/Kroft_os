@@ -8,6 +8,8 @@ from .auth_service import SimpleAuthService
 from .semantic_index import SemanticIndex
 from .desktop_service import DesktopService
 from .desktop_orchestrator import DesktopOrchestrator
+from .tool_registry import ToolRegistry
+from .agent_service import AgentService
 
 __all__ = [
     "VaultStreamCrawler",
@@ -19,4 +21,6 @@ __all__ = [
     "SemanticIndex",
     "DesktopService",
     "DesktopOrchestrator",
+    "ToolRegistry",
+    "AgentService",
 ]

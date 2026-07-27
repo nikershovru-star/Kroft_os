@@ -1,4 +1,12 @@
 # Changelog
+## v5.0.0 (Stage 33)
+- Hermes Agent: `AgentService` -- rule-based natural language intent router.
+- `ToolRegistry` -- unified tool registration (search, open, analytics, export, desktop).
+- CLI `agent "COMMAND" [--dry-run]`, REPL `agent`, HTTP `POST /api/agent/execute`.
+- Web UI: Agent input + Execute/Dry Run buttons.
+- 8 tests (`test_agent.py`); suite 271 -> 279 passed.
+- HONEST LIMITATIONS: regex/English-only; no LLM; single-tool calls; dry_run via json body.
+
 ## v5.0.0 (Stage 32)
 - Desktop Orchestrator: `DesktopOrchestrator` bridges `GraphQueryEngine` + `DesktopService`.
 - `open_note(query, top_k=1)` -- hybrid-search then open top result in OS default app.

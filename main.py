@@ -22,10 +22,11 @@ from adapters.embedding import MockEmbeddingAdapter
 
 from cli.parser import parse_args
 from cli.commands import (
-    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic, cmd_hybrid, cmd_desktop,
+    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic, cmd_hybrid, cmd_desktop, cmd_agent,
 )
-from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex, DesktopService, DesktopOrchestrator
+from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex, DesktopService, DesktopOrchestrator, ToolRegistry, AgentService
 from adapters.desktop_adapter import MockDesktopAdapter
+from adapters.agent_adapter import RuleBasedAgentAdapter
 
 
 def build_container(vault_path: str, loader=None) -> DependencyContainer:
@@ -65,6 +66,16 @@ def build_container(vault_path: str, loader=None) -> DependencyContainer:
             c.resolve("IFileSystem"),
             vault_path,
         ),
+    )
+    # Stage 33: Hermes Agent — tool registry + rule-based intent router
+    c.register_instance("ToolRegistry", ToolRegistry())
+    c.register_factory(
+        "AgentService",
+        lambda: _wire_agent(c),
+    )
+    c.register_factory(
+        "IAgent",
+        lambda: RuleBasedAgentAdapter(c.resolve("AgentService")),
     )
     c.register_factory(
         "CrawlStateTracker",
@@ -130,6 +141,50 @@ def build_container(vault_path: str, loader=None) -> DependencyContainer:
     return c
 
 
+def _wire_agent(container: DependencyContainer) -> AgentService:
+    """Register all available tools in the ToolRegistry and return AgentService.
+
+    Lives in the composition root (main.py) so it may resolve exporters and
+    services by name without any service->service or cli->adapters imports.
+    """
+    registry: ToolRegistry = container.resolve("ToolRegistry")
+    engine: GraphQueryEngine = container.resolve("GraphQueryEngine")
+    orch: DesktopOrchestrator = container.resolve("DesktopOrchestrator")
+    desktop: DesktopService = container.resolve("DesktopService")
+
+    # Search tools
+    registry.register("list_notes", lambda query, top_k: orch.list_notes(query, top_k),
+                      "List note candidates via hybrid search")
+    registry.register("open_note", lambda query, top_k: orch.open_note(query, top_k),
+                      "Open top-1 note via hybrid search")
+
+    # Graph analytics
+    registry.register("most_central", lambda: engine.centrality(),
+                      "Return centrality metrics for all nodes")
+    registry.register("list_orphans", lambda: engine.search("is:orphan"),
+                      "List orphan nodes")
+
+    # Export (exporters registered as instances in build_container)
+    def _export_graph(fmt: str):
+        g = container.resolve("IGraphBuilder").get_graph()
+        if fmt == "dot":
+            return container.resolve("export_dot")(g)
+        elif fmt == "json":
+            return container.resolve("export_json")(g)
+        elif fmt == "gexf":
+            return container.resolve("export_gexf")(g)
+        return {"error": f"unknown format {fmt}"}
+    registry.register("export_graph", _export_graph, "Export graph to dot/json/gexf")
+
+    # Desktop
+    registry.register("screenshot", lambda: {"size": len(desktop.capture_screen())},
+                      "Capture screen and return PNG size")
+    registry.register("cursor_position", lambda: {"x": desktop.where_is_cursor()[0], "y": desktop.where_is_cursor()[1]},
+                      "Return cursor coordinates")
+
+    return AgentService(registry)
+
+
 def _prescan_plugin_dir(argv) -> str | None:
     """Extract --plugin-dir BEFORE the real parser exists (chicken-and-egg:
     plugins must register their subcommands into the parser itself)."""
@@ -184,11 +239,13 @@ def main(argv=None) -> None:
         cmd_hybrid(args, build())
     elif args.command == "desktop":
         cmd_desktop(args, build())
+    elif args.command == "agent":
+        cmd_agent(args, build())
 
 
 _BUILTIN_COMMANDS = {
     "init", "crawl", "query", "search", "status", "stop", "repl",
-    "export", "watch", "serve", "semantic", "hybrid", "desktop",
+    "export", "watch", "serve", "semantic", "hybrid", "desktop", "agent",
 }
 
 
