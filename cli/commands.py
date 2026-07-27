@@ -138,6 +138,22 @@ def cmd_search(args, container) -> None:
         _dump(engine.search(args.query))
 
 
+def cmd_semantic(args, container) -> None:
+    """Semantic vector search (Stage 29).
+
+    Uses the wired SemanticIndex + IEmbedding (default MockEmbeddingAdapter).
+    Restored from data/semantic_snapshot.json by Kernel.initialize() (Stage 29),
+    so a cold start is O(1) — no vault re-read.
+    """
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
+    k.initialize()  # restores graph + index + semantic from snapshot if present
+    atexit.register(lambda: k.stop())
+    engine = container.resolve("GraphQueryEngine")
+    query = " ".join(args.query) if isinstance(args.query, list) else args.query
+    _dump(engine.semantic_search(query, top_k=args.top_k))
+
+
 def cmd_stop(args, container: Optional[object] = None) -> None:
     """No daemon runs between commands, so there is nothing to signal.
 

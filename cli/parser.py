@@ -99,6 +99,13 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     psv.add_argument("--auth", default=None,
                      help='Basic auth "user:pass" for the web UI (Stage 28)')
 
+    psm = sub.add_parser("semantic", help="Semantic vector search (Stage 29)")
+    psm.add_argument("query", nargs="+", help="Query text")
+    psm.add_argument("--top-k", type=int, default=10,
+                     help="Number of nearest results (default 10)")
+    psm.add_argument("--vault", default=None,
+                     help="Path to the vault directory (or read from knowledgeos.yaml)")
+
     # Stage 25: plugins add their own subcommands LAST (they can never
     # displace a built-in: argparse raises on duplicate names and the loader
     # records the error, skipping only the offender).

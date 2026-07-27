@@ -95,28 +95,34 @@ class Kernel:
         return "data/index_snapshot.json"
 
     def _try_restore_index(self) -> None:
-        """Best-effort ContentIndex recovery on initialize().
+        """Best-effort ContentIndex + SemanticIndex recovery on initialize().
 
-        Resolves a registered ContentIndex (or any ISnapshotable service keyed
-        "ContentIndex") and restores it from the index snapshot file. No-op if
-        no store / no index service, or the file is missing/corrupt (silent
-        fallback — a fresh process simply starts with an empty index).
+        Both snapshotables live in ONE composite file (data/index_snapshot.json,
+        {"version":2, "index":..., "semantic":...}) so a single atomic write
+        (Stage 19) persists them together — a second save() would otherwise
+        clobber the first. No-op if no store / no services / missing / corrupt.
         """
         store = self._snapshot_store
         if store is None:
             return
-        index = self._resolve_snapshotable("ContentIndex")
-        if index is None:
-            return
         data = store.load()
         if data is None or "index" not in data:
             return
-        try:
-            index.restore(data["index"])
-            self.emit("IndexRestored", {"path": self._index_snapshot_path()})
-        except Exception:
-            # Corrupt index payload — leave the index empty, never crash boot.
-            pass
+        index = self._resolve_snapshotable("ContentIndex")
+        if index is not None:
+            try:
+                index.restore(data["index"])
+                self.emit("IndexRestored", {"path": self._index_snapshot_path()})
+            except Exception:
+                pass
+        # Stage 29: semantic embeddings share the same composite file.
+        sem = self._resolve_snapshotable("SemanticIndex")
+        if sem is not None and "semantic" in data:
+            try:
+                sem.restore(data["semantic"])
+                self.emit("SemanticRestored", {"path": self._index_snapshot_path()})
+            except Exception:
+                pass
 
     def _resolve_snapshotable(self, key: str):
         """Return a registered service that implements ISnapshotable, else None.
@@ -133,10 +139,12 @@ class Kernel:
         return None
 
     def _try_snapshot_index(self) -> None:
-        """Best-effort ContentIndex persistence on save()/stop()/autosave.
+        """Best-effort Index + SemanticIndex persistence (composite snapshot).
 
-        Emits IndexSnapshotted via IEventBus. No-op if unwired; silent on write
-        failure (no backoff, no retry).
+        Stage 19 persists the ContentIndex; Stage 29 adds the SemanticIndex to
+        the SAME atomic file ({"version":2, "index":..., "semantic":...}) so a
+        single SnapshotStore.save() writes both. Emits IndexSnapshotted /
+        SemanticSnapshotted. No-op if unwired; silent on write failure.
         """
         store = self._snapshot_store
         if store is None:
@@ -144,9 +152,15 @@ class Kernel:
         index = self._resolve_snapshotable("ContentIndex")
         if index is None:
             return
+        payload: Dict[str, Any] = {"version": 2, "index": index.snapshot()}
+        sem = self._resolve_snapshotable("SemanticIndex")
+        if sem is not None:
+            payload["semantic"] = sem.snapshot()
         try:
-            store.save({"version": 2, "index": index.snapshot()})
+            store.save(payload)
             self.emit("IndexSnapshotted", {"path": self._index_snapshot_path()})
+            if sem is not None:
+                self.emit("SemanticSnapshotted", {"path": self._index_snapshot_path()})
         except Exception:
             pass
 

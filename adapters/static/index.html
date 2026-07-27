@@ -16,7 +16,11 @@
 </head>
 <body>
   <h1>KnowledgeOS</h1>
-  <input id="search" type="text" placeholder="Search vault..." autocomplete="off">
+  <select id="searchMode">
+    <option value="lexical">Lexical</option>
+    <option value="semantic">Semantic</option>
+  </select>
+  <input id="search" type="text" placeholder="Search..." autocomplete="off">
   <div id="suggestions"></div>
   <div id="results"></div>
   <button onclick="loadGraph()">Show Graph</button>
@@ -32,13 +36,19 @@
     const suggestions = document.getElementById("suggestions");
 
     async function doSearch(q) {
+      const mode = document.getElementById("searchMode").value;
+      const url = mode === "semantic"
+        ? `${API}/semantic?q=${encodeURIComponent(q)}&top_k=10`
+        : `${API}/search?q=${encodeURIComponent(q)}`;
       const [searchRes, suggestRes] = await Promise.all([
-        fetch(`${API}/search?q=${encodeURIComponent(q)}`).then(r => r.json()),
+        fetch(url).then(r => r.json()),
         fetch(`${API}/suggest?prefix=${encodeURIComponent(q)}`).then(r => r.json()),
       ]);
-      document.getElementById("results").innerHTML = searchRes.map(id =>
-        `<div class="result"><b>${escapeHtml(id)}</b></div>`
-      ).join("");
+      document.getElementById("results").innerHTML = searchRes.map(item => {
+        const [id, score] = Array.isArray(item) ? item : [item, null];
+        const scoreStr = score !== null ? ` <span style="color:#666">${score.toFixed(3)}</span>` : "";
+        return `<div class="result"><b>${escapeHtml(id)}</b>${scoreStr}</div>`;
+      }).join("");
       suggestions.innerHTML = suggestRes.map(s =>
         `<span onclick="searchBox.value=${JSON.stringify(s).replace(/"/g, '&quot;')};doSearch(${JSON.stringify(s)});">${escapeHtml(s)}</span>`
       ).join("");

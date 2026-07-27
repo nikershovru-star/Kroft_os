@@ -30,6 +30,8 @@ class VaultStreamCrawler(IService):
         vault_path: str,
         tracker: Optional[Any] = None,
         index: Optional[Any] = None,
+        semantic_index: Optional[Any] = None,
+        embedding: Optional[Any] = None,
     ) -> None:
         self._fs = fs
         self._bus = bus
@@ -42,6 +44,10 @@ class VaultStreamCrawler(IService):
         # Stage 18: optional ContentIndex (same duck-typed DI convention).
         # index=None => zero regression: no full-text indexing at all.
         self._index = index
+        # Stage 29: optional SemanticIndex + IEmbedding (duck-typed pair).
+        # BOTH must be wired for semantic indexing; either None => no-op.
+        self._semantic_index = semantic_index
+        self._embedding = embedding
         self._stats: Dict[str, int] = {}
 
     # ----- IService -----
@@ -108,6 +114,10 @@ class VaultStreamCrawler(IService):
         if self._index is not None:
             for fpath in deleted:
                 self._index.remove_file(_norm(fpath))
+        # Stage 29: purge deleted files from the semantic index too.
+        if self._semantic_index is not None:
+            for fpath in deleted:
+                self._semantic_index.remove(_norm(fpath))
         # Changed files: drop their stale node+edges before rescanning,
         # otherwise re-adding would duplicate outgoing edges (edge storage
         # is a list). COLLISION caught in smoke: remove_node also drops
@@ -160,6 +170,9 @@ class VaultStreamCrawler(IService):
             # => zero regression: nothing is indexed.
             if self._index is not None:
                 self._index.index_file(fpath, text)
+            # Stage 29: semantic embedding (replace semantics via dict add).
+            if self._semantic_index is not None and self._embedding is not None:
+                self._semantic_index.add(fpath, self._embedding.embed(text))
             for link in links:
                 target = _norm(link.strip())
                 if target:

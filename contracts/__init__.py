@@ -10,6 +10,7 @@ from .igraph_builder import IGraphBuilder
 from .igraph_query import IGraphQuery
 from .snapshotable import ISnapshotable
 from .plugin import IPlugin
+from .embedding import IEmbedding
 
 __all__ = [
     "IService",
@@ -20,4 +21,5 @@ __all__ = [
     "IGraphQuery",
     "ISnapshotable",
     "IPlugin",
+    "IEmbedding",
 ]

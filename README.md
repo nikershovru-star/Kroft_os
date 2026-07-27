@@ -701,6 +701,39 @@ python main.py serve --port 8080 --auth admin:secret
 - Пароль виден в командной строке процесса (ps/Task Manager).
 - REPL-команда `serve` не принимает `--auth` (только CLI).
 
+## STAGE 29 — Semantic Search
+
+Поиск по смыслу через векторные эмбеддинги:
+
+```bash
+python main.py crawl --vault ./vault
+python main.py semantic "how to configure python" --top-k 5
+# REPL:  semantic how to configure python --top-k 5
+# HTTP:  GET /api/semantic?q=how%20to%20configure%20python&top_k=5
+```
+
+- **`contracts/IEmbedding`** — порт; **`adapters.MockEmbeddingAdapter`** (SHA-256 →
+  128-dim, L2-normalized, детерминированный) — дефолтная проводка; **`OpenAIEmbeddingAdapter`**
+  (urllib, опционально, требует `OPENAI_API_KEY`) — для продакшена.
+- **`services.SemanticIndex`** — brute-force cosine similarity, O(nodes) на запрос;
+  имплементирует `ISnapshotable`.
+- **`VaultStreamCrawler`** индексирует документы в `SemanticIndex` во время crawl;
+  `GraphQueryEngine.semantic_search(query, top_k)` — прокси к индексу.
+- **Снапшот**: `SemanticIndex` пишется в **тот же** `data/index_snapshot.json`
+  (composite `{"version":2, "index":..., "semantic":...}`) рядом с ContentIndex —
+  одна атомарная запись, без clobber.
+- Web UI: переключатель **Lexical / Semantic** рядом с поиском.
+
+### HONEST LIMITATIONS (Stage 29)
+- Mock-эмбеддинг — НЕ настоящая семантика (детерминированный вектор для
+  инфраструктуры/тестов). Настоящий поиск требует OpenAI/sentence-transformers
+  (вне arch gate — только urllib-OpenAI реализован).
+- Brute-force cosine O(nodes) — для vault-scale (сотни нод) OK; тысячи
+  потребуют FAISS/ANN (внешняя зависимость).
+- embeddings хранятся в RAM; снапшот может быть большим (128 floats/документ).
+- Нет инкрементального обновления semantic-индекса при watch-mode recrawl —
+  только полный crawl перестраивает.
+
 ## Test gates
 
 ```

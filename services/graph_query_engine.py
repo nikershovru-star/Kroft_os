@@ -36,7 +36,9 @@ _FILTER_RE = re.compile(r"\b(\w+):(\S+)\b")
 class GraphQueryEngine(IGraphQuery):
     """Pure read-only structural query engine over a shared IGraphBuilder."""
 
-    def __init__(self, graph: IGraphBuilder, index: Optional[Any] = None) -> None:
+    def __init__(self, graph: IGraphBuilder, index: Optional[Any] = None,
+                 semantic_index: Optional[Any] = None,
+                 embedding: Optional[Any] = None) -> None:
         # Snapshot-on-read: every query pulls a fresh deep-copy snapshot via
         # graph.get_graph(), so the crawler may mutate the live graph (add
         # nodes/edges) between our calls without corrupting an in-flight query.
@@ -46,6 +48,10 @@ class GraphQueryEngine(IGraphQuery):
         # composition root wires the SAME instance the crawler writes to).
         # index=None => zero regression: search() returns [].
         self._index = index
+        # Stage 29: optional SemanticIndex + IEmbedding (duck-typed pair,
+        # same DI convention). Either None => semantic_search() returns [].
+        self._semantic_index = semantic_index
+        self._embedding = embedding
 
     # ----- IService -----
     def name(self) -> str:
@@ -312,6 +318,17 @@ class GraphQueryEngine(IGraphQuery):
                 continue
             result.append(nid)
         return result
+
+    def semantic_search(self, query: str, top_k: int = 10) -> List[Tuple[str, float]]:
+        """Vector similarity search over the SemanticIndex (Stage 29).
+
+        Returns [(node_id, cosine_score), ...] best-first. Without a wired
+        semantic_index+embedding pair -> [] (zero regression).
+        """
+        if self._semantic_index is None or self._embedding is None:
+            return []
+        q_emb = self._embedding.embed(query)
+        return self._semantic_index.search(q_emb, top_k=top_k)
 
     def fuzzy_search(self, query: str) -> List[str]:
         """Fuzzy full-text AND-search over the shared ContentIndex (Stage 20).

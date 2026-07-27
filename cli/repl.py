@@ -46,7 +46,7 @@ _COMMANDS = (
     ("query orphans", "nodes with zero edges"),
     ("query tags TAG", "nodes carrying <TAG>"),
     ("search QUERY", "full-text AND-search + DSL filters (tag:X, from:X, to:X, is:orphan)"),
-    ("fuzzy QUERY", "fuzzy full-text search (e.g. 'fuzzy pithon')"),
+    ("semantic QUERY", "semantic vector search (top-10 by default)"),
     ("export FORMAT [OUTPUT]", "export graph to dot/json/gexf (FORMAT in dot/json/gexf; OUTPUT file or '-' stdout)"),
     ("watch [--interval N]", "start auto-recrawl on .md change (background thread; stop with 'watch stop')"),
     ("serve [PORT]", "start HTTP server for the web UI (default 8080; --auth via CLI only)"),
@@ -196,6 +196,9 @@ class KnowledgeOSRepl:
         if verb == "fuzzy":
             self._do_fuzzy(parts[1:])
             return
+        if verb == "semantic":
+            self._do_semantic(parts[1:])
+            return
         if verb == "export":
             self._do_export(parts[1:])
             return
@@ -270,6 +273,21 @@ class KnowledgeOSRepl:
             return
         engine = self._container.resolve("GraphQueryEngine")
         print(json.dumps(engine.fuzzy_search(" ".join(args)), ensure_ascii=False))
+
+    def _do_semantic(self, args: List[str]) -> None:
+        """Semantic vector search (Stage 29) via SemanticIndex."""
+        if not args:
+            print("semantic: missing QUERY", file=sys.stderr)
+            return
+        top_k = 10
+        if len(args) >= 3 and args[-2] == "--top-k":
+            try:
+                top_k = int(args[-1])
+                args = args[:-2]
+            except ValueError:
+                pass
+        engine = self._container.resolve("GraphQueryEngine")
+        print(json.dumps(engine.semantic_search(" ".join(args), top_k=top_k), ensure_ascii=False))
 
     def _do_export(self, args: List[str]) -> None:
         """Export the live graph to dot/json/gexf (Stage 23).

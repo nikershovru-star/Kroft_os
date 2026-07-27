@@ -18,12 +18,13 @@ from adapters import LocalFileSystemAdapter
 from adapters.exporters import export_dot, export_json, export_gexf
 from adapters.file_watcher import FileWatcher
 from adapters.http_server import KnowledgeOSServer
+from adapters.embedding import MockEmbeddingAdapter
 
 from cli.parser import parse_args
 from cli.commands import (
-    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve,
+    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic,
 )
-from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService
+from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex
 
 
 def build_container(vault_path: str, loader=None) -> DependencyContainer:
@@ -44,6 +45,10 @@ def build_container(vault_path: str, loader=None) -> DependencyContainer:
     # Stage 18: singleton ContentIndex — the crawler WRITES to it, the query
     # engine READS from it (same shared-instance convention as IGraphBuilder).
     c.register_instance("ContentIndex", ContentIndex())
+    # Stage 29: shared SemanticIndex (crawler writes, engine reads) + the
+    # default deterministic Mock embedding (real OpenAI adapter is opt-in).
+    c.register_instance("SemanticIndex", SemanticIndex())
+    c.register_instance("Embedding", MockEmbeddingAdapter())
     c.register_factory(
         "CrawlStateTracker",
         lambda: CrawlStateTracker(c.resolve("IFileSystem"), ".crawl_state.json"),
@@ -57,6 +62,8 @@ def build_container(vault_path: str, loader=None) -> DependencyContainer:
             vault_path,
             tracker=c.resolve("CrawlStateTracker"),
             index=c.resolve("ContentIndex"),
+            semantic_index=c.resolve("SemanticIndex"),
+            embedding=c.resolve("Embedding"),
         ),
     )
     c.register_factory(
@@ -64,6 +71,8 @@ def build_container(vault_path: str, loader=None) -> DependencyContainer:
         lambda: GraphQueryEngine(
             c.resolve("IGraphBuilder"),
             index=c.resolve("ContentIndex"),
+            semantic_index=c.resolve("SemanticIndex"),
+            embedding=c.resolve("Embedding"),
         ),
     )
     # Stage 23: graph exporters registered as instances. The composition root
@@ -152,11 +161,13 @@ def main(argv=None) -> None:
         cmd_watch(args, build())
     elif args.command == "serve":
         cmd_serve(args, build())
+    elif args.command == "semantic":
+        cmd_semantic(args, build())
 
 
 _BUILTIN_COMMANDS = {
     "init", "crawl", "query", "search", "status", "stop", "repl",
-    "export", "watch", "serve",
+    "export", "watch", "serve", "semantic",
 }
 
 

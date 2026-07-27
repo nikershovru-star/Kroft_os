@@ -5,6 +5,7 @@ from .incremental_tracker import CrawlStateTracker
 from .content_index import ContentIndex
 from .watch_service import WatchService
 from .auth_service import SimpleAuthService
+from .semantic_index import SemanticIndex
 
 __all__ = [
     "VaultStreamCrawler",
@@ -13,4 +14,5 @@ __all__ = [
     "ContentIndex",
     "WatchService",
     "SimpleAuthService",
+    "SemanticIndex",
 ]

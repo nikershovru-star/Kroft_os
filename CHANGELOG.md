@@ -431,3 +431,20 @@
 - HONEST LIMITATIONS (Stage 28): single user; RAM-only sessions (restart
   logs everyone out); unsigned hex token, no TTL; no HTTPS; password visible
   in process args; REPL serve has no --auth.
+
+## v5.0.0 (Stage 29)
+- Semantic Search: vector embeddings + cosine similarity.
+  - `contracts.IEmbedding` port; `adapters.MockEmbeddingAdapter` (deterministic
+    SHA-256 -> 128-dim, L2-normalized) as default wiring; `OpenAIEmbeddingAdapter`
+    (stdlib urllib, optional, requires OPENAI_API_KEY).
+  - `services.SemanticIndex` — brute-force cosine top-k (O(nodes)/query),
+    implements ISnapshotable.
+  - `VaultStreamCrawler` indexes docs into SemanticIndex during crawl (duck-typed).
+  - `GraphQueryEngine.semantic_search(query, top_k)` proxy to the index.
+  - Composite snapshot: SemanticIndex shares data/index_snapshot.json with
+    ContentIndex ({"version":2,"index":..,"semantic":..}) — one atomic write.
+  - API `GET /api/semantic?q=...&top_k=10` -> [[node_id, score], ...].
+  - Web UI: Lexical/Semantic toggle. CLI: `semantic QUERY [--top-k N]`; REPL too.
+- 10 new tests (`tests/test_semantic_search.py`). Full suite now 249 green.
+- HONEST LIMITATIONS: Mock embedding is NOT real semantics; brute-force O(nodes);
+  no incremental semantic update on watch recrawl; no FAISS (out of arch gate).
