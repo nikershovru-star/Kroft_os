@@ -1,4 +1,12 @@
 # Changelog
+## v5.0.0 (Stage 34)
+- Multi-Step Agent Plans: `find X and open the best` -> sequential tool execution.
+- Cyrillic support: `найди`, `открой`, `сделай скриншот`, `экспортируй граф в dot`, etc.
+- Fail-fast execution: error in step N stops the chain, returns partial plan.
+- Backward-compatible single-step JSON format preserved (flat {ok,command,tool,result}).
+- 9 new tests (`test_agent.py` 16->actually 17 incl. working fail-fast test); suite 279 -> 288 passed.
+- HONEST LIMITATIONS: fail-fast only (no rollback); regex not NLP; mixed-language limited.
+
 ## v5.0.0 (Stage 33)
 - Hermes Agent: `AgentService` -- rule-based natural language intent router.
 - `ToolRegistry` -- unified tool registration (search, open, analytics, export, desktop).

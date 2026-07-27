@@ -846,6 +846,35 @@ python main.py agent --dry-run "find python"   # показать план бе�
 - `dry_run` в HTTP требует `dry_run: true` в JSON body (UI кнопка Dry Run).
 - Планировщик не умеет многошаговые цепочки (только single tool call).
 
+## STAGE 34 — Multi-Step Plans + Cyrillic Support
+
+Агент теперь понимает цепочки команд и кириллицу:
+
+```bash
+python main.py agent "find python notes and open the best"     # 2 шага
+python main.py agent "open my note and take a screenshot"      # 2 шага
+python main.py agent "найди питон"                             # русский
+python main.py agent "открой лучшую заметку про python"        # русский
+python main.py agent "сделай скриншот"                         # русский
+python main.py agent "экспортируй граф в dot"                  # русский
+# REPL: agent найди питон
+# HTTP: POST /api/agent/execute {"command":"найди питон"}
+```
+
+- **Multi-step plans:** `find X and open the best` → сначала `list_notes`, потом
+  `open_note`. `find X and take a screenshot`, `open X and take a screenshot` — тоже 2 шага.
+- **Fail-fast:** ошибка в шаге N останавливает цепочку, возвращается частичный план.
+- **Кириллица:** `найди`, `открой`, `покажи`, `сделай скриншот`, `позиция курсора`,
+  `экспортируй граф в FMT`, `центральность`, `осиротевшие`.
+- **Backward compat:** single-step команды возвращают тот же плоский JSON
+  (`{"ok","command","tool","result"}`), что и в Stage 33 — API не сломан.
+
+### HONEST LIMITATIONS (Stage 34)
+- Цепочки только fail-fast (нет rollback/compensating transactions).
+- Кириллические паттерны — regex, не NLP. Синонимы не распознаются.
+- Mixed-language (`найди python`) работает, но только если английское слово
+  попадает в capture group `(.*)`.
+
 ## Test gates
 
 ```
