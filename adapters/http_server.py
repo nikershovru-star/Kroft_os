@@ -117,6 +117,13 @@ class _Handler(BaseHTTPRequestHandler):
             except ValueError:
                 top_k = 10
             self._json_response(engine.semantic_search(q, top_k=top_k))
+        elif path == "/api/hybrid":
+            q = qs.get("q", [""])[0]
+            try:
+                top_k = int(qs.get("top_k", ["10"])[0])
+            except ValueError:
+                top_k = 10
+            self._json_response(engine.hybrid_search(q, top_k=top_k))
         elif path == "/api/logout":
             auth = self._auth
             if auth is not None:

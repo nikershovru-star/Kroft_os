@@ -22,7 +22,7 @@ from adapters.embedding import MockEmbeddingAdapter
 
 from cli.parser import parse_args
 from cli.commands import (
-    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic,
+    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic, cmd_hybrid,
 )
 from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex
 
@@ -163,11 +163,13 @@ def main(argv=None) -> None:
         cmd_serve(args, build())
     elif args.command == "semantic":
         cmd_semantic(args, build())
+    elif args.command == "hybrid":
+        cmd_hybrid(args, build())
 
 
 _BUILTIN_COMMANDS = {
     "init", "crawl", "query", "search", "status", "stop", "repl",
-    "export", "watch", "serve", "semantic",
+    "export", "watch", "serve", "semantic", "hybrid",
 }
 
 

@@ -154,6 +154,22 @@ def cmd_semantic(args, container) -> None:
     _dump(engine.semantic_search(query, top_k=args.top_k))
 
 
+def cmd_hybrid(args, container) -> None:
+    """Hybrid lexical+semantic search (Stage 30).
+
+    RRF-fused result via GraphQueryEngine.hybrid_search — combines the
+    ContentIndex (lexical) and SemanticIndex (semantic) rank lists. Zero
+    regression: if either engine is unwired the fusion degrades to the other.
+    """
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
+    k.initialize()  # restores graph + index + semantic from snapshot if present
+    atexit.register(lambda: k.stop())
+    engine = container.resolve("GraphQueryEngine")
+    query = " ".join(args.query) if isinstance(args.query, list) else args.query
+    _dump(engine.hybrid_search(query, top_k=args.top_k))
+
+
 def cmd_stop(args, container: Optional[object] = None) -> None:
     """No daemon runs between commands, so there is nothing to signal.
 

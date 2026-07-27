@@ -330,6 +330,43 @@ class GraphQueryEngine(IGraphQuery):
         q_emb = self._embedding.embed(query)
         return self._semantic_index.search(q_emb, top_k=top_k)
 
+    def hybrid_search(self, query: str, top_k: int = 10) -> List[Tuple[str, float]]:
+        """RRF fusion of lexical (ContentIndex) and semantic (SemanticIndex).
+
+        Reciprocal Rank Fusion (k=60) combines both rank lists into one
+        scored result. Zero regression: if either engine is unwired, the
+        fusion simply degrades to the other (missing ranks contribute 0).
+        """
+        if not query or not query.strip():
+            return []
+        query = query.strip()
+
+        # Lexical: List[str] from existing search()
+        lexical = self.search(query)
+
+        # Semantic: List[Tuple[str, float]] from the SemanticIndex directly
+        # (request more candidates so RRF captures overlaps between lists).
+        semantic: List[Tuple[str, float]] = []
+        if self._semantic_index is not None and self._embedding is not None:
+            q_emb = self._embedding.embed(query)
+            semantic = self._semantic_index.search(
+                q_emb, top_k=max(top_k * 3, 50)
+            )
+
+        # RRF fusion, k=60
+        k = 60
+        scores: Dict[str, float] = {}
+
+        for rank, nid in enumerate(lexical, start=1):
+            scores[nid] = scores.get(nid, 0.0) + 1.0 / (k + rank)
+
+        for rank, (nid, _) in enumerate(semantic, start=1):
+            scores[nid] = scores.get(nid, 0.0) + 1.0 / (k + rank)
+
+        # Desc by score, asc by nid tie-break
+        result = sorted(scores.items(), key=lambda x: (-x[1], x[0]))
+        return result[:top_k]
+
     def fuzzy_search(self, query: str) -> List[str]:
         """Fuzzy full-text AND-search over the shared ContentIndex (Stage 20).
 

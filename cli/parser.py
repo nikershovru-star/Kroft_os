@@ -106,6 +106,13 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     psm.add_argument("--vault", default=None,
                      help="Path to the vault directory (or read from knowledgeos.yaml)")
 
+    ph = sub.add_parser("hybrid", help="Hybrid lexical+semantic search (Stage 30)")
+    ph.add_argument("query", nargs="+", help="Query text")
+    ph.add_argument("--top-k", type=int, default=10,
+                    help="Number of results (default 10)")
+    ph.add_argument("--vault", default=None,
+                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+
     # Stage 25: plugins add their own subcommands LAST (they can never
     # displace a built-in: argparse raises on duplicate names and the loader
     # records the error, skipping only the offender).

@@ -1,4 +1,14 @@
 # Changelog
+## v5.0.0 (Stage 30)
+- Hybrid Search: RRF fusion (k=60) of lexical (ContentIndex) + semantic (SemanticIndex).
+- `GraphQueryEngine.hybrid_search(query, top_k=10)` -- zero regression (degrades to
+  lexical-only / semantic-only / empty when engines are unwired).
+- CLI `hybrid QUERY [--top-k N]`, REPL `hybrid`, HTTP `GET /api/hybrid?q=&top_k=`.
+- Web UI: search-mode select now Lexical / Semantic / Hybrid.
+- 8 tests (`test_hybrid_search.py`); suite 249 -> 257 passed.
+- HONEST LIMITATIONS: RRF uses ranks not absolute scores; Mock embedding is not
+  real semantics (OpenAI/sentence-transformers out of arch gate changes only candidates).
+
 
 ## v5.0.0 (Stages 1-7)
 - Hexagonal bootstrap: contracts, infrastructure (DI), kernel FSM, runtime, adapters

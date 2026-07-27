@@ -47,6 +47,7 @@ _COMMANDS = (
     ("query tags TAG", "nodes carrying <TAG>"),
     ("search QUERY", "full-text AND-search + DSL filters (tag:X, from:X, to:X, is:orphan)"),
     ("semantic QUERY", "semantic vector search (top-10 by default)"),
+    ("hybrid QUERY", "hybrid lexical+semantic RRF search (top-10 by default)"),
     ("export FORMAT [OUTPUT]", "export graph to dot/json/gexf (FORMAT in dot/json/gexf; OUTPUT file or '-' stdout)"),
     ("watch [--interval N]", "start auto-recrawl on .md change (background thread; stop with 'watch stop')"),
     ("serve [PORT]", "start HTTP server for the web UI (default 8080; --auth via CLI only)"),
@@ -199,6 +200,9 @@ class KnowledgeOSRepl:
         if verb == "semantic":
             self._do_semantic(parts[1:])
             return
+        if verb == "hybrid":
+            self._do_hybrid(parts[1:])
+            return
         if verb == "export":
             self._do_export(parts[1:])
             return
@@ -288,6 +292,21 @@ class KnowledgeOSRepl:
                 pass
         engine = self._container.resolve("GraphQueryEngine")
         print(json.dumps(engine.semantic_search(" ".join(args), top_k=top_k), ensure_ascii=False))
+
+    def _do_hybrid(self, args: List[str]) -> None:
+        """Hybrid lexical+semantic RRF search (Stage 30) via hybrid_search."""
+        if not args:
+            print("hybrid: missing QUERY", file=sys.stderr)
+            return
+        top_k = 10
+        if len(args) >= 3 and args[-2] == "--top-k":
+            try:
+                top_k = int(args[-1])
+                args = args[:-2]
+            except ValueError:
+                pass
+        engine = self._container.resolve("GraphQueryEngine")
+        print(json.dumps(engine.hybrid_search(" ".join(args), top_k=top_k), ensure_ascii=False))
 
     def _do_export(self, args: List[str]) -> None:
         """Export the live graph to dot/json/gexf (Stage 23).

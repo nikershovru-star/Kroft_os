@@ -19,6 +19,7 @@
   <select id="searchMode">
     <option value="lexical">Lexical</option>
     <option value="semantic">Semantic</option>
+    <option value="hybrid">Hybrid</option>
   </select>
   <input id="search" type="text" placeholder="Search..." autocomplete="off">
   <div id="suggestions"></div>
@@ -39,6 +40,8 @@
       const mode = document.getElementById("searchMode").value;
       const url = mode === "semantic"
         ? `${API}/semantic?q=${encodeURIComponent(q)}&top_k=10`
+        : mode === "hybrid"
+        ? `${API}/hybrid?q=${encodeURIComponent(q)}&top_k=10`
         : `${API}/search?q=${encodeURIComponent(q)}`;
       const [searchRes, suggestRes] = await Promise.all([
         fetch(url).then(r => r.json()),

@@ -734,6 +734,33 @@ python main.py semantic "how to configure python" --top-k 5
 - Нет инкрементального обновления semantic-индекса при watch-mode recrawl —
   только полный crawl перестраивает.
 
+## STAGE 30 — Hybrid Search (RRF)
+
+RRF-фьюжн lexical (ContentIndex) + semantic (SemanticIndex) рангов:
+
+```bash
+python main.py crawl --vault ./vault
+python main.py hybrid "how to configure python" --top-k 5
+# REPL:  hybrid how to configure python --top-k 5
+# HTTP:  GET /api/hybrid?q=how%20to%20configure%20python&top_k=5
+```
+
+- **`services.GraphQueryEngine.hybrid_search(query, top_k=10)`** — Reciprocal Rank
+  Fusion (k=60): объединяет два ранговых списка в один скор. Нода, попавшая в
+  ОБА списка, получает суммированный RRF-скор и поднимается выше.
+- **Zero regression**: без `SemanticIndex` → чисто lexical RRF; без `ContentIndex`
+  → чисто semantic RRF; без обоих → `[]`. Tie-break по `node_id` ascending.
+- Web UI: переключатель **Lexical / Semantic / Hybrid**.
+- CLI `hybrid` + REPL `hybrid` с `--top-k`.
+
+### HONEST LIMITATIONS (Stage 30)
+- RRF использует **ранги**, а не абсолютные скоры — поэтому абсолютная
+  релевантность эмбеддинга (Mock, детерминированный) не влияет на порядок
+  внутри каждого списка, только на состав кандидатов. Для vault-scale
+  (сотни нод) fusion работает за O(candidates).
+- При замене Mock на OpenAI/sentence-transformers семантический ранг станет
+  осмысленным — RRF объединит его с lexical без изменения логики.
+
 ## Test gates
 
 ```
