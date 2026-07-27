@@ -657,6 +657,27 @@ KnowledgeOS перестаёт быть монолитом и становитс
   зависимостей/приоритетов между плагинами нет.
 - REPL не видит плагиновые команды (парсер REPL отдельный).
 
+## STAGE 26 — Graph Analytics
+
+Метрики графа знаний (чистый stdlib, без numpy):
+- **Centrality** — in-degree / out-degree / total-degree для каждой ноды.
+- **Connected Components** — кластеры связанных заметок (BFS, weakly connected).
+- **PageRank** — итеративный алгоритм (30 итераций, damping 0.85); обратная
+  adjacency строится один раз → O(iterations × (nodes + edges)).
+
+API: `GET /api/stats/centrality`, `/api/stats/components`, `/api/stats/pagerank`.
+Web UI: кнопка «Analytics» — таблицы centrality / components / top-10 PageRank.
+
+### HONEST LIMITATIONS (Stage 26)
+- Components — только weakly connected (рёбра как undirected). Нет SCC
+  (Tarjan/Kosaraju не реализованы).
+- Центральность — только degree; нет betweenness / closeness (all-pairs
+  shortest paths дорого на чистом Python).
+- PageRank: фиксированные 30 итераций, без epsilon-критерия сходимости;
+  для vault-scale (сотни нод) этого достаточно.
+- Analytics считается на каждый запрос заново (никакого кеша) — снимок
+  графа честный, но большие графы будут пересчитываться при каждом клике.
+
 ## Test gates
 
 ```

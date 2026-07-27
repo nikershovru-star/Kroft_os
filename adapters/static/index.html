@@ -20,7 +20,9 @@
   <div id="suggestions"></div>
   <div id="results"></div>
   <button onclick="loadGraph()">Show Graph</button>
+  <button onclick="loadAnalytics()">Analytics</button>
   <div id="graph"></div>
+  <div id="analytics"></div>
 
   <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
   <script>
@@ -57,6 +59,36 @@
         physics: { stabilization: false },
         interaction: { hover: true }
       });
+    }
+    async function loadAnalytics() {
+      // Reset first — repeated clicks must not duplicate the tables.
+      const el = document.getElementById("analytics");
+      el.innerHTML = "Loading...";
+      const [cent, comps, pr] = await Promise.all([
+        fetch(`${API}/stats/centrality`).then(r => r.json()),
+        fetch(`${API}/stats/components`).then(r => r.json()),
+        fetch(`${API}/stats/pagerank`).then(r => r.json()),
+      ]);
+
+      let html = "<h2>Degree Centrality</h2><table border='1'><tr><th>Node</th><th>In</th><th>Out</th><th>Total</th></tr>";
+      for (const [nid, d] of Object.entries(cent).sort((a, b) => b[1].total - a[1].total)) {
+        html += `<tr><td>${escapeHtml(nid)}</td><td>${d.in}</td><td>${d.out}</td><td>${d.total}</td></tr>`;
+      }
+      html += "</table>";
+
+      html += `<h2>Connected Components (${comps.length})</h2>`;
+      for (const comp of comps) {
+        html += `<div class="result">${comp.length} nodes: ${comp.map(escapeHtml).join(", ")}</div>`;
+      }
+
+      html += "<h2>PageRank (top 10)</h2><table border='1'><tr><th>Node</th><th>Score</th></tr>";
+      const sortedPr = Object.entries(pr).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      for (const [nid, score] of sortedPr) {
+        html += `<tr><td>${escapeHtml(nid)}</td><td>${score.toFixed(4)}</td></tr>`;
+      }
+      html += "</table>";
+
+      el.innerHTML = html;
     }
   </script>
 </body>

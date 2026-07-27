@@ -165,6 +165,91 @@ class GraphQueryEngine(IGraphQuery):
             "orphan_count": orphan_count,
         }
 
+    # ----- graph analytics (Stage 26) -----
+    def centrality(self) -> Dict[str, Dict[str, int]]:
+        """Degree centrality: in/out/total per node (Stage 26).
+
+        NOTE: get_graph() returns nodes as a LIST of node dicts (not a dict
+        keyed by id — that is the on-disk snapshot format). Empty graph -> {}.
+        """
+        g = self._snapshot()
+        result: Dict[str, Dict[str, int]] = {
+            n["id"]: {"in": 0, "out": 0, "total": 0} for n in g["nodes"]
+        }
+        for e in g["edges"]:
+            src, dst = e.get("from"), e.get("to")
+            if src in result:
+                result[src]["out"] += 1
+                result[src]["total"] += 1
+            if dst in result:
+                result[dst]["in"] += 1
+                result[dst]["total"] += 1
+        return result
+
+    def connected_components(self) -> List[List[str]]:
+        """Weakly connected components via BFS (edges as undirected).
+
+        Each component is sorted by node id; components are ordered by size
+        desc, then by first node id. Empty graph -> [].
+        """
+        g = self._snapshot()
+        ids = [n["id"] for n in g["nodes"]]
+        adj: Dict[str, set] = {nid: set() for nid in ids}
+        for e in g["edges"]:
+            src, dst = e.get("from"), e.get("to")
+            if src in adj and dst in adj:
+                adj[src].add(dst)
+                adj[dst].add(src)
+        visited: set = set()
+        components: List[List[str]] = []
+        for start in ids:
+            if start in visited:
+                continue
+            comp: List[str] = []
+            queue: "deque[str]" = deque([start])
+            visited.add(start)
+            while queue:
+                cur = queue.popleft()
+                comp.append(cur)
+                for nxt in adj[cur]:
+                    if nxt not in visited:
+                        visited.add(nxt)
+                        queue.append(nxt)
+            components.append(sorted(comp))
+        return sorted(components, key=lambda c: (-len(c), c[0]))
+
+    def pagerank(self, damping: float = 0.85, iterations: int = 30) -> Dict[str, float]:
+        """Iterative PageRank — pure stdlib, no numpy (Stage 26).
+
+        Dangling nodes (no outgoing edges) distribute their rank evenly.
+        Duplicate edges count as parallel links (weight via repetition).
+        Complexity: O(iterations * (nodes + edges)) — the reverse adjacency
+        is prebuilt once (NOT the naive O(nodes^2) scan per target).
+        Empty graph -> {}.
+        """
+        g = self._snapshot()
+        ids = [n["id"] for n in g["nodes"]]
+        n = len(ids)
+        if n == 0:
+            return {}
+        out_count: Dict[str, int] = {nid: 0 for nid in ids}
+        incoming: Dict[str, List[str]] = {nid: [] for nid in ids}
+        for e in g["edges"]:
+            src, dst = e.get("from"), e.get("to")
+            if src in out_count and dst in incoming:
+                out_count[src] += 1
+                incoming[dst].append(src)
+        dangling = [nid for nid in ids if out_count[nid] == 0]
+        pr: Dict[str, float] = {nid: 1.0 / n for nid in ids}
+        for _ in range(iterations):
+            dangling_sum = sum(pr[nid] for nid in dangling)
+            base = (1.0 - damping) / n + damping * dangling_sum / n
+            pr = {
+                nid: base + damping * sum(pr[src] / out_count[src] for src in incoming[nid])
+                for nid in ids
+            }
+        return pr
+
     # ----- full-text + structural search (Stage 21 DSL) -----
     def _parse_query(self, query: str) -> Tuple[List[str], Dict[str, str]]:
         """Split a query into (text_terms, structural_filters).

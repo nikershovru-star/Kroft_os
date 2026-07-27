@@ -403,3 +403,16 @@
   rights; on_crawl_complete fires only on batch CLI crawl (not REPL/watch/
   HTTP); directory-convention loader, not setuptools entry_points; no
   inter-plugin deps/priorities; REPL does not see plugin commands.
+
+## v5.0.0 (Stage 26)
+- `GraphQueryEngine.centrality()` — in/out/total degree per node.
+- `GraphQueryEngine.connected_components()` — weakly connected clusters (BFS).
+- `GraphQueryEngine.pagerank(damping=0.85, iterations=30)` — iterative PageRank,
+  stdlib-only; reverse adjacency prebuilt once, O(iterations * (nodes + edges)).
+- API: `/api/stats/centrality`, `/api/stats/components`, `/api/stats/pagerank`.
+- Web UI: "Analytics" button — centrality table, component clusters, top-10
+  PageRank (innerHTML reset on each click, no duplication).
+- 8 new tests (`tests/test_graph_analytics.py`). Full suite now 234 green.
+- HONEST LIMITATIONS (Stage 26): weak components only (no SCC); degree-only
+  centrality (no betweenness/closeness); fixed 30 iterations (no epsilon
+  early-stop); metrics recomputed per request (no cache).

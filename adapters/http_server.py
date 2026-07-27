@@ -62,6 +62,12 @@ class _Handler(BaseHTTPRequestHandler):
             g = engine._snapshot()
             node = next((n for n in g["nodes"] if n["id"] == nid), None)
             self._json_response(node or {})
+        elif path == "/api/stats/centrality":
+            self._json_response(engine.centrality())
+        elif path == "/api/stats/components":
+            self._json_response(engine.connected_components())
+        elif path == "/api/stats/pagerank":
+            self._json_response(engine.pagerank())
         elif path == "/":
             self._serve_static("index.html")
         elif path.startswith("/static/"):
