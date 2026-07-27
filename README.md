@@ -381,8 +381,9 @@ python main.py crawl --vault ./my-vault
   tracker duck-typed (`Optional[Any]`), инъекция через DI.
 
 ### HONEST LIMITATIONS (Stage 17)
-- **mtime, не content-hash:** если откатить файл к старой версии с тем же
-  mtime → crawler пропустит изменение.
+- ~~**mtime, не content-hash:** если откатить файл к старой версии с тем же
+  mtime → crawler пропустит изменение.~~ → closed in **STAGE 24**
+  (`sha256(content)` в `.crawl_state.json` v2; mtime-only bump игнорируется).
 - **Нет обработки renamed файлов:** `old.md` удалён + `new.md` создан = два
   события (удаление + добавление), не rename.
 - **State-файл видимый:** `.crawl_state.json` лежит в корне vault'а (рядом с
@@ -576,6 +577,25 @@ python main.py export --format gexf --output g.gexf  # Gephi GEXF 1.3
 - GEXF — только направленные рёбра (`directed`), ядро-граф направленный.
 - Экспорт не потоковый — весь граф держится в памяти (OK для масштаба vault).
 - Абсолютный `--output` вне vault обходит traversal-гард `IFileSystem`.
+
+## STAGE 24 — Content-Hash Incremental Tracking
+
+`CrawlStateTracker` теперь хранит `sha256(content)` вместе с `mtime`:
+- Перекроул происходит **только при изменении содержимого**, не при `touch`.
+- Watch Mode (Stage 27) перестаёт стрелять вхолостую после `git checkout`.
+- Формат `.crawl_state.json` — v2 (`{"path": {"mtime": ..., "hash": "..."}}`).
+  v1 (`{"path": mtime}`) мигрируется автоматически при `load_state()`:
+  `hash=None` → per-file fallback на mtime-сравнение (Stage-17 семантика).
+- Публичный API трекера НЕ менялся (`save_state({path: mtime})`,
+  `get_changed_files(vault) -> (changed, deleted)`) — crawler, CLI, REPL и
+  Web UI не тронуты, поведение прозрачно.
+- Arch gate: `hashlib` — единственный новый импорт в `services/` (stdlib,
+  добавлен в `STDLIB_BASES`); services/ по-прежнему только `contracts` + stdlib.
+
+### HONEST LIMITATIONS (Stage 24)
+- Хеширование читает весь файл — для больших `.md` это O(bytes).
+- Файл, который временно недоступен (lock), считается unchanged (чтобы не
+  зациклить watch mode).
 
 ## STAGE 27 — Watch Mode (auto-recrawl)
 

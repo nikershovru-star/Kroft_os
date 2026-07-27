@@ -31,6 +31,7 @@ ALLOWED = {
 STDLIB_BASES = {
     "os", "sys", "pathlib", "typing", "abc", "enum", "functools", "dataclasses",
     "collections", "json", "time", "re", "contextlib", "threading", "asyncio",
+    "hashlib",
     "itertools", "copy", "math", "uuid", "datetime", "warnings", "logging",
 }
 

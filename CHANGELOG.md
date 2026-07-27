@@ -363,3 +363,19 @@
   thousands); snapshot persisted per recrawl (not transactional); watchdog is
   a bonus -- if uninstalled, polling is the only path; on Windows the stock
   `watchdog` needs the `pywin32` extra to offer the real OS watcher.
+
+## v5.0.0 (Stage 24)
+- `CrawlStateTracker` now stores `sha256(content)` alongside `mtime` in
+  `.crawl_state.json` (v2 format). Incremental crawl re-processes a file ONLY
+  if its content hash changed — `mtime`-only bumps (git checkout, touch, copy)
+  are ignored. This eliminates false triggers in Watch Mode (Stage 27).
+- Legacy v1 state files (`{path: mtime}`) are auto-migrated on load — zero
+  regression for existing vaults (hash=None entries fall back to mtime).
+- Public tracker API unchanged (`save_state({path: mtime})`,
+  `get_changed_files(vault)`) — CLI/REPL/Web UI untouched, transparent.
+- `hashlib` is the only new stdlib import in `services/` (arch gate clean,
+  added to `STDLIB_BASES`).
+- 6 new tests (`tests/test_incremental_hash.py`). Full suite now 216 green.
+- HONEST LIMITATIONS (Stage 24): hashing reads the entire file content —
+  for very large `.md` files this is O(bytes); unreadable files (transient
+  locks) are treated as unchanged to avoid infinite re-crawl loops.
