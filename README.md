@@ -678,6 +678,29 @@ Web UI: кнопка «Analytics» — таблицы centrality / components / 
 - Analytics считается на каждый запрос заново (никакого кеша) — снимок
   графа честный, но большие графы будут пересчитываться при каждом клике.
 
+## STAGE 28 — Basic Auth for Web UI
+
+```bash
+python main.py serve --port 8080 --auth admin:secret
+```
+
+- Login-форма на `/login.html` (POST `/api/login`, JSON `{"user","pass"}`).
+- Session cookie `knowledgeos_session` (HttpOnly, Path=/), токен —
+  `secrets.token_hex(32)`; сравнение кредов — `secrets.compare_digest`.
+- Неавторизованный `GET /` → 302 на `/login.html`; все остальные маршруты
+  (включая `/static/*`) → 401. Публичны только `/api/login` и `/login.html`.
+- `GET /api/logout` отзывает сессию server-side и гасит cookie.
+- Без `--auth` поведение байт-в-байт как в Stage 22 (AuthService просто
+  не зарегистрирован в DI).
+
+### HONEST LIMITATIONS (Stage 28)
+- Один пользователь (`--auth user:pass`), без ролей — all-or-nothing.
+- Креды и сессии живут в RAM: рестарт сервера разлогинивает всех.
+- Токен — случайный hex, не подписан; нет expiry/TTL у сессий.
+- Нет HTTPS — только localhost или за reverse proxy.
+- Пароль виден в командной строке процесса (ps/Task Manager).
+- REPL-команда `serve` не принимает `--auth` (только CLI).
+
 ## Test gates
 
 ```

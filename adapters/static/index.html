@@ -21,6 +21,7 @@
   <div id="results"></div>
   <button onclick="loadGraph()">Show Graph</button>
   <button onclick="loadAnalytics()">Analytics</button>
+  <button onclick="fetch('/api/logout').then(()=>location.href='/login.html')">Logout</button>
   <div id="graph"></div>
   <div id="analytics"></div>
 

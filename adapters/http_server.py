@@ -12,6 +12,7 @@ Architecture contract:
 """
 from __future__ import annotations
 
+import http.cookies
 import json
 import mimetypes
 import os
@@ -34,11 +35,52 @@ class _Handler(BaseHTTPRequestHandler):
         self._container = container
         super().__init__(*args, **kwargs)
 
+    # ----- auth (Stage 28) -----
+    _COOKIE_NAME = "knowledgeos_session"
+
+    @property
+    def _auth(self):
+        # resolve() raises KeyError for unregistered names -> guard with has().
+        # No --auth => no "AuthService" registration => auth disabled entirely
+        # (zero regression with Stage 22 behaviour).
+        if self._container.has("AuthService"):
+            return self._container.resolve("AuthService")
+        return None
+
+    def _session_token(self):
+        c = http.cookies.SimpleCookie(self.headers.get("Cookie", ""))
+        morsel = c.get(self._COOKIE_NAME)
+        return morsel.value if morsel else None
+
+    def _check_auth(self, path: str) -> bool:
+        """True if the request may proceed. Public: login page + login POST.
+
+        NOTE: "/" is NOT public — an unauthenticated hit on it gets a 302 to
+        /login.html (handled in do_GET). /static/* is protected too, except
+        the login page itself (otherwise /static/index.html bypasses login).
+        """
+        auth = self._auth
+        if auth is None:
+            return True
+        if path in ("/api/login", "/login.html", "/static/login.html"):
+            return True
+        return auth.validate_session(self._session_token())
+
     # ----- routing -----
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query)
+
+        if not self._check_auth(path):
+            if path == "/":
+                # Browser flow: bounce to the login form instead of a raw 401.
+                self.send_response(302)
+                self.send_header("Location", "/login.html")
+                self.end_headers()
+                return
+            self.send_error(401)
+            return
 
         # Resolve lazily per-request (singletons; cheap on a warm container).
         # ContentIndex may be unregistered (e.g. index=None test) -> None,
@@ -68,20 +110,67 @@ class _Handler(BaseHTTPRequestHandler):
             self._json_response(engine.connected_components())
         elif path == "/api/stats/pagerank":
             self._json_response(engine.pagerank())
+        elif path == "/api/logout":
+            auth = self._auth
+            if auth is not None:
+                auth.revoke_session(self._session_token())
+            body = b'{"ok": true}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header(
+                "Set-Cookie", f"{self._COOKIE_NAME}=; Max-Age=0; Path=/"
+            )
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         elif path == "/":
             self._serve_static("index.html")
+        elif path == "/login.html":
+            self._serve_static("login.html")
         elif path.startswith("/static/"):
             self._serve_static(path[8:])
         else:
             self.send_error(404)
 
     def do_POST(self):
-        if self.path == "/api/crawl":
+        path = urlparse(self.path).path
+        if path == "/api/login":
+            self._handle_login()
+            return
+        if not self._check_auth(path):
+            self.send_error(401)
+            return
+        if path == "/api/crawl":
             # Stage 27 integration hook: trigger crawl via WatchService. The
             # actual crawl pipeline is wired elsewhere; here we simply signal.
             self._json_response({"status": "triggered"})
         else:
             self.send_error(404)
+
+    def _handle_login(self):
+        auth = self._auth
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            data = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+        except Exception:
+            data = {}
+        user = str(data.get("user", ""))
+        passwd = str(data.get("pass", ""))
+        if auth is not None and auth.check_credentials(user, passwd):
+            token = auth.create_session()
+            body = b'{"ok": true}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header(
+                "Set-Cookie", f"{self._COOKIE_NAME}={token}; HttpOnly; Path=/"
+            )
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            # Auth disabled (no --auth) or bad credentials: both are 401 —
+            # /api/login is meaningless without a configured AuthService.
+            self.send_error(401)
 
     # ----- response helpers -----
     def _json_response(self, data):

@@ -305,6 +305,16 @@ def cmd_serve(args, container) -> None:
     atexit.register(lambda: k.stop())
 
     server = container.resolve("KnowledgeOSServer")
+    # Stage 28: optional basic auth. Registered into DI here (composition
+    # concern) — the adapter resolves "AuthService" per-request; without
+    # --auth nothing is registered and the server behaves exactly as Stage 22.
+    if getattr(args, "auth", None):
+        if ":" not in args.auth:
+            print('serve: --auth must be "user:pass"', file=sys.stderr)
+            raise SystemExit(2)
+        user, passwd = args.auth.split(":", 1)
+        from services import SimpleAuthService  # cli -> services (axis-clean)
+        container.register_instance("AuthService", SimpleAuthService(user, passwd))
     server._host = args.host
     server._port = args.port
     server.start()

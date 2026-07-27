@@ -4,6 +4,7 @@ from .graph_query_engine import GraphQueryEngine
 from .incremental_tracker import CrawlStateTracker
 from .content_index import ContentIndex
 from .watch_service import WatchService
+from .auth_service import SimpleAuthService
 
 __all__ = [
     "VaultStreamCrawler",
@@ -11,4 +12,5 @@ __all__ = [
     "CrawlStateTracker",
     "ContentIndex",
     "WatchService",
+    "SimpleAuthService",
 ]

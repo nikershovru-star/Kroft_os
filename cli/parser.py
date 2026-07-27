@@ -96,6 +96,8 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
                      help="Bind port (default 8080)")
     psv.add_argument("--vault", default=None,
                      help="Path to the vault directory (or read from knowledgeos.yaml)")
+    psv.add_argument("--auth", default=None,
+                     help='Basic auth "user:pass" for the web UI (Stage 28)')
 
     # Stage 25: plugins add their own subcommands LAST (they can never
     # displace a built-in: argparse raises on duplicate names and the loader

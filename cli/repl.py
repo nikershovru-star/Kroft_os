@@ -49,7 +49,7 @@ _COMMANDS = (
     ("fuzzy QUERY", "fuzzy full-text search (e.g. 'fuzzy pithon')"),
     ("export FORMAT [OUTPUT]", "export graph to dot/json/gexf (FORMAT in dot/json/gexf; OUTPUT file or '-' stdout)"),
     ("watch [--interval N]", "start auto-recrawl on .md change (background thread; stop with 'watch stop')"),
-    ("serve [PORT]", "start HTTP server for the web UI (default 8080)"),
+    ("serve [PORT]", "start HTTP server for the web UI (default 8080; --auth via CLI only)"),
     ("status", "show kernel state + graph size"),
     ("save", "force a graph snapshot (GraphSnapshotted)"),
     ("exit / quit", "graceful shutdown and leave the REPL"),

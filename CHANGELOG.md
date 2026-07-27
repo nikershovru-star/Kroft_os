@@ -416,3 +416,18 @@
 - HONEST LIMITATIONS (Stage 26): weak components only (no SCC); degree-only
   centrality (no betweenness/closeness); fixed 30 iterations (no epsilon
   early-stop); metrics recomputed per request (no cache).
+
+## v5.0.0 (Stage 28)
+- Basic auth for Web UI: `serve --auth user:pass`.
+- `services/auth_service.py` — `SimpleAuthService`: in-memory credentials +
+  session tokens (`secrets.token_hex(32)`, `secrets.compare_digest`).
+- Endpoints: `POST /api/login`, `GET /api/logout` (server-side revoke).
+- Cookie `knowledgeos_session` (HttpOnly, Path=/).
+- With auth on: `/` -> 302 /login.html; every other route (API and /static/*)
+  -> 401 without a valid cookie. Public: `/api/login`, `/login.html` only.
+- Zero regression: without `--auth` the server behaves exactly as Stage 22
+  (no AuthService registration in DI).
+- 5 new tests (`tests/test_auth.py`). Full suite now 239 green.
+- HONEST LIMITATIONS (Stage 28): single user; RAM-only sessions (restart
+  logs everyone out); unsigned hex token, no TTL; no HTTPS; password visible
+  in process args; REPL serve has no --auth.
