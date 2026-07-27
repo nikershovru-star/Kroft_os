@@ -3,11 +3,16 @@ import argparse
 import sys
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(loader=None) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="main.py",
         description="KnowledgeOS v5 -- knowledge operating system CLI",
     )
+    # Stage 25: plugin directory. Parsed twice: pre-scanned in main() (before
+    # this parser exists, so plugins can add subcommands) and declared here
+    # for --help + argparse acceptance.
+    p.add_argument("--plugin-dir", default=None,
+                   help="Directory with *.py plugins (class Plugin) to load (Stage 25)")
     sub = p.add_subparsers(dest="command")
 
     pi = sub.add_parser("init", help="Create data/ and vault/ directory structure")
@@ -64,9 +69,10 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 
-    pex = sub.add_parser("export", help="Export graph to dot/json/gexf (Stage 23)")
-    pex.add_argument("--format", choices=["dot", "json", "gexf"], default="json",
-                     help="Export format (default: json)")
+    pex = sub.add_parser("export", help="Export graph to dot/json/gexf (Stage 23; plugins may add formats)")
+    pex.add_argument("--format", default="json",
+                     help="Export format: dot/json/gexf built-in; plugin formats "
+                          "resolve via the DI container (Stage 25)")
     pex.add_argument("--output", default="-",
                      help="Output file path ('-' for stdout)")
     pex.add_argument("--vault", default=None,
@@ -91,11 +97,17 @@ def build_parser() -> argparse.ArgumentParser:
     psv.add_argument("--vault", default=None,
                      help="Path to the vault directory (or read from knowledgeos.yaml)")
 
+    # Stage 25: plugins add their own subcommands LAST (they can never
+    # displace a built-in: argparse raises on duplicate names and the loader
+    # records the error, skipping only the offender).
+    if loader is not None:
+        loader.apply_commands(sub)
+
     return p
 
 
-def parse_args(argv=None) -> argparse.Namespace:
-    p = build_parser()
+def parse_args(argv=None, loader=None) -> argparse.Namespace:
+    p = build_parser(loader=loader)
     args = p.parse_args(argv)
     if args.command is None:
         p.print_help()

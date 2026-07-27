@@ -5,10 +5,13 @@ referenced) and dispatches CLI commands. Run: `python main.py <command>`.
 """
 from __future__ import annotations
 
+import sys as _sys
+
 from infrastructure import (
     DependencyContainer,
     InMemoryGraphBuilder,
     InMemoryEventBus,
+    PluginLoader,
 )
 from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter
@@ -23,7 +26,7 @@ from cli.commands import (
 from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService
 
 
-def build_container(vault_path: str) -> DependencyContainer:
+def build_container(vault_path: str, loader=None) -> DependencyContainer:
     """Composition root: register ports + concrete adapters + services.
 
     Adapters (LocalFileSystemAdapter) are referenced HERE only; commands
@@ -91,31 +94,70 @@ def build_container(vault_path: str) -> DependencyContainer:
         "KnowledgeOSServer",
         lambda: KnowledgeOSServer(c, host="127.0.0.1", port=8080),
     )
+    # Stage 25: plugin system. The loader (if any) merges plugin exporters
+    # into the container and is itself registered so cli/ can fire hooks
+    # (on_crawl_complete) and report plugin errors without importing
+    # infrastructure loading machinery.
+    c.register_instance("PluginLoader", loader)
+    if loader is not None:
+        loader.apply_exporters(c)
     return c
 
 
+def _prescan_plugin_dir(argv) -> str | None:
+    """Extract --plugin-dir BEFORE the real parser exists (chicken-and-egg:
+    plugins must register their subcommands into the parser itself)."""
+    import argparse as _argparse
+    pre = _argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--plugin-dir", default=None)
+    known, _ = pre.parse_known_args(argv)
+    return known.plugin_dir
+
+
 def main(argv=None) -> None:
-    args = parse_args(argv)
+    # Stage 25: load plugins first so their subcommands exist at parse time.
+    plugin_dir = _prescan_plugin_dir(argv)
+    loader = None
+    if plugin_dir is not None:
+        loader = PluginLoader(plugin_dir)
+        loader.load()
+        for fname, err in loader.errors:
+            print(f"[plugin] {fname}: {err}", file=_sys.stderr)
+    args = parse_args(argv, loader=loader)
+    build = lambda: build_container(args.vault, loader=loader)
+    # Plugin-registered subcommands carry their handler via set_defaults(func=...).
+    if getattr(args, "func", None) is not None and args.command not in _BUILTIN_COMMANDS:
+        # A plugin command may omit --vault entirely -- default to cwd so the
+        # container can still be built (LocalFileSystemAdapter needs a path).
+        plugin_vault = getattr(args, "vault", None) or "."
+        args.func(args, build_container(plugin_vault, loader=loader))
+        return
     if args.command == "init":
         cmd_init(args)
     elif args.command == "crawl":
-        cmd_crawl(args, build_container(args.vault))
+        cmd_crawl(args, build())
     elif args.command == "query":
-        cmd_query(args, build_container(args.vault))
+        cmd_query(args, build())
     elif args.command == "search":
-        cmd_search(args, build_container(args.vault))
+        cmd_search(args, build())
     elif args.command == "status":
-        cmd_status(args, build_container(args.vault))
+        cmd_status(args, build())
     elif args.command == "stop":
         cmd_stop(args)
     elif args.command == "repl":
-        cmd_repl(args, build_container(args.vault))
+        cmd_repl(args, build())
     elif args.command == "export":
-        cmd_export(args, build_container(args.vault))
+        cmd_export(args, build())
     elif args.command == "watch":
-        cmd_watch(args, build_container(args.vault))
+        cmd_watch(args, build())
     elif args.command == "serve":
-        cmd_serve(args, build_container(args.vault))
+        cmd_serve(args, build())
+
+
+_BUILTIN_COMMANDS = {
+    "init", "crawl", "query", "search", "status", "stop", "repl",
+    "export", "watch", "serve",
+}
 
 
 if __name__ == "__main__":

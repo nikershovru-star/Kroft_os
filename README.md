@@ -622,6 +622,41 @@ python main.py watch --vault ./my-vault --interval 1.0 --no-watchdog
 - Snapshot персистится после каждого recrawl (не транзакционно).
 - `watchdog` — бонус; если не установлен, работает только polling.
 
+## STAGE 25 — Plugin System (Entry Points)
+
+KnowledgeOS перестаёт быть монолитом и становится платформой: новые форматы
+экспорта, CLI-команды и crawl-хуки добавляются **без правки core**.
+
+- `contracts/plugin.py` — порт `IPlugin` (ABC): `register_commands(parser)`,
+  `register_exporters(container)`, `on_crawl_complete(graph)`.
+- `infrastructure/plugin_loader.py` — `PluginLoader`: сканирует `--plugin-dir`,
+  импортирует каждый `*.py` по file path (`importlib.util`, без загрязнения
+  `sys.path`), инстанцирует top-level `class Plugin`. Duck-typed: наследовать
+  `IPlugin` рекомендуется, но не обязательно (файл плагина может не иметь
+  ни одного импорта из проекта). Fail-soft: битый плагин → запись в
+  `loader.errors` + stderr, core CLI никогда не падает.
+- `main.py --plugin-dir ./my-plugins <command>`: pre-scan argv
+  (`parse_known_args`) решает chicken-and-egg — плагины регистрируют
+  субкоманды ДО настоящего `parse_args`. Экспортёры мёржатся в DI-контейнер
+  (`export_<fmt>`), `export --format <fmt>` больше не ограничен argparse
+  `choices` (неизвестный формат → JSON-ошибка + exit 2 со списком known).
+- Хук `on_crawl_complete(graph)` стреляет после batch `crawl`.
+- Дубликат имени субкоманды: built-in всегда побеждает (argparse raise →
+  fail-soft skip плагина).
+- Zero regression: без `--plugin-dir` loader = None, поведение прежнее
+  байт-в-байт (`test_no_plugin_dir_zero_regression`).
+
+### HONEST LIMITATIONS (Stage 25)
+- Плагины исполняются с полными правами процесса — **никакой песочницы**;
+  битый импорт fail-soft, но злонамеренный код не изолируется.
+- `on_crawl_complete` стреляет только в batch `crawl` (CLI); REPL `crawl`,
+  watch-mode recrawl и HTTP-crawl хук НЕ вызывают.
+- Название «Entry Points» условное: это directory-convention loader,
+  setuptools entry_points (pip-устанавливаемые плагины) не поддерживаются.
+- Плагины загружаются в детерминированном порядке (sorted по имени файла),
+  зависимостей/приоритетов между плагинами нет.
+- REPL не видит плагиновые команды (парсер REPL отдельный).
+
 ## Test gates
 
 ```

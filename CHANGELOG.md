@@ -379,3 +379,27 @@
 - HONEST LIMITATIONS (Stage 24): hashing reads the entire file content —
   for very large `.md` files this is O(bytes); unreadable files (transient
   locks) are treated as unchanged to avoid infinite re-crawl loops.
+
+## v5.0.0 (Stage 25)
+- Plugin System: KnowledgeOS becomes a platform. `contracts/plugin.py`
+  (`IPlugin` ABC: register_commands / register_exporters / on_crawl_complete)
+  + `infrastructure/plugin_loader.py` (`PluginLoader`: scans --plugin-dir for
+  *.py files with a top-level `class Plugin`, imports by file path via
+  importlib.util, duck-typed, fail-soft — broken plugins are recorded and
+  skipped, never crash the CLI).
+- `main.py --plugin-dir DIR <command>`: argv pre-scan (parse_known_args)
+  loads plugins BEFORE the real parser so plugin subcommands exist at parse
+  time; plugin exporters merge into the DI container as `export_<fmt>`.
+- `export --format` no longer constrained by argparse choices — plugin
+  formats resolve via the container; unknown format -> JSON error + exit 2
+  listing known formats (instead of a KeyError traceback).
+- `on_crawl_complete(graph)` fires after batch `crawl`. Built-in commands
+  always win a name clash (fail-soft skip of the offending plugin).
+- Zero regression without --plugin-dir (loader=None path; container exposes
+  `PluginLoader` as None). Real bug caught by smoke: plugin command without
+  --vault crashed container build -> plugin commands default vault to cwd.
+- 10 new tests (`tests/test_plugins.py`). Full suite now 226 green.
+- HONEST LIMITATIONS (Stage 25): no sandbox — plugins run with full process
+  rights; on_crawl_complete fires only on batch CLI crawl (not REPL/watch/
+  HTTP); directory-convention loader, not setuptools entry_points; no
+  inter-plugin deps/priorities; REPL does not see plugin commands.

@@ -9,6 +9,7 @@ from .i_capability_registry import ICapabilityRegistry
 from .igraph_builder import IGraphBuilder
 from .igraph_query import IGraphQuery
 from .snapshotable import ISnapshotable
+from .plugin import IPlugin
 
 __all__ = [
     "IService",
@@ -18,4 +19,5 @@ __all__ = [
     "IGraphBuilder",
     "IGraphQuery",
     "ISnapshotable",
+    "IPlugin",
 ]

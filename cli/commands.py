@@ -77,6 +77,11 @@ def cmd_crawl(args, container) -> None:
     crawler = container.resolve("VaultStreamCrawler")
     asyncio.run(crawler.crawl())
     k.stop()  # persists snapshot before teardown
+    # Stage 25: fire plugin crawl hooks (duck-typed loader from the container;
+    # None when no --plugin-dir was given -- zero-regression path).
+    loader = container.resolve("PluginLoader") if container.has("PluginLoader") else None
+    if loader is not None:
+        loader.notify_crawl_complete(container.resolve("IGraphBuilder").get_graph())
     _dump(crawler.get_stats())
 
 
@@ -247,6 +252,14 @@ def cmd_export(args, container) -> None:
     atexit.register(lambda: k.stop())
     engine = container.resolve("GraphQueryEngine")
     graph = engine._snapshot()  # existing method on GraphQueryEngine
+    # Stage 25: --format is no longer constrained by argparse choices --
+    # plugins may register new exporters (export_<fmt>) in the container.
+    # Unknown format -> graceful JSON error + exit 2 (not a KeyError traceback).
+    if not container.has(f"export_{args.format}"):
+        _dump({"error": f"unknown export format '{args.format}'",
+               "known": sorted(n[len("export_"):] for n in container.names()
+                               if n.startswith("export_"))})
+        sys.exit(2)
     exporter = container.resolve(f"export_{args.format}")
     data = exporter(graph)
 
