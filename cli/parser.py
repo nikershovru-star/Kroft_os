@@ -113,6 +113,14 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     ph.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 
+    pd = sub.add_parser("desktop", help="Desktop automation (Stage 31)")
+    pd.add_argument("action", choices=["click", "type", "screenshot", "cursor", "open"],
+                    help="Action to perform")
+    pd.add_argument("args", nargs="*",
+                    help="Arguments for the action (e.g. x y for click, TEXT for type, APP_NAME for open)")
+    pd.add_argument("--vault", default=None,
+                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+
     # Stage 25: plugins add their own subcommands LAST (they can never
     # displace a built-in: argparse raises on duplicate names and the loader
     # records the error, skipping only the offender).

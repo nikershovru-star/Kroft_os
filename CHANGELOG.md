@@ -1,4 +1,16 @@
 # Changelog
+## v5.0.0 (Stage 31)
+- Desktop Automation: `IDesktop` port + `MockDesktopAdapter` (default, no-op) +
+  `PyAutoGUIAdapter` (opt-in, lazy import pyautogui/PIL).
+- `DesktopService` -- high-level orchestration (click, type, screenshot, cursor, open).
+  Unwired `IDesktop` -> RuntimeError (no silent fail).
+- CLI `desktop ACTION [ARGS]`, REPL `desktop`, HTTP `POST /api/desktop/click`,
+  `POST /api/desktop/type`, `GET /api/desktop/screenshot` (raw PNG), `GET /api/desktop/cursor`.
+- Web UI: Desktop control buttons (Click, Screenshot, Cursor).
+- 8 tests (`test_desktop.py`); suite 257 -> 263 passed.
+- HONEST LIMITATIONS: PyAutoGUI needs `pip install pyautogui pillow` + interactive
+  session; open_app is platform-specific; screenshots are raw PNG; no sandbox.
+
 ## v5.0.0 (Stage 30)
 - Hybrid Search: RRF fusion (k=60) of lexical (ContentIndex) + semantic (SemanticIndex).
 - `GraphQueryEngine.hybrid_search(query, top_k=10)` -- zero regression (degrades to

@@ -761,6 +761,36 @@ python main.py hybrid "how to configure python" --top-k 5
 - При замене Mock на OpenAI/sentence-transformers семантический ранг станет
   осмысленным — RRF объединит его с lexical без изменения логики.
 
+## STAGE 31 — Desktop Automation
+
+Управление рабочим столом через ядро KnowledgeOS:
+
+```bash
+python main.py desktop click 100 200
+python main.py desktop type "hello world"
+python main.py desktop screenshot
+python main.py desktop cursor
+python main.py desktop open notepad
+# REPL:  desktop click 100 200
+# HTTP:  POST /api/desktop/click  {"x":100,"y":200}
+#        GET  /api/desktop/screenshot  (raw PNG)
+#        GET  /api/desktop/cursor      -> {"x":0,"y":0}
+```
+
+- **`contracts.IDesktop`** — порт; **`adapters.MockDesktopAdapter`** (default, no-op) +
+  **`PyAutoGUIAdapter`** (lazy import, opt-in: `pip install pyautogui pillow`).
+- **`services.DesktopService`** — оркестрация действий (click/type/screenshot/cursor/open).
+  Без проводки `IDesktop` → `RuntimeError` (не silent fail).
+- Web UI: кнопки **Click / Screenshot / Cursor**.
+
+### HONEST LIMITATIONS (Stage 31)
+- `PyAutoGUIAdapter` требует `pip install pyautogui pillow` и работает только в
+  интерактивной сессии (не headless). `open_app` — platform-specific (Windows:
+  `start`, macOS: `open`, Linux: `xdg-open`).
+- Скриншоты через HTTP возвращают **raw PNG** (не base64 в JSON).
+- Нет sandbox — адаптер имеет полный контроль над мышью/клавиатурой.
+- Default wiring = Mock (ноль реальных действий), поэтому все тесты headless.
+
 ## Test gates
 
 ```

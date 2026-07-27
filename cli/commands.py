@@ -170,6 +170,44 @@ def cmd_hybrid(args, container) -> None:
     _dump(engine.hybrid_search(query, top_k=args.top_k))
 
 
+def cmd_desktop(args, container) -> None:
+    """Desktop automation (Stage 31)."""
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
+    k.initialize()
+    atexit.register(lambda: k.stop())
+    ds = container.resolve("DesktopService")
+    action = args.action
+    if action == "click":
+        if len(args.args) != 2:
+            print("desktop click: need X Y", file=sys.stderr)
+            return
+        x, y = int(args.args[0]), int(args.args[1])
+        ds.click_at(x, y)
+        print(json.dumps({"ok": True, "action": "click", "x": x, "y": y}))
+    elif action == "type":
+        if not args.args:
+            print("desktop type: need TEXT", file=sys.stderr)
+            return
+        text = " ".join(args.args)
+        ds.type_text(text)
+        print(json.dumps({"ok": True, "action": "type", "text": text}))
+    elif action == "screenshot":
+        data = ds.capture_screen()
+        import base64
+        b64 = base64.b64encode(data).decode("ascii")
+        print(json.dumps({"ok": True, "action": "screenshot", "png_base64": b64[:80] + "..."}))
+    elif action == "cursor":
+        x, y = ds.where_is_cursor()
+        print(json.dumps({"ok": True, "action": "cursor", "x": x, "y": y}))
+    elif action == "open":
+        if not args.args:
+            print("desktop open: need APP_NAME", file=sys.stderr)
+            return
+        ds.launch(args.args[0])
+        print(json.dumps({"ok": True, "action": "open", "app": args.args[0]}))
+
+
 def cmd_stop(args, container: Optional[object] = None) -> None:
     """No daemon runs between commands, so there is nothing to signal.
 

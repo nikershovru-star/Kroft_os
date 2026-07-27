@@ -22,9 +22,10 @@ from adapters.embedding import MockEmbeddingAdapter
 
 from cli.parser import parse_args
 from cli.commands import (
-    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic, cmd_hybrid,
+    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic, cmd_hybrid, cmd_desktop,
 )
-from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex
+from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex, DesktopService
+from adapters.desktop_adapter import MockDesktopAdapter
 
 
 def build_container(vault_path: str, loader=None) -> DependencyContainer:
@@ -49,6 +50,12 @@ def build_container(vault_path: str, loader=None) -> DependencyContainer:
     # default deterministic Mock embedding (real OpenAI adapter is opt-in).
     c.register_instance("SemanticIndex", SemanticIndex())
     c.register_instance("Embedding", MockEmbeddingAdapter())
+    # Stage 31: Desktop capability (default Mock, zero regression)
+    c.register_instance("IDesktop", MockDesktopAdapter())
+    c.register_factory(
+        "DesktopService",
+        lambda: DesktopService(c.resolve("IDesktop")),
+    )
     c.register_factory(
         "CrawlStateTracker",
         lambda: CrawlStateTracker(c.resolve("IFileSystem"), ".crawl_state.json"),
@@ -165,11 +172,13 @@ def main(argv=None) -> None:
         cmd_semantic(args, build())
     elif args.command == "hybrid":
         cmd_hybrid(args, build())
+    elif args.command == "desktop":
+        cmd_desktop(args, build())
 
 
 _BUILTIN_COMMANDS = {
     "init", "crawl", "query", "search", "status", "stop", "repl",
-    "export", "watch", "serve", "semantic", "hybrid",
+    "export", "watch", "serve", "semantic", "hybrid", "desktop",
 }
 
 

@@ -48,6 +48,7 @@ _COMMANDS = (
     ("search QUERY", "full-text AND-search + DSL filters (tag:X, from:X, to:X, is:orphan)"),
     ("semantic QUERY", "semantic vector search (top-10 by default)"),
     ("hybrid QUERY", "hybrid lexical+semantic RRF search (top-10 by default)"),
+    ("desktop ACTION", "desktop automation: click x y | type text | screenshot | cursor | open app"),
     ("export FORMAT [OUTPUT]", "export graph to dot/json/gexf (FORMAT in dot/json/gexf; OUTPUT file or '-' stdout)"),
     ("watch [--interval N]", "start auto-recrawl on .md change (background thread; stop with 'watch stop')"),
     ("serve [PORT]", "start HTTP server for the web UI (default 8080; --auth via CLI only)"),
@@ -203,6 +204,9 @@ class KnowledgeOSRepl:
         if verb == "hybrid":
             self._do_hybrid(parts[1:])
             return
+        if verb == "desktop":
+            self._do_desktop(parts[1:])
+            return
         if verb == "export":
             self._do_export(parts[1:])
             return
@@ -307,6 +311,41 @@ class KnowledgeOSRepl:
                 pass
         engine = self._container.resolve("GraphQueryEngine")
         print(json.dumps(engine.hybrid_search(" ".join(args), top_k=top_k), ensure_ascii=False))
+
+    def _do_desktop(self, args: List[str]) -> None:
+        """Desktop automation (Stage 31)."""
+        if not args:
+            print("desktop: missing ACTION", file=sys.stderr)
+            return
+        action = args[0]
+        ds = self._container.resolve("DesktopService")
+        if action == "click":
+            if len(args) != 3:
+                print("desktop click: need X Y", file=sys.stderr)
+                return
+            ds.click_at(int(args[1]), int(args[2]))
+            print(json.dumps({"ok": True, "action": "click"}))
+        elif action == "type":
+            if len(args) < 2:
+                print("desktop type: need TEXT", file=sys.stderr)
+                return
+            ds.type_text(" ".join(args[1:]))
+            print(json.dumps({"ok": True, "action": "type"}))
+        elif action == "screenshot":
+            data = ds.capture_screen()
+            import base64
+            print(json.dumps({"ok": True, "action": "screenshot", "size": len(data)}))
+        elif action == "cursor":
+            x, y = ds.where_is_cursor()
+            print(json.dumps({"ok": True, "action": "cursor", "x": x, "y": y}))
+        elif action == "open":
+            if len(args) < 2:
+                print("desktop open: need APP_NAME", file=sys.stderr)
+                return
+            ds.launch(args[1])
+            print(json.dumps({"ok": True, "action": "open"}))
+        else:
+            print(f"desktop: unknown action {action}", file=sys.stderr)
 
     def _do_export(self, args: List[str]) -> None:
         """Export the live graph to dot/json/gexf (Stage 23).

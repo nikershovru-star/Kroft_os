@@ -124,6 +124,31 @@ class _Handler(BaseHTTPRequestHandler):
             except ValueError:
                 top_k = 10
             self._json_response(engine.hybrid_search(q, top_k=top_k))
+        elif path == "/api/desktop/click":
+            body = self._read_body()
+            data = json.loads(body.decode("utf-8"))
+            ds = self._container.resolve("DesktopService")
+            ds.click_at(data["x"], data["y"])
+            self._json_response({"ok": True})
+        elif path == "/api/desktop/type":
+            body = self._read_body()
+            data = json.loads(body.decode("utf-8"))
+            ds = self._container.resolve("DesktopService")
+            ds.type_text(data["text"])
+            self._json_response({"ok": True})
+        elif path == "/api/desktop/screenshot":
+            ds = self._container.resolve("DesktopService")
+            png = ds.capture_screen()
+            import base64
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(png)))
+            self.end_headers()
+            self.wfile.write(png)
+        elif path == "/api/desktop/cursor":
+            ds = self._container.resolve("DesktopService")
+            x, y = ds.where_is_cursor()
+            self._json_response({"x": x, "y": y})
         elif path == "/api/logout":
             auth = self._auth
             if auth is not None:
@@ -158,6 +183,18 @@ class _Handler(BaseHTTPRequestHandler):
             # Stage 27 integration hook: trigger crawl via WatchService. The
             # actual crawl pipeline is wired elsewhere; here we simply signal.
             self._json_response({"status": "triggered"})
+        elif path == "/api/desktop/click":
+            body = self._read_body()
+            data = json.loads(body.decode("utf-8"))
+            ds = self._container.resolve("DesktopService")
+            ds.click_at(data["x"], data["y"])
+            self._json_response({"ok": True})
+        elif path == "/api/desktop/type":
+            body = self._read_body()
+            data = json.loads(body.decode("utf-8"))
+            ds = self._container.resolve("DesktopService")
+            ds.type_text(data["text"])
+            self._json_response({"ok": True})
         else:
             self.send_error(404)
 
@@ -195,6 +232,11 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _read_body(self) -> bytes:
+        """Read the raw request body using Content-Length (Stage 31)."""
+        length = int(self.headers.get("Content-Length", 0))
+        return self.rfile.read(length) if length > 0 else b""
 
     def _serve_static(self, rel_path):
         base = os.path.join(os.path.dirname(__file__), "static")
