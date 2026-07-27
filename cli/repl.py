@@ -49,6 +49,8 @@ _COMMANDS = (
     ("semantic QUERY", "semantic vector search (top-10 by default)"),
     ("hybrid QUERY", "hybrid lexical+semantic RRF search (top-10 by default)"),
     ("desktop ACTION", "desktop automation: click x y | type text | screenshot | cursor | open app"),
+    ("desktop open_note QUERY", "search+open top note in default app"),
+    ("desktop list_notes QUERY", "list top-k note candidates from hybrid search"),
     ("export FORMAT [OUTPUT]", "export graph to dot/json/gexf (FORMAT in dot/json/gexf; OUTPUT file or '-' stdout)"),
     ("watch [--interval N]", "start auto-recrawl on .md change (background thread; stop with 'watch stop')"),
     ("serve [PORT]", "start HTTP server for the web UI (default 8080; --auth via CLI only)"),
@@ -344,6 +346,34 @@ class KnowledgeOSRepl:
                 return
             ds.launch(args[1])
             print(json.dumps({"ok": True, "action": "open"}))
+        elif action == "open_note":
+            if len(args) < 2:
+                print("desktop open_note: need QUERY", file=sys.stderr)
+                return
+            top_k = 1
+            if len(args) >= 4 and args[-2] == "--top-k":
+                try:
+                    top_k = int(args[-1])
+                    args = args[:-2]
+                except ValueError:
+                    pass
+            orch = self._container.resolve("DesktopOrchestrator")
+            result = orch.open_note(" ".join(args[1:]), top_k=top_k)
+            print(json.dumps(result, ensure_ascii=False))
+        elif action == "list_notes":
+            if len(args) < 2:
+                print("desktop list_notes: need QUERY", file=sys.stderr)
+                return
+            top_k = 5
+            if len(args) >= 4 and args[-2] == "--top-k":
+                try:
+                    top_k = int(args[-1])
+                    args = args[:-2]
+                except ValueError:
+                    pass
+            orch = self._container.resolve("DesktopOrchestrator")
+            result = orch.list_notes(" ".join(args[1:]), top_k=top_k)
+            print(json.dumps(result, ensure_ascii=False))
         else:
             print(f"desktop: unknown action {action}", file=sys.stderr)
 

@@ -113,11 +113,13 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     ph.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 
-    pd = sub.add_parser("desktop", help="Desktop automation (Stage 31)")
-    pd.add_argument("action", choices=["click", "type", "screenshot", "cursor", "open"],
+    pd = sub.add_parser("desktop", help="Desktop automation (Stage 31/32)")
+    pd.add_argument("action", choices=["click", "type", "screenshot", "cursor", "open", "open_note", "list_notes"],
                     help="Action to perform")
     pd.add_argument("args", nargs="*",
-                    help="Arguments for the action (e.g. x y for click, TEXT for type, APP_NAME for open)")
+                    help="Arguments for the action (e.g. x y for click, TEXT for type, APP_NAME for open, QUERY for open_note/list_notes)")
+    pd.add_argument("--top-k", type=int, default=None,
+                    help="top-k for open_note / list_notes (default 1/5)")
     pd.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 

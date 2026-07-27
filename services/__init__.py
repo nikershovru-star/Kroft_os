@@ -7,6 +7,7 @@ from .watch_service import WatchService
 from .auth_service import SimpleAuthService
 from .semantic_index import SemanticIndex
 from .desktop_service import DesktopService
+from .desktop_orchestrator import DesktopOrchestrator
 
 __all__ = [
     "VaultStreamCrawler",
@@ -17,4 +18,5 @@ __all__ = [
     "SimpleAuthService",
     "SemanticIndex",
     "DesktopService",
+    "DesktopOrchestrator",
 ]

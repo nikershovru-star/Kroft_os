@@ -24,7 +24,7 @@ from cli.parser import parse_args
 from cli.commands import (
     cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic, cmd_hybrid, cmd_desktop,
 )
-from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex, DesktopService
+from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex, DesktopService, DesktopOrchestrator
 from adapters.desktop_adapter import MockDesktopAdapter
 
 
@@ -55,6 +55,16 @@ def build_container(vault_path: str, loader=None) -> DependencyContainer:
     c.register_factory(
         "DesktopService",
         lambda: DesktopService(c.resolve("IDesktop")),
+    )
+    # Stage 32: DesktopOrchestrator bridges search + desktop action
+    c.register_factory(
+        "DesktopOrchestrator",
+        lambda: DesktopOrchestrator(
+            c.resolve("GraphQueryEngine"),
+            c.resolve("DesktopService"),
+            c.resolve("IFileSystem"),
+            vault_path,
+        ),
     )
     c.register_factory(
         "CrawlStateTracker",

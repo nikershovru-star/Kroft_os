@@ -791,6 +791,32 @@ python main.py desktop open notepad
 - Нет sandbox — адаптер имеет полный контроль над мышью/клавиатурой.
 - Default wiring = Mock (ноль реальных действий), поэтому все тесты headless.
 
+## STAGE 32 — Desktop Orchestrator: Smart Actions
+
+Поиск + действие: найди заметку и открой её одной командой:
+
+```bash
+python main.py desktop open_note "python configure"
+python main.py desktop list_notes "python" --top-k 5
+# REPL:  desktop open_note python configure
+# HTTP:  POST /api/desktop/open_note {"query":"python configure","top_k":1}
+```
+
+- **`services.DesktopOrchestrator`** — мост между `GraphQueryEngine.hybrid_search`
+  и `DesktopService.launch`.
+- `open_note(query, top_k=1)` — hybrid-search, затем открывает топ-1 результат в
+  дефолтном приложении ОС (start/open/xdg-open).
+- `list_notes(query, top_k=5)` — возвращает ранжированный список кандидатов без открытия.
+- Zero regression: пустой запрос → `{"error":"empty query"}`; нет результатов →
+  `{"error":"no results"}`. CLI `desktop open_note/list_notes`, REPL, HTTP POST.
+
+### HONEST LIMITATIONS (Stage 32)
+- `open_note` использует `os.path.join(vault_path, nid)` — если nid уже абсолютный
+  путь, логика может дублировать префикс (fallback на nid как есть).
+- Реальное открытие файла требует интерактивной сессии + `PyAutoGUIAdapter`
+  (Mock просто вызывает `os.system`, что в headless среде молча игнорируется).
+- Нет preview перед открытием — топ-1 открывается сразу.
+
 ## Test gates
 
 ```

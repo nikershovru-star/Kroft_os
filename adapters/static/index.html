@@ -29,6 +29,10 @@
   <button onclick="desktopScreenshot()">Screenshot</button>
   <button onclick="desktopCursor()">Cursor Position</button>
   <div id="desktopResult"></div>
+  <input id="openNoteQuery" type="text" placeholder="Open note about..." autocomplete="off">
+  <button onclick="desktopOpenNote()">Open Note</button>
+  <button onclick="desktopListNotes()">List Notes</button>
+  <div id="openNoteResult"></div>
   <button onclick="loadGraph()">Show Graph</button>
   <button onclick="loadAnalytics()">Analytics</button>
   <button onclick="fetch('/api/logout').then(()=>location.href='/login.html')">Logout</button>
@@ -93,6 +97,26 @@
       const r = await fetch(`${API}/desktop/cursor`);
       const j = await r.json();
       document.getElementById("desktopResult").innerText = `Cursor: ${j.x}, ${j.y}`;
+    }
+    async function desktopOpenNote() {
+      const q = document.getElementById("openNoteQuery").value;
+      const r = await fetch(`${API}/desktop/open_note`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({query: q, top_k: 1})
+      });
+      const j = await r.json();
+      document.getElementById("openNoteResult").innerText = JSON.stringify(j, null, 2);
+    }
+    async function desktopListNotes() {
+      const q = document.getElementById("openNoteQuery").value;
+      const r = await fetch(`${API}/desktop/list_notes`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({query: q, top_k: 5})
+      });
+      const j = await r.json();
+      document.getElementById("openNoteResult").innerHTML = "<pre>" + JSON.stringify(j, null, 2) + "</pre>";
     }
 
     async function loadGraph() {

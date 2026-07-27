@@ -1,4 +1,15 @@
 # Changelog
+## v5.0.0 (Stage 32)
+- Desktop Orchestrator: `DesktopOrchestrator` bridges `GraphQueryEngine` + `DesktopService`.
+- `open_note(query, top_k=1)` -- hybrid-search then open top result in OS default app.
+- `list_notes(query, top_k=5)` -- return ranked candidates without opening.
+- CLI `desktop open_note QUERY` / `desktop list_notes QUERY`, REPL, HTTP POST
+  `/api/desktop/open_note` + `/api/desktop/list_notes`.
+- Web UI: Open Note / List Notes input + buttons.
+- 6 tests (`test_desktop_orchestrator.py`); suite 265 -> 271 passed.
+- HONEST LIMITATIONS: os.path.join may double-prefix absolute nid (fallback to nid);
+  real open needs interactive session + PyAutoGUIAdapter; no preview before open.
+
 ## v5.0.0 (Stage 31)
 - Desktop Automation: `IDesktop` port + `MockDesktopAdapter` (default, no-op) +
   `PyAutoGUIAdapter` (opt-in, lazy import pyautogui/PIL).

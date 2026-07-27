@@ -206,6 +206,24 @@ def cmd_desktop(args, container) -> None:
             return
         ds.launch(args.args[0])
         print(json.dumps({"ok": True, "action": "open", "app": args.args[0]}))
+    elif action == "open_note":
+        if not args.args:
+            print("desktop open_note: need QUERY", file=sys.stderr)
+            return
+        query = " ".join(args.args)
+        orch = container.resolve("DesktopOrchestrator")
+        top_k = args.top_k if args.top_k is not None else 1
+        result = orch.open_note(query, top_k=top_k)
+        print(json.dumps(result, ensure_ascii=False))
+    elif action == "list_notes":
+        if not args.args:
+            print("desktop list_notes: need QUERY", file=sys.stderr)
+            return
+        query = " ".join(args.args)
+        orch = container.resolve("DesktopOrchestrator")
+        top_k = args.top_k if args.top_k is not None else 5
+        result = orch.list_notes(query, top_k=top_k)
+        print(json.dumps(result, ensure_ascii=False))
 
 
 def cmd_stop(args, container: Optional[object] = None) -> None:

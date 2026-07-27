@@ -195,6 +195,18 @@ class _Handler(BaseHTTPRequestHandler):
             ds = self._container.resolve("DesktopService")
             ds.type_text(data["text"])
             self._json_response({"ok": True})
+        elif path == "/api/desktop/open_note":
+            body = self._read_body()
+            data = json.loads(body.decode("utf-8"))
+            orch = self._container.resolve("DesktopOrchestrator")
+            result = orch.open_note(data.get("query", ""), top_k=data.get("top_k", 1))
+            self._json_response(result)
+        elif path == "/api/desktop/list_notes":
+            body = self._read_body()
+            data = json.loads(body.decode("utf-8"))
+            orch = self._container.resolve("DesktopOrchestrator")
+            result = orch.list_notes(data.get("query", ""), top_k=data.get("top_k", 5))
+            self._json_response(result)
         else:
             self.send_error(404)
 
