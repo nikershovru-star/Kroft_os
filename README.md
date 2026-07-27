@@ -878,12 +878,12 @@ python main.py agent "экспортируй граф в dot"                  #
 ## STAGE 35 — Task Scheduler
 
 ```bash
-python main.py schedule add --cron "every 60" --command "agent найди питон"
+python main.py schedule add --cron "every 60" --cmd "agent найди питон"
 python main.py schedule list
 python main.py schedule cancel job-1
 python main.py schedule start   # daemon thread
 python main.py schedule stop
-# REPL: schedule add --cron "daily 09:00" agent найди питон
+# REPL: schedule add --cron "daily 09:00" --cmd agent найди питон
 # HTTP: POST /api/schedule/add {"cron":"every 60","command":"agent найди питон"}
 ```
 
@@ -891,6 +891,30 @@ python main.py schedule stop
 - Cron expressions: `every N` (seconds), `daily HH:MM`.
 - Executor wired to `IAgent.execute` — scheduled commands run through Hermes agent.
 - Daemon thread, fail-safe (exceptions in jobs don't crash scheduler).
+
+## STAGE 36 — Real Desktop Activation
+
+```bash
+# Default (mock) — no real mouse/keyboard actions
+python main.py desktop cursor
+# Real PyAutoGUI — requires `pip install pyautogui pillow`
+python main.py desktop cursor --desktop-adapter pyautogui
+python main.py agent "найди питон и открой лучшую" --desktop-adapter pyautogui
+# Or via env var:
+set DESKTOP_ADAPTER=pyautogui
+python main.py agent "найди питон и открой лучшую"
+```
+
+- `--desktop-adapter {mock,pyautogui}` — глобальный CLI-флаг (как `--plugin-dir`).
+- `MockDesktopAdapter` — default, zero regression (все тесты headless).
+- `PyAutoGUIAdapter` — lazy import, реальные клики/открытие/скриншоты.
+- Требования: `pip install pyautogui pillow`, интерактивная Windows-сессия.
+
+### HONEST LIMITATIONS (Stage 36)
+- `PyAutoGUIAdapter` не работает в headless/CI.
+- `open_app` использует `os.system(start/open/xdg-open)` — не контролирует,
+  какое приложение откроет файл (зависит от ОС).
+- Нет sandbox — адаптер управляет реальной мышью и клавиатурой.
 
 ## Test gates
 

@@ -419,13 +419,20 @@ class KnowledgeOSRepl:
         action = args[0]
         if action == "add":
             cron = "every 60"
-            cmd_start = 1
-            if len(args) >= 3 and args[1] == "--cron":
-                cron = args[2]
-                cmd_start = 3
-            command = " ".join(args[cmd_start:])
+            command = None
+            rest = args[1:]
+            i = 0
+            while i < len(rest):
+                if rest[i] == "--cron" and i + 1 < len(rest):
+                    cron = rest[i + 1]
+                    i += 2
+                elif rest[i] in ("--cmd", "--command") and i + 1 < len(rest):
+                    command = rest[i + 1]
+                    i += 2
+                else:
+                    i += 1
             if not command:
-                print("schedule add: need COMMAND", file=sys.stderr)
+                print("schedule add: need --cmd COMMAND", file=sys.stderr)
                 return
             jid = sched.add(cron, command)
             print(json.dumps({"ok": True, "id": jid}))

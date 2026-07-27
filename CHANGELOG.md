@@ -1,4 +1,10 @@
 # Changelog
+## v5.0.0 (Stage 36)
+- Real Desktop Activation: `--desktop-adapter pyautogui` CLI flag + env var.
+- `PyAutoGUIAdapter` lazy-wiring in DI (default remains Mock).
+- 3 tests (`test_desktop_pyautogui.py`, skip if pyautogui not installed).
+- HONEST LIMITATIONS: no headless/CI; os.system open; no sandbox over mouse/keyboard.
+
 ## v5.0.0 (Stage 35)
 - Task Scheduler: `SchedulerService` with `sched` (stdlib).
 - Cron expressions: `every N`, `daily HH:MM`.

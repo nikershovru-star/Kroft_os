@@ -251,11 +251,11 @@ def cmd_schedule(args, container) -> None:
     sched: SchedulerService = container.resolve("SchedulerService")
     action = args.action
     if action == "add":
-        if not args.command:
-            print("schedule add: need --command", file=sys.stderr)
+        if not args.cmd:
+            print("schedule add: need --cmd", file=sys.stderr)
             return
-        jid = sched.add(args.cron, args.command)
-        print(json.dumps({"ok": True, "id": jid, "cron": args.cron, "command": args.command}))
+        jid = sched.add(args.cron, args.cmd)
+        print(json.dumps({"ok": True, "id": jid, "cron": args.cron, "command": args.cmd}))
     elif action == "list":
         print(json.dumps(sched.list_jobs(), ensure_ascii=False))
     elif action == "cancel":

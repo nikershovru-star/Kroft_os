@@ -29,7 +29,7 @@ from adapters.desktop_adapter import MockDesktopAdapter
 from adapters.agent_adapter import RuleBasedAgentAdapter
 
 
-def build_container(vault_path: str, loader=None) -> DependencyContainer:
+def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock") -> DependencyContainer:
     """Composition root: register ports + concrete adapters + services.
 
     Adapters (LocalFileSystemAdapter) are referenced HERE only; commands
@@ -51,8 +51,13 @@ def build_container(vault_path: str, loader=None) -> DependencyContainer:
     # default deterministic Mock embedding (real OpenAI adapter is opt-in).
     c.register_instance("SemanticIndex", SemanticIndex())
     c.register_instance("Embedding", MockEmbeddingAdapter())
-    # Stage 31: Desktop capability (default Mock, zero regression)
-    c.register_instance("IDesktop", MockDesktopAdapter())
+    # Stage 31/36: Desktop capability. Default Mock (zero regression);
+    # opt-in PyAutoGUI via --desktop-adapter flag or DESKTOP_ADAPTER env var.
+    if desktop_adapter == "pyautogui":
+        from adapters.desktop_adapter import PyAutoGUIAdapter
+        c.register_instance("IDesktop", PyAutoGUIAdapter())
+    else:
+        c.register_instance("IDesktop", MockDesktopAdapter())
     c.register_factory(
         "DesktopService",
         lambda: DesktopService(c.resolve("IDesktop")),
@@ -205,9 +210,49 @@ def _prescan_plugin_dir(argv) -> str | None:
     return known.plugin_dir
 
 
+def _prescan_desktop_adapter(argv) -> str:
+    """Extract --desktop-adapter from anywhere in argv (Stage 36).
+
+    Works regardless of position (before or after the subcommand). The flag
+    and its value are STRIPPED from *argv* (mutated in place) so the real
+    parser never chokes on an unknown global flag after the subcommand.
+    Falls back to the DESKTOP_ADAPTER env var, then "mock".
+    """
+    import argparse as _argparse
+    import os as _os
+    pre = _argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--desktop-adapter", dest="desktop_adapter", default=None)
+    known, _ = pre.parse_known_args(argv)
+    # strip the flag (and its value) from argv so parse_args won't see it
+    if known.desktop_adapter is not None:
+        try:
+            i = argv.index("--desktop-adapter")
+            # value may be attached (--desktop-adapter=pyautogui) or separate
+            if "=" in argv[i]:
+                argv.pop(i)
+            else:
+                argv.pop(i); argv.pop(i)  # remove flag + value
+        except (ValueError, IndexError):
+            pass
+    if known.desktop_adapter in ("mock", "pyautogui"):
+        return known.desktop_adapter
+    env = _os.environ.get("DESKTOP_ADAPTER")
+    if env in ("mock", "pyautogui"):
+        return env
+    return "mock"
+
+
 def main(argv=None) -> None:
+    # Stage 36: normalize to a mutable list so --desktop-adapter can be
+    # stripped in place before the real parser runs.
+    if argv is None:
+        argv = _sys.argv[1:]
+    else:
+        argv = list(argv)
     # Stage 25: load plugins first so their subcommands exist at parse time.
     plugin_dir = _prescan_plugin_dir(argv)
+    # Stage 36: extract --desktop-adapter (works in any position), default mock.
+    desktop_adapter = _prescan_desktop_adapter(argv)
     loader = None
     if plugin_dir is not None:
         loader = PluginLoader(plugin_dir)
@@ -215,7 +260,8 @@ def main(argv=None) -> None:
         for fname, err in loader.errors:
             print(f"[plugin] {fname}: {err}", file=_sys.stderr)
     args = parse_args(argv, loader=loader)
-    build = lambda: build_container(args.vault, loader=loader)
+    build = lambda: build_container(args.vault, loader=loader,
+                                    desktop_adapter=desktop_adapter)
     # Plugin-registered subcommands carry their handler via set_defaults(func=...).
     if getattr(args, "func", None) is not None and args.command not in _BUILTIN_COMMANDS:
         # A plugin command may omit --vault entirely -- default to cwd so the
