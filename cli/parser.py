@@ -80,6 +80,17 @@ def build_parser() -> argparse.ArgumentParser:
     pw.add_argument("--no-watchdog", action="store_true",
                     help="Force polling fallback even if watchdog is installed")
 
+    psv = sub.add_parser(
+        "serve",
+        help="Start HTTP server for the web UI (Stage 22)",
+    )
+    psv.add_argument("--host", default="127.0.0.1",
+                     help="Bind host (default 127.0.0.1)")
+    psv.add_argument("--port", type=int, default=8080,
+                     help="Bind port (default 8080)")
+    psv.add_argument("--vault", default=None,
+                     help="Path to the vault directory (or read from knowledgeos.yaml)")
+
     return p
 
 

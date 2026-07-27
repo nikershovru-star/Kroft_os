@@ -14,10 +14,11 @@ from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter
 from adapters.exporters import export_dot, export_json, export_gexf
 from adapters.file_watcher import FileWatcher
+from adapters.http_server import KnowledgeOSServer
 
 from cli.parser import parse_args
 from cli.commands import (
-    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch,
+    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve,
 )
 from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService
 
@@ -83,6 +84,13 @@ def build_container(vault_path: str) -> DependencyContainer:
             kernel=None,  # cmd_watch injects the live Kernel after build
         ),
     )
+    # Stage 22: HTTP server adapter (stdlib http.server). Registered HERE in
+    # the composition root only; cli/ resolves it by name and overrides
+    # _host/_port before start() -- cli/ must NOT import adapters directly.
+    c.register_factory(
+        "KnowledgeOSServer",
+        lambda: KnowledgeOSServer(c, host="127.0.0.1", port=8080),
+    )
     return c
 
 
@@ -106,6 +114,8 @@ def main(argv=None) -> None:
         cmd_export(args, build_container(args.vault))
     elif args.command == "watch":
         cmd_watch(args, build_container(args.vault))
+    elif args.command == "serve":
+        cmd_serve(args, build_container(args.vault))
 
 
 if __name__ == "__main__":

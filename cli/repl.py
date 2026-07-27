@@ -49,6 +49,7 @@ _COMMANDS = (
     ("fuzzy QUERY", "fuzzy full-text search (e.g. 'fuzzy pithon')"),
     ("export FORMAT [OUTPUT]", "export graph to dot/json/gexf (FORMAT in dot/json/gexf; OUTPUT file or '-' stdout)"),
     ("watch [--interval N]", "start auto-recrawl on .md change (background thread; stop with 'watch stop')"),
+    ("serve [PORT]", "start HTTP server for the web UI (default 8080)"),
     ("status", "show kernel state + graph size"),
     ("save", "force a graph snapshot (GraphSnapshotted)"),
     ("exit / quit", "graceful shutdown and leave the REPL"),
@@ -131,7 +132,7 @@ class KnowledgeOSRepl:
                 # Complete command verbs.
                 cmds = [
                     "crawl", "query", "search", "fuzzy", "status",
-                    "save", "exit", "quit", "help",
+                    "save", "exit", "quit", "help", "watch", "serve",
                 ]
                 self._matches = [c for c in cmds if c.startswith(text)]
         try:
@@ -200,6 +201,9 @@ class KnowledgeOSRepl:
             return
         if verb == "watch":
             self._do_watch(parts[1:])
+            return
+        if verb == "serve":
+            self._do_serve(parts[1:])
             return
         # Unknown command: report and continue (does NOT crash the session).
         print(
@@ -316,6 +320,34 @@ class KnowledgeOSRepl:
         self._repl_watch = ws
         backend = "watchdog" if getattr(self._container.resolve("FileWatcher"), "using_watchdog", False) else "polling"
         print(f"watch started ({backend} backend); 'watch stop' to halt", file=sys.stderr)
+
+    def _do_serve(self, args: List[str]) -> None:
+        """Start the HTTP server (Stage 22) in a background thread.
+
+        Resolves ``KnowledgeOSServer`` from the DI container by name (cli/
+        never imports adapters directly). The REPL loop keeps running, so
+        'stop' / 'exit' leaves the REPL -- it does NOT shut the server down.
+        """
+        if args:
+            try:
+                port = int(args[0])
+            except ValueError:
+                print(f"serve: invalid port {args[0]!r}", file=sys.stderr)
+                return
+        else:
+            port = 8080
+        server = self._container.resolve("KnowledgeOSServer")
+        server._port = port
+        server.start()
+        print(
+            f"Server running at http://127.0.0.1:{server.port}/",
+            file=sys.stderr,
+        )
+        print(
+            "Note: runs in a background thread. 'stop'/'exit' shuts down the "
+            "REPL, not the server.",
+            file=sys.stderr,
+        )
 
     def _do_save(self) -> None:
         """Force a graph snapshot while the kernel keeps running."""

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>KnowledgeOS</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+    #search { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+    #suggestions { margin: 8px 0; color: #666; }
+    #suggestions span { cursor: pointer; margin-right: 12px; text-decoration: underline; }
+    .result { padding: 12px; border-bottom: 1px solid #eee; }
+    .result b { display: block; margin-bottom: 4px; }
+    #graph { width: 100%; height: 500px; border: 1px solid #ddd; margin-top: 20px; border-radius: 4px; }
+    button { padding: 10px 20px; margin-top: 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>KnowledgeOS</h1>
+  <input id="search" type="text" placeholder="Search vault..." autocomplete="off">
+  <div id="suggestions"></div>
+  <div id="results"></div>
+  <button onclick="loadGraph()">Show Graph</button>
+  <div id="graph"></div>
+
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script>
+    const API = "/api";
+    const searchBox = document.getElementById("search");
+    const suggestions = document.getElementById("suggestions");
+
+    async function doSearch(q) {
+      const [searchRes, suggestRes] = await Promise.all([
+        fetch(`${API}/search?q=${encodeURIComponent(q)}`).then(r => r.json()),
+        fetch(`${API}/suggest?prefix=${encodeURIComponent(q)}`).then(r => r.json()),
+      ]);
+      document.getElementById("results").innerHTML = searchRes.map(id =>
+        `<div class="result"><b>${escapeHtml(id)}</b></div>`
+      ).join("");
+      suggestions.innerHTML = suggestRes.map(s =>
+        `<span onclick="searchBox.value=${JSON.stringify(s).replace(/"/g, '&quot;')};doSearch(${JSON.stringify(s)});">${escapeHtml(s)}</span>`
+      ).join("");
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => (
+        {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]
+      ));
+    }
+
+    searchBox.addEventListener("input", (e) => doSearch(e.target.value));
+
+    async function loadGraph() {
+      const data = await fetch(`${API}/graph`).then(r => r.json());
+      const nodes = new vis.DataSet(data.nodes.map(n => ({id: n.id, label: n.label || n.id})));
+      const edges = new vis.DataSet(data.edges.map(e => ({from: e.from, to: e.to, label: e.relation || ""})));
+      new vis.Network(document.getElementById("graph"), {nodes, edges}, {
+        physics: { stabilization: false },
+        interaction: { hover: true }
+      });
+    }
+  </script>
+</body>
+</html>

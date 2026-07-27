@@ -270,3 +270,36 @@ def cmd_export(args, container) -> None:
         Path(output).write_text(data, encoding="utf-8")
     else:
         fs.write_content(output, data)
+
+
+def cmd_serve(args, container) -> None:
+    """Start the HTTP server for the web UI (Stage 22).
+
+    Builds a Kernel (restores graph/index from snapshot), starts it, then
+    resolves the ``KnowledgeOSServer`` adapter from the DI container (cli/
+    must NOT import adapters directly -- arch gate) and runs its serve_forever
+    loop on a daemon thread while the main thread sleeps until Ctrl+C.
+
+    Overrides the server's host/port from --host/--port before start() so the
+    CLI controls binding without touching the adapter's constructor in cli/.
+    """
+    import time
+
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
+    k.initialize()
+    k.start()
+    atexit.register(lambda: k.stop())
+
+    server = container.resolve("KnowledgeOSServer")
+    server._host = args.host
+    server._port = args.port
+    server.start()
+    print(f"Server running at http://{server._host}:{server.port}/", file=sys.stderr)
+    print("Press Ctrl+C to stop.", file=sys.stderr)
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        server.stop()
+        print("Server stopped.", file=sys.stderr)
