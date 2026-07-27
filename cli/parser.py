@@ -130,6 +130,18 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     pa.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 
+    psch = sub.add_parser("schedule", help="Task scheduler (Stage 35)")
+    psch.add_argument("action", choices=["add", "list", "cancel", "start", "stop"],
+                      help="Scheduler action")
+    psch.add_argument("--cron", default="every 60",
+                      help="Cron expression: 'every N' or 'daily HH:MM'")
+    psch.add_argument("--command", default=None,
+                      help="Command to schedule (for add)")
+    psch.add_argument("--id", default=None,
+                      help="Job ID (for cancel)")
+    psch.add_argument("--vault", default=None,
+                      help="Path to the vault directory (or read from knowledgeos.yaml)")
+
     # Stage 25: plugins add their own subcommands LAST (they can never
     # displace a built-in: argparse raises on duplicate names and the loader
     # records the error, skipping only the offender).

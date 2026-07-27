@@ -218,6 +218,20 @@ class _Handler(BaseHTTPRequestHandler):
             else:
                 result = agent.execute(command)
                 self._json_response(result)
+        elif path == "/api/schedule/add":
+            body = self._read_body()
+            data = json.loads(body.decode("utf-8"))
+            sched = self._container.resolve("SchedulerService")
+            jid = sched.add(data.get("cron", "every 60"), data.get("command", ""))
+            self._json_response({"ok": True, "id": jid})
+        elif path == "/api/schedule/list":
+            sched = self._container.resolve("SchedulerService")
+            self._json_response(sched.list_jobs())
+        elif path == "/api/schedule/cancel":
+            body = self._read_body()
+            data = json.loads(body.decode("utf-8"))
+            sched = self._container.resolve("SchedulerService")
+            self._json_response({"ok": sched.cancel(data.get("id", ""))})
         else:
             self.send_error(404)
 

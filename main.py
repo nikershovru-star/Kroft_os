@@ -22,9 +22,9 @@ from adapters.embedding import MockEmbeddingAdapter
 
 from cli.parser import parse_args
 from cli.commands import (
-    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic, cmd_hybrid, cmd_desktop, cmd_agent,
+    cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic, cmd_hybrid, cmd_desktop, cmd_agent, cmd_schedule,
 )
-from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex, DesktopService, DesktopOrchestrator, ToolRegistry, AgentService
+from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex, DesktopService, DesktopOrchestrator, ToolRegistry, AgentService, SchedulerService
 from adapters.desktop_adapter import MockDesktopAdapter
 from adapters.agent_adapter import RuleBasedAgentAdapter
 
@@ -138,6 +138,9 @@ def build_container(vault_path: str, loader=None) -> DependencyContainer:
     c.register_instance("PluginLoader", loader)
     if loader is not None:
         loader.apply_exporters(c)
+    # Stage 35: Task Scheduler (executor wired to IAgent.execute)
+    c.register_instance("SchedulerService", SchedulerService())
+    _wire_scheduler(c)
     return c
 
 
@@ -183,6 +186,13 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
                       "Return cursor coordinates")
 
     return AgentService(registry)
+
+
+def _wire_scheduler(container: DependencyContainer) -> None:
+    """Wire the scheduler's executor to the Hermes agent (composition root only)."""
+    sched: SchedulerService = container.resolve("SchedulerService")
+    agent = container.resolve("IAgent")
+    sched.set_executor(lambda cmd: agent.execute(cmd))
 
 
 def _prescan_plugin_dir(argv) -> str | None:
@@ -241,11 +251,13 @@ def main(argv=None) -> None:
         cmd_desktop(args, build())
     elif args.command == "agent":
         cmd_agent(args, build())
+    elif args.command == "schedule":
+        cmd_schedule(args, build())
 
 
 _BUILTIN_COMMANDS = {
     "init", "crawl", "query", "search", "status", "stop", "repl",
-    "export", "watch", "serve", "semantic", "hybrid", "desktop", "agent",
+    "export", "watch", "serve", "semantic", "hybrid", "desktop", "agent", "schedule",
 }
 
 

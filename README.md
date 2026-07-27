@@ -875,6 +875,23 @@ python main.py agent "экспортируй граф в dot"                  #
 - Mixed-language (`найди python`) работает, но только если английское слово
   попадает в capture group `(.*)`.
 
+## STAGE 35 — Task Scheduler
+
+```bash
+python main.py schedule add --cron "every 60" --command "agent найди питон"
+python main.py schedule list
+python main.py schedule cancel job-1
+python main.py schedule start   # daemon thread
+python main.py schedule stop
+# REPL: schedule add --cron "daily 09:00" agent найди питон
+# HTTP: POST /api/schedule/add {"cron":"every 60","command":"agent найди питон"}
+```
+
+- **`services.SchedulerService`** — in-memory `sched.scheduler` + JSON snapshot (`snapshot()`/`restore()`).
+- Cron expressions: `every N` (seconds), `daily HH:MM`.
+- Executor wired to `IAgent.execute` — scheduled commands run through Hermes agent.
+- Daemon thread, fail-safe (exceptions in jobs don't crash scheduler).
+
 ## Test gates
 
 ```

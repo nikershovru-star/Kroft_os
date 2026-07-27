@@ -242,6 +242,36 @@ def cmd_agent(args, container) -> None:
         print(json.dumps(result, ensure_ascii=False))
 
 
+def cmd_schedule(args, container) -> None:
+    """Task scheduler (Stage 35)."""
+    effective = _resolve_config(args, container)
+    k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
+    k.initialize()
+    atexit.register(lambda: k.stop())
+    sched: SchedulerService = container.resolve("SchedulerService")
+    action = args.action
+    if action == "add":
+        if not args.command:
+            print("schedule add: need --command", file=sys.stderr)
+            return
+        jid = sched.add(args.cron, args.command)
+        print(json.dumps({"ok": True, "id": jid, "cron": args.cron, "command": args.command}))
+    elif action == "list":
+        print(json.dumps(sched.list_jobs(), ensure_ascii=False))
+    elif action == "cancel":
+        if not args.id:
+            print("schedule cancel: need --id", file=sys.stderr)
+            return
+        ok = sched.cancel(args.id)
+        print(json.dumps({"ok": ok, "id": args.id}))
+    elif action == "start":
+        sched.start()
+        print(json.dumps({"ok": True, "status": "started"}))
+    elif action == "stop":
+        sched.stop()
+        print(json.dumps({"ok": True, "status": "stopped"}))
+
+
 def cmd_stop(args, container: Optional[object] = None) -> None:
     """No daemon runs between commands, so there is nothing to signal.
 

@@ -1,4 +1,11 @@
 # Changelog
+## v5.0.0 (Stage 35)
+- Task Scheduler: `SchedulerService` with `sched` (stdlib).
+- Cron expressions: `every N`, `daily HH:MM`.
+- CLI/REPL/HTTP: `schedule add/list/cancel/start/stop`.
+- Executor wired to `IAgent.execute` -- scheduled commands go through Hermes agent.
+- 6 tests (`test_scheduler.py`); suite 288 -> 294 passed.
+
 ## v5.0.0 (Stage 34)
 - Multi-Step Agent Plans: `find X and open the best` -> sequential tool execution.
 - Cyrillic support: `найди`, `открой`, `сделай скриншот`, `экспортируй граф в dot`, etc.

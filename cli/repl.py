@@ -52,6 +52,11 @@ _COMMANDS = (
     ("desktop open_note QUERY", "search+open top note in default app"),
     ("agent COMMAND", "Hermes agent: find/open/show/export (try 'agent find python')"),
     ("agent --dry-run COMMAND", "show execution plan without running"),
+    ("schedule add [--cron EXPR] CMD", "schedule a command (every N / daily HH:MM)"),
+    ("schedule list", "show scheduled jobs"),
+    ("schedule cancel ID", "cancel a job"),
+    ("schedule start", "start the scheduler daemon"),
+    ("schedule stop", "stop the scheduler daemon"),
     ("desktop list_notes QUERY", "list top-k note candidates from hybrid search"),
     ("export FORMAT [OUTPUT]", "export graph to dot/json/gexf (FORMAT in dot/json/gexf; OUTPUT file or '-' stdout)"),
     ("watch [--interval N]", "start auto-recrawl on .md change (background thread; stop with 'watch stop')"),
@@ -213,6 +218,9 @@ class KnowledgeOSRepl:
             return
         if verb == "agent":
             self._do_agent(parts[1:])
+            return
+        if verb == "schedule":
+            self._do_schedule(parts[1:])
             return
         if verb == "export":
             self._do_export(parts[1:])
@@ -402,6 +410,37 @@ class KnowledgeOSRepl:
         else:
             result = agent.execute(command)
             print(json.dumps(result, ensure_ascii=False))
+
+    def _do_schedule(self, args: List[str]) -> None:
+        if not args:
+            print("schedule: need ACTION", file=sys.stderr)
+            return
+        sched: SchedulerService = self._container.resolve("SchedulerService")
+        action = args[0]
+        if action == "add":
+            cron = "every 60"
+            cmd_start = 1
+            if len(args) >= 3 and args[1] == "--cron":
+                cron = args[2]
+                cmd_start = 3
+            command = " ".join(args[cmd_start:])
+            if not command:
+                print("schedule add: need COMMAND", file=sys.stderr)
+                return
+            jid = sched.add(cron, command)
+            print(json.dumps({"ok": True, "id": jid}))
+        elif action == "list":
+            print(json.dumps(sched.list_jobs(), ensure_ascii=False))
+        elif action == "cancel" and len(args) == 2:
+            print(json.dumps({"ok": sched.cancel(args[1])}))
+        elif action == "start":
+            sched.start()
+            print(json.dumps({"ok": True, "status": "started"}))
+        elif action == "stop":
+            sched.stop()
+            print(json.dumps({"ok": True, "status": "stopped"}))
+        else:
+            print(f"schedule: unknown action {action}", file=sys.stderr)
 
     def _do_export(self, args: List[str]) -> None:
         """Export the live graph to dot/json/gexf (Stage 23).
