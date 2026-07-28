@@ -43,6 +43,9 @@ class GraphQueryEngine(IGraphQuery):
         # graph.get_graph(), so the crawler may mutate the live graph (add
         # nodes/edges) between our calls without corrupting an in-flight query.
         self._graph = graph
+        # Stage 43: optional networkx graph (lazy-built from the snapshot on
+        # first graph-reasoning call; may also be injected directly for tests).
+        self._g: Any = None
         # Stage 18: optional ContentIndex (duck-typed — the services
         # cross-import gate forbids importing the sibling service; the DI
         # composition root wires the SAME instance the crawler writes to).
@@ -106,6 +109,105 @@ class GraphQueryEngine(IGraphQuery):
             connected.add(e.get("from"))
             connected.add(e.get("to"))
         return [n["id"] for n in g["nodes"] if n["id"] not in connected]
+
+    # ----- Stage 43: graph-aware reasoning (networkx, lazy import) -----
+    def _ensure_nx(self) -> Any:
+        """Build (or return) the networkx DiGraph from the live snapshot.
+
+        networkx is imported lazily INSIDE this method so the arch-gate
+        (services -> contracts + stdlib only) is not violated at module load.
+        If a caller injected ``self._g`` directly (tests), it is returned as-is.
+        """
+        if self._g is not None:
+            return self._g
+        import networkx as nx
+        snap = self._snapshot()
+        g = nx.DiGraph()
+        for n in snap.get("nodes", []):
+            g.add_node(n["id"])
+        for e in snap.get("edges", []):
+            src = e.get("from")
+            dst = e.get("to")
+            if src and dst:
+                g.add_edge(src, dst)
+        self._g = g
+        return g
+
+    def get_neighbors(self, node_id: str, direction: str = "both", depth: int = 1) -> List[Dict[str, Any]]:
+        """BFS/DFS neighbors with direction filter and depth limit."""
+        g = self._ensure_nx()
+        if g is None or node_id not in g:
+            return []
+        import networkx as nx
+        if direction == "out":
+            frontier = set(g.successors(node_id))
+        elif direction == "in":
+            frontier = set(g.predecessors(node_id))
+        else:
+            frontier = set(g.successors(node_id)) | set(g.predecessors(node_id))
+        seen = {node_id}
+        for _ in range(depth - 1):
+            next_frontier = set()
+            for n in frontier:
+                if n not in seen:
+                    seen.add(n)
+                    next_frontier.update(g.successors(n))
+                    next_frontier.update(g.predecessors(n))
+            frontier = next_frontier - seen
+        nodes = (seen | frontier) - {node_id}
+        return [{"id": n, "title": n.replace(".md", "").replace("-", " ")} for n in nodes]
+
+    def shortest_path(self, from_id: str, to_id: str) -> List[str]:
+        """Shortest path between two nodes; empty list if no path."""
+        g = self._ensure_nx()
+        if g is None or from_id not in g or to_id not in g:
+            return []
+        import networkx as nx
+        try:
+            return nx.shortest_path(g, source=from_id, target=to_id)
+        except nx.NetworkXNoPath:
+            return []
+        except nx.NodeNotFound:
+            return []
+
+    def get_cluster(self, node_id: str, k: int = 5) -> List[Dict[str, Any]]:
+        """Personalized PageRank cluster around a node (top-k excluding self).
+
+        Pure-stdlib implementation (reuses the iterative scheme from
+        ``pagerank``) with a personalization/teleport vector concentrated on
+        ``node_id``. Avoids ``nx.pagerank`` which requires the optional
+        ``scipy`` dependency (not present in this environment).
+        """
+        g = self._snapshot()
+        ids = [n["id"] for n in g["nodes"]]
+        n = len(ids)
+        if n == 0 or node_id not in ids:
+            return []
+        out_count: Dict[str, int] = {nid: 0 for nid in ids}
+        incoming: Dict[str, List[str]] = {nid: [] for nid in ids}
+        for e in g["edges"]:
+            src, dst = e.get("from"), e.get("to")
+            if src in out_count and dst in incoming:
+                out_count[src] += 1
+                incoming[dst].append(src)
+        damping = 0.85
+        dangling = [nid for nid in ids if out_count[nid] == 0]
+        # personalization: teleport only to node_id
+        pers: Dict[str, float] = {nid: (1.0 if nid == node_id else 0.0) for nid in ids}
+        pr: Dict[str, float] = {nid: 1.0 / n for nid in ids}
+        for _ in range(30):
+            dangling_sum = sum(pr[nid] for nid in dangling)
+            pr = {
+                nid: (1.0 - damping) * pers[nid]
+                + damping * (dangling_sum / n + sum(pr[src] / out_count[src] for src in incoming[nid]))
+                for nid in ids
+            }
+        pr.pop(node_id, None)
+        sorted_nodes = sorted(pr.items(), key=lambda x: x[1], reverse=True)
+        return [
+            {"id": nid, "score": round(s, 4), "title": nid.replace(".md", "").replace("-", " ")}
+            for nid, s in sorted_nodes[:k]
+        ]
 
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:

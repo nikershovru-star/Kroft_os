@@ -427,7 +427,6 @@ class KnowledgeOSRepl:
             if len(args) < 2:
                 print("agent --batch: need FILE", file=sys.stderr)
                 return
-            import json
             with open(args[1], "r", encoding="utf-8") as f:
                 commands = [json.loads(line)["command"] for line in f if line.strip()]
             agent = self._container.resolve("IAgent")

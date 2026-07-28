@@ -69,6 +69,54 @@ class AgentService:
             r"export\s+(dot|json|gexf)\b(?:\s+(.+))?$",
             [("export_format", lambda m: {"fmt": m.group(1)})],
         ),
+        # Stage 43: graph reasoning (English)
+        (
+            r"neighbors\s+of\s+(.+?)(?:\s+(in|out|both))?(?:\s+depth\s+(\d+))?$",
+            [("graph_neighbors", lambda m: {
+                "query": m.group(1).strip(),
+                "direction": (m.group(2) or "both").lower(),
+                "depth": int(m.group(3) or 1),
+            })],
+        ),
+        (
+            r"path\s+from\s+(.+?)\s+to\s+(.+)$",
+            [("graph_path", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"cluster\s+around\s+(.+?)(?:\s+top\s+(\d+))?$",
+            [("graph_cluster", lambda m: {
+                "query": m.group(1).strip(),
+                "k": int(m.group(2) or 5),
+            })],
+        ),
+        # Stage 43: graph reasoning (Cyrillic)
+        (
+            r"соседи\s+(.+?)(?:\s+(вход|выход|оба))?(?:\s+глубина\s+(\d+))?$",
+            [("graph_neighbors", lambda m: {
+                "query": m.group(1).strip(),
+                "direction": {"вход": "in", "выход": "out", "оба": "both"}.get(
+                    (m.group(2) or "оба").lower(), "both"
+                ),
+                "depth": int(m.group(3) or 1),
+            })],
+        ),
+        (
+            r"путь\s+от\s+(.+?)\s+до\s+(.+)$",
+            [("graph_path", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"кластер\s+вокруг\s+(.+?)(?:\s+топ\s+(\d+))?$",
+            [("graph_cluster", lambda m: {
+                "query": m.group(1).strip(),
+                "k": int(m.group(2) or 5),
+            })],
+        ),
         (
             r"take\s+a\s+screenshot",
             [("screenshot", lambda m: {})],

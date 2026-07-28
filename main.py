@@ -226,6 +226,43 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
     registry.register("show_note", lambda query, top_k=1: orch.show_note(query, top_k),
                       "Show top note content inline")
 
+    # Stage 43: graph reasoning tools
+    def _graph_neighbors(query: str, direction: str = "both", depth: int = 1):
+        results = engine.hybrid_search(query, top_k=1)
+        if not results:
+            return {"error": "no results", "query": query}
+        nid = results[0][0]
+        return {"ok": True, "node": nid, "neighbors": engine.get_neighbors(nid, direction, depth)}
+
+    registry.register("graph_neighbors", _graph_neighbors,
+                      "Graph neighbors of a note (direction: in/out/both, depth: int)")
+
+    def _graph_path(from_query: str, to_query: str):
+        a = engine.hybrid_search(from_query, top_k=1)
+        b = engine.hybrid_search(to_query, top_k=1)
+        if not a or not b:
+            return {"error": "node not found"}
+        path = engine.shortest_path(a[0][0], b[0][0])
+        return {
+            "ok": True,
+            "from": a[0][0],
+            "to": b[0][0],
+            "path": path,
+            "length": len(path) - 1 if path else -1,
+        }
+
+    registry.register("graph_path", _graph_path,
+                      "Shortest path between two notes")
+
+    def _graph_cluster(query: str, k: int = 5):
+        results = engine.hybrid_search(query, top_k=1)
+        if not results:
+            return {"error": "no results", "query": query}
+        return {"ok": True, "node": results[0][0], "cluster": engine.get_cluster(results[0][0], k)}
+
+    registry.register("graph_cluster", _graph_cluster,
+                      "Personalized PageRank cluster around a note")
+
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)
     loader = container.try_resolve("PluginLoader")  # None if no plugins loaded

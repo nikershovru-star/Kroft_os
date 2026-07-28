@@ -249,7 +249,6 @@ def cmd_agent(args, container) -> None:
         session.reset()
         print(json.dumps({"ok": True, "action": "clear_history"}))
     elif args.batch:
-        import json
         with open(args.batch, "r", encoding="utf-8") as f:
             commands = [json.loads(line)["command"] for line in f if line.strip()]
         batch_results = agent._svc.execute_batch(commands, continue_on_error=args.continue_on_error)

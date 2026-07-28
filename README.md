@@ -1057,4 +1057,24 @@ POST /api/agent/batch {"commands":[{"command":"find python"},{"command":"show"}]
 - JSON Lines input: one `{"command": "..."}` per line.
 - Fail-fast by default; `--continue-on-error` for resilient pipelines.
 
+
+## STAGE 43 — Agent Graph-Aware Reasoning
+
+```bash
+# Graph structure queries (resolve via hybrid search top-1, then reason)
+python main.py agent "neighbors of python"
+python main.py agent "neighbors of python in depth 2"
+python main.py agent "path from python to budget"
+python main.py agent "cluster around python top 10"
+# Cyrillic
+python main.py agent "соседи питон глубина 2"
+python main.py agent "путь от питона до бюджета"
+```
+
+- `graph_neighbors` — BFS/DFS neighbors with direction (in/out/both) and depth.
+- `graph_path` — shortest path between two notes (hybrid-search resolves ambiguous names).
+- `graph_cluster` — personalized PageRank cluster around a note.
+- All tools resolve the query to the best-matching node via `hybrid_search`, then traverse the graph.
+- `networkx` is imported lazily inside the engine (arch-gate clean: services stay stdlib-only at module level).
+
 ## Test gates

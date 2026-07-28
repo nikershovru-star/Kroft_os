@@ -1,4 +1,10 @@
 # Changelog
+## v5.6.0 (Stage 43)
+- Graph-Aware Reasoning: `neighbors`, `path`, `cluster` NL intents.
+- `GraphQueryEngine`: `get_neighbors`, `shortest_path`, `get_cluster` (networkx, lazy import).
+- Cyrillic support: `соседи`, `путь`, `кластер`.
+- 5 tests (test_graph_reasoning.py); suite 333 -> 338 passed.
+
 ## v5.5.0 (Stage 42)
 - Batch Script Execution: `agent --batch FILE` (JSON Lines).
 - Shared session context across batch steps (implicit refs, conversation history).
