@@ -287,6 +287,23 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
     registry.register("graph_suggest", _graph_suggest,
                       "Suggest missing links for a note (graph+content hybrid)")
 
+    # Stage 46: graph analytics & health
+    def _graph_stats():
+        return engine.graph_stats()
+    registry.register("graph_stats", _graph_stats, "Graph statistics")
+
+    def _graph_orphans():
+        return {"ok": True, "orphans": engine.orphan_nodes()}
+    registry.register("graph_orphans", _graph_orphans, "List orphan notes")
+
+    def _graph_central(k: int = 5):
+        return {"ok": True, "top": engine.top_central(k=k)}
+    registry.register("graph_central", _graph_central, "Top central notes by pagerank/degree")
+
+    def _graph_health():
+        return engine.graph_health()
+    registry.register("graph_health", _graph_health, "Graph health check")
+
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)
     loader = container.try_resolve("PluginLoader")  # None if no plugins loaded

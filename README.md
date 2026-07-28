@@ -1113,4 +1113,25 @@ python main.py agent "с чем связать питона"
 - Existing edges (source -> candidate) and self excluded; reverse-direction edges treated as candidate links to recommend.
 - Returns `[{"id", "score", "reason", "title"}]`; user confirms -> `graph_link` (S44).
 
+
+## STAGE 46 — Agent Graph Analytics & Health
+
+```bash
+python main.py agent "graph stats"
+python main.py agent "most central top 3"
+python main.py agent "orphan notes"
+python main.py agent "graph health"
+# Russian
+python main.py agent "статистика графа"
+python main.py agent "самые центральные"
+python main.py agent "осиротевшие заметки"
+python main.py agent "здоровье графа"
+```
+
+- `graph_stats` — nodes/edges/density/orphans.
+- `graph_central` — top-k by pagerank or degree (`most central top N`).
+- `graph_orphans` — list orphan (unconnected) notes.
+- `graph_health` — stats + heuristics (healthy = no orphans AND density > 0).
+- Pure-stdlib over the snapshot graph (no new deps).
+
 ## Test gates

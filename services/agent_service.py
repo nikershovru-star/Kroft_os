@@ -207,6 +207,40 @@ class AgentService:
                 "top_k": int(m.group(2) or 5),
             })],
         ),
+        # Stage 46: graph analytics & health (English)
+        (
+            r"graph\s+stats",
+            [("graph_stats", lambda m: {})],
+        ),
+        (
+            r"orphan\s+notes?",
+            [("graph_orphans", lambda m: {})],
+        ),
+        (
+            r"most\s+central(?:\s+top\s+(\d+))?",
+            [("graph_central", lambda m: {"k": int(m.group(1) or 5)})],
+        ),
+        (
+            r"graph\s+health",
+            [("graph_health", lambda m: {})],
+        ),
+        # Stage 46: graph analytics & health (Russian)
+        (
+            r"статистика\s+графа",
+            [("graph_stats", lambda m: {})],
+        ),
+        (
+            r"осиротевшие\s+заметки",
+            [("graph_orphans", lambda m: {})],
+        ),
+        (
+            r"самые\s+центральные(?:\s+топ\s+(\d+))?",
+            [("graph_central", lambda m: {"k": int(m.group(1) or 5)})],
+        ),
+        (
+            r"здоровье\s+графа",
+            [("graph_health", lambda m: {})],
+        ),
         (
             r"take\s+a\s+screenshot",
             [("screenshot", lambda m: {})],

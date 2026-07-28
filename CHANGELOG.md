@@ -1,4 +1,9 @@
 # Changelog
+## v5.9.0 (Stage 46)
+- Agent Graph Analytics & Health NL intents (EN + RU): stats / central / orphans / health.
+- `GraphQueryEngine`: `graph_stats`, `top_central` (pagerank/degree, pure stdlib), `graph_health`.
+- 5 tests (test_graph_analytics_s46.py; test_graph_analytics.py kept for Stage 26). Suite 348 -> 353 passed.
+
 ## v5.8.0 (Stage 45)
 - Agent Graph Link Recommendations: `suggest links for` / `what should link to` (EN) + `предложи связи для` / `с чем связать` (RU).
 - `GraphQueryEngine.suggest_links`: graph (common-neighbor Jaccard + adjacency bonus) + content (title token Jaccard); excludes existing/self.

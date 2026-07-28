@@ -343,6 +343,76 @@ class GraphQueryEngine(IGraphQuery):
         candidates.sort(key=lambda x: x["score"], reverse=True)
         return candidates[:top_k]
 
+    def graph_stats(self) -> Dict[str, Any]:
+        """Return high-level graph statistics."""
+        g = self._snapshot()
+        nodes = g.get("nodes", [])
+        edges = g.get("edges", [])
+        n = len(nodes)
+        m = len(edges)
+        density = m / (n * (n - 1)) if n > 1 else 0.0
+        orphan_ids = self.orphan_nodes()
+        return {
+            "nodes": n,
+            "edges": m,
+            "density": round(density, 4),
+            "orphans": len(orphan_ids),
+            "orphan_ids": orphan_ids,
+        }
+
+    def top_central(self, k: int = 5, metric: str = "pagerank") -> List[Dict[str, Any]]:
+        """Return top-k nodes by centrality metric ('pagerank' or 'degree').
+
+        Pure-stdlib: degree counts undirected degree; pagerank uses the same
+        iterative scheme as Stage 43 get_cluster (uniform teleport vector).
+        """
+        g = self._snapshot()
+        ids = [n["id"] for n in g.get("nodes", [])]
+        if not ids:
+            return []
+        if metric == "degree":
+            out_count: Dict[str, int] = {nid: 0 for nid in ids}
+            in_count: Dict[str, int] = {nid: 0 for nid in ids}
+            for e in g.get("edges", []):
+                src, dst = e.get("from"), e.get("to")
+                if src in out_count:
+                    out_count[src] += 1
+                if dst in in_count:
+                    in_count[dst] += 1
+            scores = {nid: out_count[nid] + in_count[nid] for nid in ids}
+        else:
+            # uniform PageRank (pure stdlib, same iterative core as S43)
+            out_count: Dict[str, int] = {nid: 0 for nid in ids}
+            incoming: Dict[str, List[str]] = {nid: [] for nid in ids}
+            for e in g.get("edges", []):
+                src, dst = e.get("from"), e.get("to")
+                if src in out_count and dst in incoming:
+                    out_count[src] += 1
+                    incoming[dst].append(src)
+            damping = 0.85
+            dangling = [nid for nid in ids if out_count[nid] == 0]
+            n = len(ids)
+            pr: Dict[str, float] = {nid: 1.0 / n for nid in ids}
+            for _ in range(30):
+                dangling_sum = sum(pr[nid] for nid in dangling)
+                base = (1.0 - damping) / n + damping * dangling_sum / n
+                pr = {
+                    nid: base + damping * sum(pr[src] / out_count[src] for src in incoming[nid])
+                    for nid in ids
+                }
+            scores = pr
+        sorted_nodes = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return [
+            {"id": nid, "score": round(s, 4), "title": nid.replace(".md", "").replace("-", " ")}
+            for nid, s in sorted_nodes[:k]
+        ]
+
+    def graph_health(self) -> Dict[str, Any]:
+        """Quick health check: stats + heuristics."""
+        stats = self.graph_stats()
+        healthy = stats["orphans"] == 0 and stats["density"] > 0
+        return {"ok": True, "healthy": healthy, "stats": stats}
+
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:
             return None
