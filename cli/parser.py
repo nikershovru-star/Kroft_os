@@ -124,9 +124,13 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 
     pa = sub.add_parser("agent", help="Hermes agent: natural language command (Stage 33)")
-    pa.add_argument("text", nargs="+", help="Natural language command")
+    pa.add_argument("text", nargs="*", help="Natural language command")
     pa.add_argument("--dry-run", action="store_true",
                     help="Show plan without executing")
+    pa.add_argument("--session-reset", action="store_true",
+                    help="Clear agent session (Stage 39)")
+    pa.add_argument("--session-info", action="store_true",
+                    help="Show current session state (Stage 39)")
     pa.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 

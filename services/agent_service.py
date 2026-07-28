@@ -147,9 +147,21 @@ class AgentService:
         ),
     ]
 
-    def __init__(self, registry: ToolRegistry) -> None:
+    def __init__(self, registry: ToolRegistry, session_store: Optional[Any] = None) -> None:
         self._registry = registry
-        self._last_find: List[Dict[str, Any]] = []  # SessionStore (in-proc, stateless-by-default)
+        self._session = session_store
+        self._local_find: List[Dict[str, Any]] = []  # fallback if no session_store
+
+    def _get_last_find(self) -> List[Dict[str, Any]]:
+        if self._session:
+            return self._session.get_last_find()
+        return self._local_find
+
+    def _set_last_find(self, results: List[Dict[str, Any]], command: str = "") -> None:
+        if self._session:
+            self._session.set_last_find(results, command)
+        else:
+            self._local_find = results
 
     def _match(self, command: str) -> List[Tuple[str, Dict[str, Any]]]:
         """Return a plan (list of (tool_name, kwargs)) or []."""
@@ -157,12 +169,17 @@ class AgentService:
             return []
         cmd = command.strip().lower()
         # Implicit reference: "open the first one" / "открой первую" -> last find top-1
-        if re.fullmatch(r"(open|открой)\s+(the\s+)?(first|первую|первый)(\s+(one|result))?", cmd) and self._last_find:
-            top = self._last_find[0]
-            return [("open_note", {"query": top.get("id", ""), "top_k": 1})]
-        if re.fullmatch(r"(show|покажи)\s+(the\s+)?(first|первую|первый)(\s+(one|result))?", cmd) and self._last_find:
-            top = self._last_find[0]
-            return [("show_note", {"query": top.get("id", ""), "top_k": 1})]
+        if re.fullmatch(r"(open|открой)\s+(the\s+)?(first|первую|первый)(\s+(one|result))?", cmd):
+            if self._get_last_find():
+                top = self._get_last_find()[0]
+                return [("open_note", {"query": top.get("id", ""), "top_k": 1})]
+            # No prior find in this/recovered session -> explicit error (stateless-safe)
+            return [("__implicit_ref_no_context__", {})]
+        if re.fullmatch(r"(show|покажи)\s+(the\s+)?(first|первую|первый)(\s+(one|result))?", cmd):
+            if self._get_last_find():
+                top = self._get_last_find()[0]
+                return [("show_note", {"query": top.get("id", ""), "top_k": 1})]
+            return [("__implicit_ref_no_context__", {})]
         for pattern, steps in self.PATTERNS:
             m = re.search(pattern, cmd)
             if m:
@@ -175,6 +192,7 @@ class AgentService:
         plan = self._match(command)
         if not plan:
             return {
+                "ok": False,
                 "error": "unknown command",
                 "command": command,
                 "hint": "try: find X, open X, найди X, открой X, screenshot, сделай скриншот",
@@ -182,7 +200,7 @@ class AgentService:
         # Validate all tools exist before executing
         for tool_name, _ in plan:
             if not self._registry.has(tool_name):
-                return {"error": f"tool '{tool_name}' not available", "command": command}
+                return {"ok": False, "error": f"tool '{tool_name}' not available", "command": command}
         # Execute sequentially (fail-fast: stop on first error)
         results: List[Dict[str, Any]] = []
         for tool_name, kwargs in plan:
@@ -195,7 +213,7 @@ class AgentService:
         # SessionStore: remember find/list results for implicit "open the first"
         for step_result in results:
             if step_result.get("tool") == "list_notes" and "result" in step_result:
-                self._last_find = step_result["result"]
+                self._set_last_find(step_result["result"], command)
         # Backward compat: single-step returns the old flat format (Stage 33),
         # enriched with spec v5.0 fields (action/query/results) where applicable.
         if len(results) == 1 and "error" not in results[0]:

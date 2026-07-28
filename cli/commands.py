@@ -234,7 +234,14 @@ def cmd_agent(args, container) -> None:
     atexit.register(lambda: k.stop())
     agent = container.resolve("IAgent")
     command = " ".join(args.text)
-    if args.dry_run:
+    if args.session_reset:
+        session = container.resolve("SessionStore")
+        session.reset()
+        print(json.dumps({"ok": True, "action": "session_reset"}))
+    elif args.session_info:
+        session = container.resolve("SessionStore")
+        print(json.dumps(session.snapshot(), ensure_ascii=False))
+    elif args.dry_run:
         plan = agent._svc.plan(command)  # type: ignore[attr-defined]
         print(json.dumps({"dry_run": True, "plan": plan}, ensure_ascii=False))
     else:

@@ -51,7 +51,9 @@ _COMMANDS = (
     ("desktop ACTION", "desktop automation: click x y | type text | screenshot | cursor | open app"),
     ("desktop open_note QUERY", "search+open top note in default app"),
     ("agent COMMAND", "Hermes agent: find/open/show/export (try 'agent find python')"),
-    ("agent --dry-run COMMAND", "show execution plan without running"),
+    ("agent <command>", "run Hermes agent (find/open/show/export/desktop/capabilities)"),
+    ("agent --session-info", "show current session state"),
+    ("agent --session-reset", "clear agent session"),
     ("schedule add [--cron EXPR] CMD", "schedule a command (every N / daily HH:MM)"),
     ("schedule list", "show scheduled jobs"),
     ("schedule cancel ID", "cancel a job"),
@@ -395,6 +397,15 @@ class KnowledgeOSRepl:
         """Hermes agent: natural language command execution (Stage 33)."""
         if not args:
             print("agent: missing COMMAND", file=sys.stderr)
+            return
+        if args and args[0] == "--session-reset":
+            session = self._container.resolve("SessionStore")
+            session.reset()
+            print(json.dumps({"ok": True, "action": "session_reset"}))
+            return
+        if args and args[0] == "--session-info":
+            session = self._container.resolve("SessionStore")
+            print(json.dumps(session.snapshot(), ensure_ascii=False))
             return
         dry_run = False
         if args[0] == "--dry-run":

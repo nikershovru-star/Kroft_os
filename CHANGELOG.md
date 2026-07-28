@@ -1,4 +1,10 @@
 # Changelog
+## v5.2.0 (Stage 39)
+- Session Persistence: `SessionStore` with JSON snapshot (`save`/`load`).
+- Agent implicit refs (`open the first one`) now survive process restarts.
+- CLI/REPL/HTTP: `--session-info`, `--session-reset`, `/api/agent/session`.
+- 5 tests (test_session_store.py); suite 313 -> 318 passed.
+
 ## v5.1.0 (Stage 38)
 - Scheduler Persistence: auto-save to `.kos/scheduler.json`, auto-restore on boot.
 - Execution History: `schedule history [job-id]` (CLI/REPL/HTTP) + `.kos/scheduler.log` (JSON Lines).

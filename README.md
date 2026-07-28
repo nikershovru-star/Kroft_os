@@ -962,4 +962,25 @@ GET /api/schedule/history?job_id=job-1
 - `restore()` preserves original job IDs (fixes Stage 35 ID regeneration bug).
 - Fail-safe: I/O errors during save/load are swallowed; scheduler never crashes on disk issues.
 
+
+## STAGE 39 — Session Persistence & Agent State Recovery
+
+```bash
+# Implicit refs now survive server restarts
+python main.py agent "find python"
+python main.py agent "open the first one"   # works even after restart
+# Diagnostics
+python main.py agent --session-info
+python main.py agent --session-reset
+# HTTP
+GET /api/agent/session
+POST /api/agent/session/reset
+```
+
+- `SessionStore` persists `last_find` to `.kos/session.json`.
+- `AgentService` uses `SessionStore` for implicit refs (`open the first one` / `открой первую`).
+- Stateless fallback: if no `SessionStore` wired, agent behaves exactly as in Stage 37 (in-proc only).
+- Thread-safe, fail-safe (I/O errors swallowed).
+- Implicit ref without prior `find` (or after `--session-reset`) returns `ok: false` (no context).
+
 ## Test gates

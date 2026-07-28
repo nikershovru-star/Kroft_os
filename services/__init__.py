@@ -11,6 +11,7 @@ from .desktop_orchestrator import DesktopOrchestrator
 from .tool_registry import ToolRegistry
 from .agent_service import AgentService
 from .scheduler import SchedulerService
+from .session_store import SessionStore
 
 __all__ = [
     "VaultStreamCrawler",
@@ -25,4 +26,5 @@ __all__ = [
     "ToolRegistry",
     "AgentService",
     "SchedulerService",
+    "SessionStore",
 ]

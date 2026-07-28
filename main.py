@@ -25,7 +25,7 @@ from cli.parser import parse_args
 from cli.commands import (
     cmd_init, cmd_crawl, cmd_query, cmd_status, cmd_stop, cmd_repl, cmd_search, cmd_export, cmd_watch, cmd_serve, cmd_semantic, cmd_hybrid, cmd_desktop, cmd_agent, cmd_schedule,
 )
-from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex, DesktopService, DesktopOrchestrator, ToolRegistry, AgentService, SchedulerService
+from services import VaultStreamCrawler, GraphQueryEngine, CrawlStateTracker, ContentIndex, WatchService, SemanticIndex, DesktopService, DesktopOrchestrator, ToolRegistry, AgentService, SchedulerService, SessionStore
 from adapters.desktop_adapter import MockDesktopAdapter
 from adapters.agent_adapter import RuleBasedAgentAdapter
 
@@ -51,6 +51,11 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
     # Stage 29: shared SemanticIndex (crawler writes, engine reads) + the
     # default deterministic Mock embedding (real OpenAI adapter is opt-in).
     c.register_instance("SemanticIndex", SemanticIndex())
+    # Stage 39: Agent Session Store (survives restarts)
+    data_dir = _os.path.join(vault_path, ".kos")
+    c.register_instance("SessionStore", SessionStore(
+        persistence_path=_os.path.join(data_dir, "session.json"),
+    ))
     c.register_instance("Embedding", MockEmbeddingAdapter())
     # Stage 31/36: Desktop capability. Default Mock (zero regression);
     # opt-in PyAutoGUI via --desktop-adapter flag or DESKTOP_ADAPTER env var.
@@ -221,7 +226,8 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
     registry.register("show_note", lambda query, top_k=1: orch.show_note(query, top_k),
                       "Show top note content inline")
 
-    return AgentService(registry)
+    session = container.resolve("SessionStore")
+    return AgentService(registry, session_store=session)
 
 
 def _wire_scheduler(container: DependencyContainer) -> None:

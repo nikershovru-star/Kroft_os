@@ -173,6 +173,9 @@ class _Handler(BaseHTTPRequestHandler):
             self._serve_static("login.html")
         elif path.startswith("/static/"):
             self._serve_static(path[8:])
+        elif path == "/api/agent/session":
+            session = self._container.resolve("SessionStore")
+            self._json_response(session.snapshot())
         else:
             self.send_error(404)
 
@@ -242,6 +245,10 @@ class _Handler(BaseHTTPRequestHandler):
             job_id = qs.get("job_id", [None])[0]
             sched = self._container.resolve("SchedulerService")
             self._json_response(sched.history(job_id))
+        elif path == "/api/agent/session/reset":
+            session = self._container.resolve("SessionStore")
+            session.reset()
+            self._json_response({"ok": True, "action": "session_reset"})
         else:
             self.send_error(404)
 
