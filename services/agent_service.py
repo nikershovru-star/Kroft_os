@@ -151,6 +151,8 @@ class AgentService:
         self._registry = registry
         self._session = session_store
         self._local_find: List[Dict[str, Any]] = []  # fallback if no session_store
+        self._patterns: List[Tuple[str, List[Tuple[str, Callable[[Any], Dict[str, Any]]]]]] = []
+        self._patterns.extend(self.PATTERNS)  # copy class-level defaults
 
     def _get_last_find(self) -> List[Dict[str, Any]]:
         if self._session:
@@ -163,11 +165,16 @@ class AgentService:
         else:
             self._local_find = results
 
+    def add_pattern(self, pattern: str, steps: List[Tuple[str, Callable[[Any], Dict[str, Any]]]]) -> None:
+        """Stage 40: register a dynamic NL pattern (plugin extension)."""
+        self._patterns.append((pattern, steps))
+
     def _match(self, command: str) -> List[Tuple[str, Dict[str, Any]]]:
         """Return a plan (list of (tool_name, kwargs)) or []."""
         if not command or not command.strip():
             return []
         cmd = command.strip().lower()
+        orig = command.strip()  # preserve argument casing for extract fns
         # Implicit reference: "open the first one" / "открой первую" -> last find top-1
         if re.fullmatch(r"(open|открой)\s+(the\s+)?(first|первую|первый)(\s+(one|result))?", cmd):
             if self._get_last_find():
@@ -180,10 +187,13 @@ class AgentService:
                 top = self._get_last_find()[0]
                 return [("show_note", {"query": top.get("id", ""), "top_k": 1})]
             return [("__implicit_ref_no_context__", {})]
-        for pattern, steps in self.PATTERNS:
+        for pattern, steps in self._patterns:
             m = re.search(pattern, cmd)
             if m:
-                return [(tool_name, extract(m)) for tool_name, extract in steps]
+                # Re-match on original case so extracted args keep their casing
+                # (e.g. "weather in Berlin" -> city "Berlin", not "berlin").
+                m_orig = re.search(pattern, orig)
+                return [(tool_name, extract(m_orig)) for tool_name, extract in steps]
         return []
 
     def execute(self, command: str) -> Dict[str, Any]:

@@ -24,12 +24,16 @@ Hooks (all optional at runtime — the loader tolerates missing ones):
                                  with the graph dict ({"nodes": ..., "edges":
                                  ...}); side-effect hook (stats, sync, ...).
 
+Stage 40 adds agent-extension hooks:
+  register_agent_tools(registry)   - register custom agent tools into ToolRegistry.
+  register_agent_patterns()        - return list of (regex, [(tool, matcher), ...]).
+
 Architecture contract: stdlib (abc, typing) only.
 """
 from __future__ import annotations
 
 import abc
-from typing import Any, Dict
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
 class IPlugin(abc.ABC):
@@ -49,3 +53,26 @@ class IPlugin(abc.ABC):
     def on_crawl_complete(self, graph: Dict[str, Any]) -> None:
         """Called after a successful batch crawl with the graph dict."""
         raise NotImplementedError
+
+
+class Plugin:
+    """Base class for KnowledgeOS plugins (Stage 40: agent extension hooks).
+
+    Concrete (non-abstract) so plugin authors may subclass and override only
+    the hooks they need. Runtime imports are avoided (stdlib-only contract):
+    ``ToolRegistry`` is referenced only for type hints under TYPE_CHECKING.
+    """
+
+    def register_exporters(self, container: Any) -> None:
+        """Stage 25: register custom export formats."""
+        pass
+
+    def register_agent_tools(self, registry: Any) -> None:
+        """Stage 40: register custom agent tools."""
+        pass
+
+    def register_agent_patterns(
+        self,
+    ) -> List[Tuple[str, List[Tuple[str, Callable[[Any], Dict[str, Any]]]]]]:
+        """Stage 40: return list of (regex, [(tool_name, matcher_fn), ...])."""
+        return []

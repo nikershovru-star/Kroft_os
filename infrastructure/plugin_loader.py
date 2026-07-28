@@ -108,3 +108,13 @@ class PluginLoader:
                     self.errors.append(
                         (type(p).__module__, f"on_crawl_complete: {exc}")
                     )
+
+    def apply_agent_extensions(self, registry: Any, agent: Any) -> None:
+        """Stage 40: let every loaded plugin register agent tools & patterns."""
+        for plugin in self.plugins:
+            try:
+                plugin.register_agent_tools(registry)
+                for pattern, steps in plugin.register_agent_patterns():
+                    agent.add_pattern(pattern, steps)
+            except Exception as exc:
+                self.errors.append(("<agent-ext>", str(exc)))

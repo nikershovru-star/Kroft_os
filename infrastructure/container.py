@@ -49,6 +49,12 @@ class DependencyContainer:
             return self._singletons[name]
         return self._factories[name](*args, **kwargs)
 
+    def try_resolve(self, name: str, *args: Any, **kwargs: Any) -> Any:
+        """Resolve if registered, else return None (safe optional resolution)."""
+        if name not in self._factories:
+            return None
+        return self.resolve(name, *args, **kwargs)
+
     def has(self, name: str) -> bool:
         return name in self._factories
 

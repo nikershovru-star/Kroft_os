@@ -227,6 +227,12 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
                       "Show top note content inline")
 
     session = container.resolve("SessionStore")
+    # Stage 40: plugin agent extensions (tools + patterns)
+    loader = container.try_resolve("PluginLoader")  # None if no plugins loaded
+    if loader is not None:
+        agent = AgentService(registry, session_store=session)  # pre-create to pass to plugins
+        loader.apply_agent_extensions(registry, agent)
+        return agent
     return AgentService(registry, session_store=session)
 
 
@@ -238,12 +244,25 @@ def _wire_scheduler(container: DependencyContainer) -> None:
 
 
 def _prescan_plugin_dir(argv) -> str | None:
-    """Extract --plugin-dir BEFORE the real parser exists (chicken-and-egg:
-    plugins must register their subcommands into the parser itself)."""
+    """Extract --plugin-dir from anywhere in argv (Stage 25/40).
+
+    Works regardless of position (before or after the subcommand). The flag
+    and its value are STRIPPED from *argv* (mutated in place) so the real
+    parser never chokes on an unknown global flag after the subcommand.
+    """
     import argparse as _argparse
     pre = _argparse.ArgumentParser(add_help=False)
     pre.add_argument("--plugin-dir", default=None)
     known, _ = pre.parse_known_args(argv)
+    if known.plugin_dir is not None:
+        try:
+            i = argv.index("--plugin-dir")
+            if "=" in argv[i]:
+                argv.pop(i)
+            else:
+                argv.pop(i); argv.pop(i)  # remove flag + value
+        except ValueError:
+            pass
     return known.plugin_dir
 
 

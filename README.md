@@ -983,4 +983,31 @@ POST /api/agent/session/reset
 - Thread-safe, fail-safe (I/O errors swallowed).
 - Implicit ref without prior `find` (or after `--session-reset`) returns `ok: false` (no context).
 
+
+## STAGE 40 — Agent Plugin Extension API
+
+Plugins can now extend the Hermes agent without touching core code.
+
+```python
+# my_plugin.py
+from contracts.plugin import Plugin
+from services.tool_registry import ToolRegistry
+
+class MyPlugin(Plugin):
+    def register_agent_tools(self, registry: ToolRegistry) -> None:
+        registry.register("jira", lambda issue: {...}, "Query Jira issue")
+
+    def register_agent_patterns(self):
+        return [
+            (r"jira\s+(\w+-\d+)", [("jira", lambda m: {"issue": m.group(1)})]),
+        ]
+```
+
+- `Plugin.register_agent_tools(registry)` — add custom tools to `ToolRegistry`.
+- `Plugin.register_agent_patterns()` — return NL regex → tool mappings.
+- `AgentService.add_pattern()` — runtime pattern registration (instance-level).
+- `PluginLoader.apply_agent_extensions()` wires plugins into the agent composition root.
+- Plugin patterns are checked after builtins; zero regression for existing commands.
+- Argument casing is preserved (e.g. `weather in Berlin` keeps `Berlin`).
+
 ## Test gates

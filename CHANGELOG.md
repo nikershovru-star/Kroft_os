@@ -1,4 +1,12 @@
 # Changelog
+## v5.3.0 (Stage 40)
+- Agent Plugin Extension API: plugins register tools + NL patterns dynamically.
+- `AgentService.add_pattern()` for runtime pattern injection.
+- `PluginLoader.apply_agent_extensions()` wires plugins into agent composition root.
+- `Plugin` base class (contracts/plugin.py) gains `register_agent_tools` / `register_agent_patterns`.
+- Argument casing preserved in extracted NL args (Berlin, not berlin).
+- 5 tests (test_agent_plugin_api.py); suite 318 -> 323 passed.
+
 ## v5.2.0 (Stage 39)
 - Session Persistence: `SessionStore` with JSON snapshot (`save`/`load`).
 - Agent implicit refs (`open the first one`) now survive process restarts.
