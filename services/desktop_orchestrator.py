@@ -46,3 +46,21 @@ class DesktopOrchestrator:
         return [
             {"id": nid, "score": round(score, 4)} for nid, score in results
         ]
+
+    def show_note(self, query: str, top_k: int = 1) -> Dict[str, Any]:
+        """Hybrid-search *query*, read the top result content (no external app)."""
+        if not query or not query.strip():
+            return {"error": "empty query"}
+        results = self._engine.hybrid_search(query.strip(), top_k=top_k)
+        if not results:
+            return {"error": "no results", "query": query}
+        nid = results[0][0]  # top-1 node id (relative path, e.g. "note.md")
+        full_path = os.path.join(self._vault_path, nid)
+        if not self._fs.exists(full_path):
+            full_path = nid
+        try:
+            content = self._fs.read_content(full_path)
+        except Exception as exc:  # noqa: BLE001 -- surface read failures cleanly
+            return {"error": f"cannot read {full_path}: {exc}", "id": nid}
+        return {"ok": True, "id": nid, "path": full_path,
+                "score": round(results[0][1], 4), "content": content}

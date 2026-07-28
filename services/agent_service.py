@@ -38,6 +38,12 @@ class AgentService:
             ],
         ),
         # --- English single-step (preserved from Stage 33) ---
+        # Stage 37: open_app must precede bare 'open' (else 'open_app x' is
+        # swallowed by the open_note pattern).
+        (
+            r"open_app\s+(.+)$",
+            [("desktop_open_app", lambda m: {"name": m.group(1).strip()})],
+        ),
         (
             r"find\s+(.+?)(?:\s+and\s+open)?$",
             [("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
@@ -48,7 +54,7 @@ class AgentService:
         ),
         (
             r"show\s+(?:me\s+)?(.+)$",
-            [("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
+            [("show_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
         ),
         (
             r"what\s+is\s+(?:the\s+)?most\s+central",
@@ -58,6 +64,11 @@ class AgentService:
             r"export\s+(?:graph|vault)\s+to\s+(\w+)",
             [("export_graph", lambda m: {"fmt": m.group(1)})],
         ),
+        # Stage 37: export <fmt> [query] (spec v5.0, without 'graph to')
+        (
+            r"export\s+(dot|json|gexf)\b(?:\s+(.+))?$",
+            [("export_format", lambda m: {"fmt": m.group(1)})],
+        ),
         (
             r"take\s+a\s+screenshot",
             [("screenshot", lambda m: {})],
@@ -65,6 +76,20 @@ class AgentService:
         (
             r"cursor\s+position",
             [("cursor_position", lambda m: {})],
+        ),
+        # Stage 37: NL desktop intents (spec v5.0)
+        (
+            r"click\s+(\d+)\s+(\d+)$",
+            [("desktop_click", lambda m: {"x": m.group(1), "y": m.group(2)})],
+        ),
+        (
+            r"type\s+(.+)$",
+            [("desktop_type", lambda m: {"text": m.group(1).strip()})],
+        ),
+        # Stage 37: capabilities (spec v5.0: 'что ты умеешь')
+        (
+            r"what\s+can\s+you\s+do|что\s+ты\s+умеешь|что\s+ты\s+можешь",
+            [("capabilities", lambda m: {})],
         ),
         (
             r"centrality",
@@ -95,6 +120,19 @@ class AgentService:
             r"экспортируй\s+граф\s+в\s+(\w+)",
             [("export_graph", lambda m: {"fmt": m.group(1)})],
         ),
+        # Stage 37: cyrillic NL desktop + show
+        (
+            r"клик\s+(\d+)\s+(\d+)$",
+            [("desktop_click", lambda m: {"x": m.group(1), "y": m.group(2)})],
+        ),
+        (
+            r"напечатай\s+(.+)$",
+            [("desktop_type", lambda m: {"text": m.group(1).strip()})],
+        ),
+        (
+            r"открой\s+приложение\s+(.+)$",
+            [("desktop_open_app", lambda m: {"name": m.group(1).strip()})],
+        ),
         (
             r"центральность",
             [("most_central", lambda m: {})],
@@ -105,18 +143,26 @@ class AgentService:
         ),
         (
             r"покажи\s+(.+)$",
-            [("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
+            [("show_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
         ),
     ]
 
     def __init__(self, registry: ToolRegistry) -> None:
         self._registry = registry
+        self._last_find: List[Dict[str, Any]] = []  # SessionStore (in-proc, stateless-by-default)
 
     def _match(self, command: str) -> List[Tuple[str, Dict[str, Any]]]:
         """Return a plan (list of (tool_name, kwargs)) or []."""
         if not command or not command.strip():
             return []
         cmd = command.strip().lower()
+        # Implicit reference: "open the first one" / "открой первую" -> last find top-1
+        if re.fullmatch(r"(open|открой)\s+(the\s+)?(first|первую|первый)(\s+(one|result))?", cmd) and self._last_find:
+            top = self._last_find[0]
+            return [("open_note", {"query": top.get("id", ""), "top_k": 1})]
+        if re.fullmatch(r"(show|покажи)\s+(the\s+)?(first|первую|первый)(\s+(one|result))?", cmd) and self._last_find:
+            top = self._last_find[0]
+            return [("show_note", {"query": top.get("id", ""), "top_k": 1})]
         for pattern, steps in self.PATTERNS:
             m = re.search(pattern, cmd)
             if m:
@@ -146,14 +192,39 @@ class AgentService:
             except Exception as e:  # noqa: BLE001 -- surface step errors, stop chain
                 results.append({"tool": tool_name, "error": str(e)})
                 break
-        # Backward compat: single-step returns the old flat format (Stage 33).
+        # SessionStore: remember find/list results for implicit "open the first"
+        for step_result in results:
+            if step_result.get("tool") == "list_notes" and "result" in step_result:
+                self._last_find = step_result["result"]
+        # Backward compat: single-step returns the old flat format (Stage 33),
+        # enriched with spec v5.0 fields (action/query/results) where applicable.
         if len(results) == 1 and "error" not in results[0]:
-            return {
+            out = {
                 "ok": True,
                 "command": command,
                 "tool": results[0]["tool"],
                 "result": results[0]["result"],
             }
+            if results[0]["tool"] in ("list_notes", "show_note"):
+                out["action"] = "find" if results[0]["tool"] == "list_notes" else "show"
+                out["query"] = plan[0][1].get("query", "")
+                out["results"] = results[0]["result"] if isinstance(results[0]["result"], list) else [results[0]["result"]]
+            elif results[0]["tool"] == "open_note":
+                out["action"] = "open"
+                out["target"] = results[0]["result"].get("opened") if isinstance(results[0]["result"], dict) else None
+                out["opened_by"] = "default_app"
+            elif results[0]["tool"] == "export_format":
+                out["action"] = "export"
+                out["format"] = plan[0][1].get("fmt")
+            elif results[0]["tool"] == "capabilities":
+                out["action"] = "capabilities"
+            elif results[0]["tool"] == "screenshot":
+                out["action"] = "desktop"
+            elif results[0]["tool"] == "cursor_position":
+                out["action"] = "desktop"
+            elif results[0]["tool"] in ("desktop_click", "desktop_type", "desktop_open_app"):
+                out["action"] = "desktop"
+            return out
         return {"ok": True, "command": command, "plan": results}
 
     def plan(self, command: str) -> List[str]:

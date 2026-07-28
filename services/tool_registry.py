@@ -13,10 +13,10 @@ class ToolRegistry:
     def register(self, name: str, fn: Callable[..., Any], description: str = "") -> None:
         self._tools[name] = Tool(name, fn, description)
 
-    def call(self, name: str, **kwargs: Any) -> Any:
-        if name not in self._tools:
-            raise KeyError(f"Tool '{name}' not registered")
-        return self._tools[name].fn(**kwargs)
+    def call(self, tool_name: str, **kwargs: Any) -> Any:
+        if tool_name not in self._tools:
+            raise KeyError(f"Tool '{tool_name}' not registered")
+        return self._tools[tool_name].fn(**kwargs)
 
     def list_tools(self) -> List[Tool]:
         return list(self._tools.values())

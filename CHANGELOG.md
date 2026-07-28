@@ -1,4 +1,15 @@
 # Changelog
+## v5.0.0 (Stage 37)
+- Agent spec alignment to System Prompt v5.0.
+- `show <query>`/`покажи` -> show_note (inline content via IFileSystem).
+- `export <fmt>` (dot/json/gexf) without 'graph to' -> export_format.
+- NL desktop intents: click x y, type <text>, open_app <name> (+ cyrillic).
+- `что ты умеешь`/`what can you do` -> capabilities.
+- Implicit refs (open the first one / открой первую) via in-proc SessionStore.
+- Response schema enriched (action/query/results/target/opened_by/format).
+- ToolRegistry.call(name->tool_name) fix: no longer reserves 'name' kwarg.
+- 12 tests (test_agent_spec.py); suite 295 -> 307 passed.
+
 ## v5.0.0 (Stage 36)
 - Real Desktop Activation: `--desktop-adapter pyautogui` CLI flag + env var.
 - `PyAutoGUIAdapter` lazy-wiring in DI (default remains Mock).

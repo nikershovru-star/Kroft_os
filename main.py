@@ -183,12 +183,37 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
             return container.resolve("export_gexf")(g)
         return {"error": f"unknown format {fmt}"}
     registry.register("export_graph", _export_graph, "Export graph to dot/json/gexf")
+    # Stage 37: export without the 'graph to' connective (spec v5.0: export <fmt> [query])
+    registry.register("export_format", _export_graph, "Export graph as dot/json/gexf")
 
     # Desktop
     registry.register("screenshot", lambda: {"size": len(desktop.capture_screen())},
                       "Capture screen and return PNG size")
     registry.register("cursor_position", lambda: {"x": desktop.where_is_cursor()[0], "y": desktop.where_is_cursor()[1]},
                       "Return cursor coordinates")
+    # Stage 37: NL desktop intents (spec v5.0)
+    registry.register("desktop_click", lambda x, y: (desktop.click_at(int(x), int(y)) or {"ok": True, "x": int(x), "y": int(y)}),
+                      "Click at screen (x, y)")
+    registry.register("desktop_type", lambda text: (desktop.type_text(text) or {"ok": True}),
+                      "Type text via keyboard")
+    registry.register("desktop_open_app", lambda name: (desktop.launch(name) or {"ok": True, "app": name}),
+                      "Open an application by name")
+
+    # Capabilities (spec v5.0: 'что ты умеешь')
+    def _capabilities():
+        return {
+            "actions": [
+                "find", "open", "show", "export", "desktop",
+                "schedule", "centrality", "orphan",
+            ],
+            "hint": "Try: find <topic>, open <file>, show <topic>, export <dot|json|gexf>, "
+                    "desktop cursor|screenshot|click x y|type <text>|open_app <name>",
+        }
+    registry.register("capabilities", _capabilities, "List available agent actions")
+
+    # Show (spec v5.0: render note content inline)
+    registry.register("show_note", lambda query, top_k=1: orch.show_note(query, top_k),
+                      "Show top note content inline")
 
     return AgentService(registry)
 

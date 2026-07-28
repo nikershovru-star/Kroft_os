@@ -916,64 +916,32 @@ python main.py agent "найди питон и открой лучшую"
   какое приложение откроет файл (зависит от ОС).
 - Нет sandbox — адаптер управляет реальной мышью и клавиатурой.
 
+
+## STAGE 37 — Agent Spec Alignment (System Prompt v5.0)
+
+AgentService приведён к контракту System Prompt v5.0:
+
+```bash
+python main.py agent "show python"          # inline content (show_note)
+python main.py agent "export json"          # без 'graph to' (export_format)
+python main.py agent "click 10 20"          # NL desktop intent -> desktop_click
+python main.py agent "type hello"           # desktop_type
+python main.py agent "open_app notepad"     # desktop_open_app
+python main.py agent "что ты умеешь"        # capabilities
+python main.py agent "найди питон"          # затем в той же сессии:
+python main.py agent "открой первую"        # implicit ref -> top-1 из last find
+```
+
+- **`show <query>`/`покажи <query>`** -> `show_note` (читает контент top-1 через IFileSystem).
+- **`export <fmt>`** (dot|json|gexf) -> `export_format` без обязательного `graph to`.
+- **NL desktop**: `click x y`, `type <text>`, `open_app <name>` (+ кириллица: `клик`, `напечатай`, `открой приложение`).
+- **`что ты умеешь`/`what can you do`** -> `capabilities`.
+- **Implicit refs**: `open the first one`/`открой первую` резолвятся к top-1 из последнего `find` (SessionStore внутри процесса; REPL/HTTP shared, раздельные CLI-вызовы stateless — по spec).
+- **Response schema**: single-step ответы обогащены spec-полями (`action`, `query`, `results`, `target`, `opened_by`, `format`) при сохранении backward-compat flat-формата.
+
+### HONEST LIMITATIONS (Stage 37)
+- Implicit refs работают только внутри одной сессии (REPL/HTTP-сервер). Отдельные `main.py agent` вызовы stateless.
+- `open_app` не контролирует, какое приложение откроет файл (os.system start/open/xdg-open).
+- MockDesktopAdapter: click/type — no-ops; cursor возвращает (0,0).
+
 ## Test gates
-
-```
-pytest tests/            # unit + e2e + arch gate (158 tests, all green)
-python -c "import contracts, infrastructure, kernel, runtime, adapters, services, cli"
-python -c "import services.incremental_tracker"  # exit 0
-python -c "import services.content_index"        # exit 0
-python main.py --help   # exit 0
-python main.py repl --help  # exit 0
-```
-
-## HONEST LIMITATIONS (Stage 7.8)
-
-- **No real concurrency:** FSM and container are GIL-atomic for single
-  operations but ship NO explicit lock (except GraphBuilder's lock). Not
-  proven safe under load.
-- **FileSystemAdapter:** local disk only. No S3 / SSH / network backends.
-- **DI Container:** manual registration. No module auto-scanning.
-- **No persistence for kernel state:** Kernel starts from a clean slate on
-  every restart (wired capabilities live only in memory). EventBus history is
-  the only thing persisted (Stage 9, JSONL).
-
-## ЭТАП 9 — EventBus Persistence (JSONL via IFileSystem)
-
-`InMemoryEventBus(store=IFileSystem, base_path="events")` appends every
-published event to a human-readable JSONL file:
-`{base_path}/{topic}/{YYYY-MM-DD}.jsonl`. `get_history(topic)` merges the
-on-disk log with the in-memory buffer (survives a Kernel restart). `clear_history()`
-removes the `base_path/` tree. `IFileSystem` port gained `append()` and `delete()`.
-
-### HONEST LIMITATIONS (Stage 9)
-- **JSONL, not SQLite:** human-readable, but not indexed/queryable.
-- **Append-only, no rotation:** topic files grow unbounded.
-- **History read = full scan** of all topic files (O(n), not O(1)).
-- **No transactional guarantee:** a crash between publish and write loses that event.
-- **No compression/retention:** raw text, forever.
-- **Merge dedup is content-based:** a disk-replicated event and the in-memory
-  mirror of the SAME event (identical JSON content) collapse to one; two
-  distinct events that happen to share a sub-microsecond timestamp do NOT
-  collapse (keyed by full record content, `json.dumps(..., sort_keys=True)`).
-
-- **Ports are independent ABCs:** IFileSystem / IEventBus / ICapabilityRegistry
-  do NOT inherit IService (IService is the base for service components only).
-  `IGraphBuilder` (Stage 10) DOES inherit IService per its spec.
-
-## ETAП 8 — IEventBus (in-memory async)
-
-`infrastructure/eventbus.py` → `InMemoryEventBus` implements `contracts.IEventBus`.
-Wired into Kernel lifecycle via DI Container (kernel resolves `IEventBus` in
-`initialize()`; emits `kernel.started` / `kernel.stopped` in `start()` / `stop()`).
-
-### HONEST LIMITATIONS (Stage 8)
-- **In-memory only (unless store is given):** without `store=`, the event log
-  is lost on Kernel restart. With `store=`, JSONL persistence applies (Stage 9).
-- **No distributed event bus:** single process, not a cluster.
-- **At-most-once delivery:** if a handler raises, the event is lost for that
-  handler (but isolated — other handlers still run).
-- **No backpressure:** unlimited subscriber queues.
-- **Error isolation:** errors are logged to stdout (print), not to a structured log.
-- **Async model:** sync handlers run via `asyncio.to_thread`; `publish_sync` wraps
-  async handlers by best-effort (creates/borrows an event loop).
