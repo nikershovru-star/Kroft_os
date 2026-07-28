@@ -176,6 +176,9 @@ class _Handler(BaseHTTPRequestHandler):
         elif path == "/api/agent/session":
             session = self._container.resolve("SessionStore")
             self._json_response(session.snapshot())
+        elif path == "/api/agent/history":
+            session = self._container.resolve("SessionStore")
+            self._json_response(session.get_turns())
         else:
             self.send_error(404)
 
@@ -249,6 +252,10 @@ class _Handler(BaseHTTPRequestHandler):
             session = self._container.resolve("SessionStore")
             session.reset()
             self._json_response({"ok": True, "action": "session_reset"})
+        elif path == "/api/agent/history/clear":
+            session = self._container.resolve("SessionStore")
+            session.reset()
+            self._json_response({"ok": True, "action": "clear_history"})
         else:
             self.send_error(404)
 

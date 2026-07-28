@@ -1010,4 +1010,26 @@ class MyPlugin(Plugin):
 - Plugin patterns are checked after builtins; zero regression for existing commands.
 - Argument casing is preserved (e.g. `weather in Berlin` keeps `Berlin`).
 
+
+## STAGE 41 — Agent Conversation History & Contextual Shortcuts
+
+```bash
+# Conversation-aware shortcuts (require prior command in session)
+python main.py agent "find python"
+python main.py agent "again"          # repeats last command
+python main.py agent "more"           # more results from last query
+python main.py agent "show"           # show top result from last find
+# History diagnostics
+python main.py agent --history
+python main.py agent --clear-history
+# HTTP
+GET /api/agent/history
+POST /api/agent/history/clear
+```
+
+- `SessionStore` now keeps a `turns` ring buffer (last 50 commands).
+- Contextual shortcuts: `again` / `повтори`, `more` / `ёще`, bare `show` / `покажи`.
+- `get_last_query()` heuristic resolves `more` against the most recent find/show/open.
+- Zero external deps; JSON persistence reuses Stage 39 mechanism.
+
 ## Test gates

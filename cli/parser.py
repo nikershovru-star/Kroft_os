@@ -131,6 +131,10 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
                     help="Clear agent session (Stage 39)")
     pa.add_argument("--session-info", action="store_true",
                     help="Show current session state (Stage 39)")
+    pa.add_argument("--history", action="store_true",
+                    help="Show conversation history (Stage 41)")
+    pa.add_argument("--clear-history", action="store_true",
+                    help="Clear conversation history (Stage 41)")
     pa.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 

@@ -1,4 +1,10 @@
 # Changelog
+## v5.4.0 (Stage 41)
+- Conversation History: `SessionStore.turns` ring buffer + `add_turn`/`get_turns`.
+- Contextual NL shortcuts: `again`, `more`, `show` (bare) resolve via session context.
+- CLI/REPL/HTTP: `--history`, `--clear-history`, `/api/agent/history`.
+- 5 tests (test_conversation.py); suite 323 -> 328 passed.
+
 ## v5.3.0 (Stage 40)
 - Agent Plugin Extension API: plugins register tools + NL patterns dynamically.
 - `AgentService.add_pattern()` for runtime pattern injection.

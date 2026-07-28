@@ -241,6 +241,13 @@ def cmd_agent(args, container) -> None:
     elif args.session_info:
         session = container.resolve("SessionStore")
         print(json.dumps(session.snapshot(), ensure_ascii=False))
+    elif args.history:
+        session = container.resolve("SessionStore")
+        print(json.dumps(session.get_turns(), ensure_ascii=False))
+    elif args.clear_history:
+        session = container.resolve("SessionStore")
+        session.reset()
+        print(json.dumps({"ok": True, "action": "clear_history"}))
     elif args.dry_run:
         plan = agent._svc.plan(command)  # type: ignore[attr-defined]
         print(json.dumps({"dry_run": True, "plan": plan}, ensure_ascii=False))

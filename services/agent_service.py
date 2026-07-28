@@ -145,6 +145,19 @@ class AgentService:
             r"покажи\s+(.+)$",
             [("show_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
         ),
+        # Stage 41: contextual shortcuts (conversation-aware)
+        (
+            r"^(again|повтори|repeat)$",
+            [("__again__", lambda m: {})],
+        ),
+        (
+            r"^(more|ещ[её]|еще)$",
+            [("__more__", lambda m: {})],
+        ),
+        (
+            r"^(show|покажи)$",
+            [("__show_last__", lambda m: {})],
+        ),
     ]
 
     def __init__(self, registry: ToolRegistry, session_store: Optional[Any] = None) -> None:
@@ -187,6 +200,22 @@ class AgentService:
                 top = self._get_last_find()[0]
                 return [("show_note", {"query": top.get("id", ""), "top_k": 1})]
             return [("__implicit_ref_no_context__", {})]
+        # Stage 41: contextual shortcuts resolved against session history
+        if cmd in ("again", "повтори", "repeat"):
+            last = self._session.get_last_command() if self._session else ""
+            if last:
+                return self._match(last)  # re-resolve
+            return [("__no_context__", {})]
+        if cmd in ("more", "ещё", "еще"):
+            last_q = self._session.get_last_query() if self._session else ""
+            if last_q:
+                return [("list_notes", {"query": last_q, "top_k": 10})]
+            return [("__no_context__", {})]
+        if cmd in ("show", "покажи"):
+            last_find = self._get_last_find()
+            if last_find:
+                return [("show_note", {"query": last_find[0].get("id", ""), "top_k": 1})]
+            return [("__no_context__", {})]
         for pattern, steps in self._patterns:
             m = re.search(pattern, cmd)
             if m:
@@ -206,6 +235,13 @@ class AgentService:
                 "error": "unknown command",
                 "command": command,
                 "hint": "try: find X, open X, найди X, открой X, screenshot, сделай скриншот",
+            }
+        # Stage 41: contextual shortcut with no conversation context
+        if plan[0][0] == "__no_context__":
+            return {
+                "ok": False,
+                "error": "no conversation context",
+                "command": command,
             }
         # Validate all tools exist before executing
         for tool_name, _ in plan:
@@ -252,7 +288,51 @@ class AgentService:
                 out["action"] = "desktop"
             elif results[0]["tool"] in ("desktop_click", "desktop_type", "desktop_open_app"):
                 out["action"] = "desktop"
+            # Stage 41: conversation history
+            summary = ""
+            if results:
+                first = results[0]
+                if "error" in first:
+                    summary = f"error: {first['error']}"
+                elif first.get("tool") == "list_notes":
+                    summary = f"found {len(first.get('result', []))} notes"
+                elif first.get("tool") == "open_note":
+                    summary = f"opened {first.get('result', {}).get('opened', '?')}"
+                elif first.get("tool") == "show_note":
+                    summary = f"showed {first.get('result', {}).get('id', '?')}"
+                elif first.get("tool") == "export_format":
+                    summary = f"exported {first.get('result', {}).get('format', '?')}"
+                else:
+                    summary = first.get("tool", "unknown")
+            if self._session:
+                self._session.add_turn(
+                    command,
+                    results[0].get("tool", "unknown") if results else "noop",
+                    summary,
+                )
             return out
+        # Stage 41: conversation history (multi-step path)
+        summary = ""
+        if results:
+            first = results[0]
+            if "error" in first:
+                summary = f"error: {first['error']}"
+            elif first.get("tool") == "list_notes":
+                summary = f"found {len(first.get('result', []))} notes"
+            elif first.get("tool") == "open_note":
+                summary = f"opened {first.get('result', {}).get('opened', '?')}"
+            elif first.get("tool") == "show_note":
+                summary = f"showed {first.get('result', {}).get('id', '?')}"
+            elif first.get("tool") == "export_format":
+                summary = f"exported {first.get('result', {}).get('format', '?')}"
+            else:
+                summary = first.get("tool", "unknown")
+        if self._session:
+            self._session.add_turn(
+                command,
+                results[0].get("tool", "unknown") if results else "noop",
+                summary,
+            )
         return {"ok": True, "command": command, "plan": results}
 
     def plan(self, command: str) -> List[str]:

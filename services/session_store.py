@@ -1,19 +1,26 @@
-"""Session Store — lightweight JSON persistence for agent context (Stage 39)."""
+"""Session Store — lightweight JSON persistence for agent context (Stage 39 + 41)."""
 from __future__ import annotations
 
 import json
 import os
 import threading
+import time
 from typing import Any, Dict, List, Optional
 
 
 class SessionStore:
     """Thread-safe agent session with optional JSON disk backing."""
 
-    def __init__(self, persistence_path: Optional[str] = None) -> None:
+    def __init__(self, persistence_path: Optional[str] = None,
+                 max_turns: int = 50) -> None:
         self._lock = threading.Lock()
         self._path = persistence_path
-        self._data: Dict[str, Any] = {"last_find": [], "last_command": ""}
+        self._max_turns = max_turns
+        self._data: Dict[str, Any] = {
+            "last_find": [],
+            "last_command": "",
+            "turns": [],  # Stage 41: conversation history
+        }
         self.load()
 
     def set_last_find(self, results: List[Dict[str, Any]], command: str = "") -> None:
@@ -26,9 +33,43 @@ class SessionStore:
         with self._lock:
             return list(self._data.get("last_find", []))
 
+    def add_turn(self, command: str, action: str, result_summary: str = "") -> None:
+        with self._lock:
+            self._data["turns"].append({
+                "command": command,
+                "action": action,
+                "summary": result_summary,
+                "ts": time.time(),
+            })
+            if len(self._data["turns"]) > self._max_turns:
+                self._data["turns"] = self._data["turns"][-self._max_turns:]
+            self.save()
+
+    def get_turns(self, n: Optional[int] = None) -> List[Dict[str, Any]]:
+        with self._lock:
+            turns = list(self._data.get("turns", []))
+            if n is not None:
+                turns = turns[-n:]
+            return turns
+
+    def get_last_command(self) -> str:
+        with self._lock:
+            turns = self._data.get("turns", [])
+            return turns[-1]["command"] if turns else ""
+
+    def get_last_query(self) -> str:
+        with self._lock:
+            # heuristic: last command whose action was a find/list/show/open
+            # (action stores the tool name: list_notes/show_note/open_note, but
+            # also accepts the friendly names find/show/open for compatibility).
+            for turn in reversed(self._data.get("turns", [])):
+                if turn["action"] in ("find", "show", "open", "list_notes", "show_note", "open_note"):
+                    return turn["command"]
+            return ""
+
     def reset(self) -> None:
         with self._lock:
-            self._data = {"last_find": [], "last_command": ""}
+            self._data = {"last_find": [], "last_command": "", "turns": []}
             self.save()
 
     def snapshot(self) -> Dict[str, Any]:

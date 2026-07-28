@@ -54,6 +54,11 @@ _COMMANDS = (
     ("agent <command>", "run Hermes agent (find/open/show/export/desktop/capabilities)"),
     ("agent --session-info", "show current session state"),
     ("agent --session-reset", "clear agent session"),
+    ("agent --history", "show conversation turns"),
+    ("agent --clear-history", "clear conversation history"),
+    ("again / повтори", "repeat last command"),
+    ("more / еще", "more results from last query"),
+    ("show / покажи (bare)", "show top result from last find"),
     ("schedule add [--cron EXPR] CMD", "schedule a command (every N / daily HH:MM)"),
     ("schedule list", "show scheduled jobs"),
     ("schedule cancel ID", "cancel a job"),
@@ -406,6 +411,15 @@ class KnowledgeOSRepl:
         if args and args[0] == "--session-info":
             session = self._container.resolve("SessionStore")
             print(json.dumps(session.snapshot(), ensure_ascii=False))
+            return
+        if args and args[0] == "--history":
+            session = self._container.resolve("SessionStore")
+            print(json.dumps(session.get_turns(), ensure_ascii=False))
+            return
+        if args and args[0] == "--clear-history":
+            session = self._container.resolve("SessionStore")
+            session.reset()
+            print(json.dumps({"ok": True, "action": "clear_history"}))
             return
         dry_run = False
         if args[0] == "--dry-run":
