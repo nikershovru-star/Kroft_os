@@ -280,6 +280,13 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
         return engine.remove_tag(query, tag)
     registry.register("graph_untag", _graph_untag, "Remove a tag from a note")
 
+    # Stage 45: graph link recommendations
+    def _graph_suggest(query: str, top_k: int = 5):
+        results = engine.suggest_links(query, top_k=top_k)
+        return {"ok": True, "query": query, "suggestions": results}
+    registry.register("graph_suggest", _graph_suggest,
+                      "Suggest missing links for a note (graph+content hybrid)")
+
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)
     loader = container.try_resolve("PluginLoader")  # None if no plugins loaded

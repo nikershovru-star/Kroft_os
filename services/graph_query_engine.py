@@ -271,6 +271,78 @@ class GraphQueryEngine(IGraphQuery):
         removed = self._graph.remove_tag(node_id, tag)
         return {"ok": True, "node": node_id, "tag": tag, "removed": bool(removed)}
 
+    def suggest_links(self, query: str, top_k: int = 5, min_score: float = 0.01) -> List[Dict[str, Any]]:
+        """Recommend missing links for a node (graph proximity + content overlap).
+
+        Pure-stdlib over the snapshot graph:
+          - graph_score: |common_neighbors| / max(deg_src, deg_dst, 1), plus an
+            adjacency bonus when the candidate is itself a direct neighbor
+            (so graph-adjacent nodes outrank isolated ones even with no shared
+            neighbors — required by the test suite).
+          - content_score: Jaccard overlap of lowercased title word-sets.
+          - combined = 0.6 * content_score + 0.4 * graph_score.
+        Existing edges (source -> candidate) and self are excluded. Returns
+        top_k dicts sorted by combined desc.
+        """
+        node_id = self._resolve(query)
+        if not node_id:
+            return []
+        snap = self._snapshot()
+        nodes = {n["id"]: n for n in snap.get("nodes", [])}
+        if node_id not in nodes:
+            return []
+        # build neighbor sets (undirected: successors + predecessors)
+        succ: Dict[str, set] = {}
+        pred: Dict[str, set] = {}
+        existing: set = set()
+        for e in snap.get("edges", []):
+            f, t = e.get("from"), e.get("to")
+            if f is None or t is None:
+                continue
+            succ.setdefault(f, set()).add(t)
+            pred.setdefault(t, set()).add(f)
+            existing.add((f, t))
+
+        def neighbors(nid: str) -> set:
+            return succ.get(nid, set()) | pred.get(nid, set())
+
+        def title_of(nid: str) -> str:
+            n = nodes.get(nid, {})
+            return n.get("label") or nid.replace(".md", "").replace("-", " ")
+
+        def title_tokens(nid: str) -> set:
+            return set(re.findall(r"\w+", title_of(nid).lower()))
+
+        src_neighbors = neighbors(node_id)
+        src_tokens = title_tokens(node_id)
+        src_deg = len(src_neighbors)
+        candidates = []
+        for cand in nodes:
+            if cand == node_id:
+                continue
+            # exclude an already-existing directed edge source -> candidate
+            if (node_id, cand) in existing:
+                continue
+            cand_neighbors = neighbors(cand)
+            common = src_neighbors & cand_neighbors
+            cand_deg = len(cand_neighbors)
+            denom = max(src_deg, cand_deg, 1)
+            adjacency_bonus = 1 if cand in src_neighbors else 0
+            graph_score = (len(common) + adjacency_bonus) / denom
+            c_tokens = title_tokens(cand)
+            union = src_tokens | c_tokens
+            content_score = len(src_tokens & c_tokens) / len(union) if union else 0.0
+            combined = 0.6 * content_score + 0.4 * graph_score
+            reason = f"shared {len(common)} neighbors + title overlap"
+            candidates.append({
+                "id": cand,
+                "score": round(combined, 4),
+                "reason": reason,
+                "title": title_of(cand),
+            })
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+        return candidates[:top_k]
+
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:
             return None

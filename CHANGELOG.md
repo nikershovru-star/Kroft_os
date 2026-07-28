@@ -1,4 +1,9 @@
 # Changelog
+## v5.8.0 (Stage 45)
+- Agent Graph Link Recommendations: `suggest links for` / `what should link to` (EN) + `предложи связи для` / `с чем связать` (RU).
+- `GraphQueryEngine.suggest_links`: graph (common-neighbor Jaccard + adjacency bonus) + content (title token Jaccard); excludes existing/self.
+- 5 tests (test_graph_suggest.py); suite 343 -> 348 passed.
+
 ## v5.7.0 (Stage 44)
 - Agent Graph Mutation: `link`/`unlink`/`tag`/`untag` NL intents (EN + RU).
 - `GraphQueryEngine`: `add_link`, `remove_link`, `add_tag`, `remove_tag` (resolve via hybrid_search).

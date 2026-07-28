@@ -177,6 +177,36 @@ class AgentService:
                 "tag": m.group(2).strip(),
             })],
         ),
+        # Stage 45: graph link recommendations (English)
+        (
+            r"suggest\s+links\s+for\s+(.+?)(?:\s+top\s+(\d+))?$",
+            [("graph_suggest", lambda m: {
+                "query": m.group(1).strip(),
+                "top_k": int(m.group(2) or 5),
+            })],
+        ),
+        (
+            r"what\s+should\s+link\s+to\s+(.+?)(?:\s+top\s+(\d+))?$",
+            [("graph_suggest", lambda m: {
+                "query": m.group(1).strip(),
+                "top_k": int(m.group(2) or 5),
+            })],
+        ),
+        # Stage 45: graph link recommendations (Russian)
+        (
+            r"предложи\s+связи\s+для\s+(.+?)(?:\s+топ\s+(\d+))?$",
+            [("graph_suggest", lambda m: {
+                "query": m.group(1).strip(),
+                "top_k": int(m.group(2) or 5),
+            })],
+        ),
+        (
+            r"с\s+чем\s+связать\s+(.+?)(?:\s+топ\s+(\d+))?$",
+            [("graph_suggest", lambda m: {
+                "query": m.group(1).strip(),
+                "top_k": int(m.group(2) or 5),
+            })],
+        ),
         (
             r"take\s+a\s+screenshot",
             [("screenshot", lambda m: {})],

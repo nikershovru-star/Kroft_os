@@ -1097,4 +1097,20 @@ python main.py agent "убрать тег питон важно"
 - All resolve query -> node id via `hybrid_search` (top-1, with direct id/label fallback).
 - New contract methods: `IGraphBuilder.remove_edge`, `add_tag`, `remove_tag`; `add_edge` now idempotent; `meta['tags']` default `[]`.
 
+
+## STAGE 45 — Agent Graph Link Recommendations
+
+```bash
+python main.py agent "suggest links for python"
+python main.py agent "suggest links for python top 10"
+# Russian
+python main.py agent "предложи связи для питона"
+python main.py agent "с чем связать питона"
+```
+
+- `graph_suggest` — ranked missing-link candidates for a note.
+- Score = 0.6 * content (title token Jaccard) + 0.4 * graph (common-neighbor Jaccard + adjacency bonus for direct neighbors).
+- Existing edges (source -> candidate) and self excluded; reverse-direction edges treated as candidate links to recommend.
+- Returns `[{"id", "score", "reason", "title"}]`; user confirms -> `graph_link` (S44).
+
 ## Test gates
