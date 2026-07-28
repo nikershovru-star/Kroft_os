@@ -56,6 +56,8 @@ _COMMANDS = (
     ("agent --session-reset", "clear agent session"),
     ("agent --history", "show conversation turns"),
     ("agent --clear-history", "clear conversation history"),
+    ("agent --batch FILE", "run batch script (JSON Lines: {\"command\":\"...\"})"),
+    ("agent --batch FILE --continue-on-error", "run batch, don't stop on first error"),
     ("again / повтори", "repeat last command"),
     ("more / еще", "more results from last query"),
     ("show / покажи (bare)", "show top result from last find"),
@@ -420,6 +422,17 @@ class KnowledgeOSRepl:
             session = self._container.resolve("SessionStore")
             session.reset()
             print(json.dumps({"ok": True, "action": "clear_history"}))
+            return
+        if args and args[0] == "--batch":
+            if len(args) < 2:
+                print("agent --batch: need FILE", file=sys.stderr)
+                return
+            import json
+            with open(args[1], "r", encoding="utf-8") as f:
+                commands = [json.loads(line)["command"] for line in f if line.strip()]
+            agent = self._container.resolve("IAgent")
+            batch_results = agent._svc.execute_batch(commands)
+            print(json.dumps({"ok": True, "batch": batch_results}, ensure_ascii=False))
             return
         dry_run = False
         if args[0] == "--dry-run":

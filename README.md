@@ -1032,4 +1032,29 @@ POST /api/agent/history/clear
 - `get_last_query()` heuristic resolves `more` against the most recent find/show/open.
 - Zero external deps; JSON persistence reuses Stage 39 mechanism.
 
+
+## STAGE 42 — Agent Batch Script Execution
+
+```bash
+# Create a batch script
+cat > nightly.jsonl <<EOF
+{"command": "find python"}
+{"command": "open the first one"}
+{"command": "export json"}
+EOF
+# Run batch (stop on first error)
+python main.py agent --batch nightly.jsonl
+# Or continue despite errors
+python main.py agent --batch nightly.jsonl --continue-on-error
+# REPL
+run nightly.jsonl
+# HTTP
+POST /api/agent/batch {"commands":[{"command":"find python"},{"command":"show"}]}
+```
+
+- `execute_batch` runs commands sequentially with shared `SessionStore` context.
+- Implicit refs work across batch steps (`find` -> `show` / `open the first one` without repeating query).
+- JSON Lines input: one `{"command": "..."}` per line.
+- Fail-fast by default; `--continue-on-error` for resilient pipelines.
+
 ## Test gates

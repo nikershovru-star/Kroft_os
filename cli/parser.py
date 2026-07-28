@@ -135,6 +135,10 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
                     help="Show conversation history (Stage 41)")
     pa.add_argument("--clear-history", action="store_true",
                     help="Clear conversation history (Stage 41)")
+    pa.add_argument("--batch", default=None,
+                    help="Path to JSON Lines batch script (Stage 42)")
+    pa.add_argument("--continue-on-error", action="store_true",
+                    help="Continue batch on step failure (Stage 42)")
     pa.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 

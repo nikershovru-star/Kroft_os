@@ -203,7 +203,10 @@ class AgentService:
         # Stage 41: contextual shortcuts resolved against session history
         if cmd in ("again", "повтори", "repeat"):
             last = self._session.get_last_command() if self._session else ""
-            if last:
+            # Guard against repeat-shortcut recursion: "again" after "again"
+            # would resolve to itself and loop forever. A shortcut cannot be
+            # repeated; without a real prior command there is no context.
+            if last and last not in ("again", "повтори", "repeat", "more", "ещё", "еще", "show", "покажи"):
                 return self._match(last)  # re-resolve
             return [("__no_context__", {})]
         if cmd in ("more", "ещё", "еще"):
@@ -334,6 +337,20 @@ class AgentService:
                 summary,
             )
         return {"ok": True, "command": command, "plan": results}
+
+    def execute_batch(
+        self,
+        commands: List[str],
+        continue_on_error: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Execute a sequence of commands with shared session context."""
+        results: List[Dict[str, Any]] = []
+        for cmd in commands:
+            result = self.execute(cmd)
+            results.append(result)
+            if not continue_on_error and not result.get("ok", True):
+                break
+        return results
 
     def plan(self, command: str) -> List[str]:
         """Dry-run: return step descriptions without executing."""

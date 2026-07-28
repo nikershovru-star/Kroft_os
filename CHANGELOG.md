@@ -1,4 +1,11 @@
 # Changelog
+## v5.5.0 (Stage 42)
+- Batch Script Execution: `agent --batch FILE` (JSON Lines).
+- Shared session context across batch steps (implicit refs, conversation history).
+- `--continue-on-error` flag for resilient pipelines.
+- HTTP: `POST /api/agent/batch`.
+- 5 tests (test_agent_batch.py); suite 328 -> 333 passed.
+
 ## v5.4.0 (Stage 41)
 - Conversation History: `SessionStore.turns` ring buffer + `add_turn`/`get_turns`.
 - Contextual NL shortcuts: `again`, `more`, `show` (bare) resolve via session context.

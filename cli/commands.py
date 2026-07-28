@@ -248,6 +248,13 @@ def cmd_agent(args, container) -> None:
         session = container.resolve("SessionStore")
         session.reset()
         print(json.dumps({"ok": True, "action": "clear_history"}))
+    elif args.batch:
+        import json
+        with open(args.batch, "r", encoding="utf-8") as f:
+            commands = [json.loads(line)["command"] for line in f if line.strip()]
+        batch_results = agent._svc.execute_batch(commands, continue_on_error=args.continue_on_error)
+        print(json.dumps({"ok": True, "batch": batch_results}, ensure_ascii=False))
+        return
     elif args.dry_run:
         plan = agent._svc.plan(command)  # type: ignore[attr-defined]
         print(json.dumps({"dry_run": True, "plan": plan}, ensure_ascii=False))

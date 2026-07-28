@@ -256,6 +256,14 @@ class _Handler(BaseHTTPRequestHandler):
             session = self._container.resolve("SessionStore")
             session.reset()
             self._json_response({"ok": True, "action": "clear_history"})
+        elif path == "/api/agent/batch":
+            body = self._read_body()
+            data = json.loads(body.decode("utf-8"))
+            commands = [item["command"] for item in data.get("commands", [])]
+            continue_on_error = data.get("continue_on_error", False)
+            agent = self._container.resolve("IAgent")
+            batch_results = agent._svc.execute_batch(commands, continue_on_error=continue_on_error)
+            self._json_response({"ok": True, "batch": batch_results})
         else:
             self.send_error(404)
 

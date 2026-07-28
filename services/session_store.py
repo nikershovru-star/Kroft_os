@@ -54,8 +54,15 @@ class SessionStore:
 
     def get_last_command(self) -> str:
         with self._lock:
-            turns = self._data.get("turns", [])
-            return turns[-1]["command"] if turns else ""
+            # Return the last NON-shortcut command: repeating a shortcut
+            # (again/повтори/more/show) is meaningless and would recurse, so
+            # walk back to the most recent real command.
+            shortcuts = ("again", "повтори", "repeat", "more", "ещё", "еще", "show", "покажи")
+            for turn in reversed(self._data.get("turns", [])):
+                cmd = turn.get("command", "")
+                if cmd and cmd not in shortcuts:
+                    return cmd
+            return ""
 
     def get_last_query(self) -> str:
         with self._lock:
