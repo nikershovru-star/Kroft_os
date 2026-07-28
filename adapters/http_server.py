@@ -162,6 +162,11 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif path.startswith("/api/schedule/history"):
+            qs = parse_qs(urlparse(path).query)
+            job_id = qs.get("job_id", [None])[0]
+            sched = self._container.resolve("SchedulerService")
+            self._json_response(sched.history(job_id))
         elif path == "/":
             self._serve_static("index.html")
         elif path == "/login.html":
@@ -232,6 +237,11 @@ class _Handler(BaseHTTPRequestHandler):
             data = json.loads(body.decode("utf-8"))
             sched = self._container.resolve("SchedulerService")
             self._json_response({"ok": sched.cancel(data.get("id", ""))})
+        elif path.startswith("/api/schedule/history"):
+            qs = parse_qs(urlparse(path).query)
+            job_id = qs.get("job_id", [None])[0]
+            sched = self._container.resolve("SchedulerService")
+            self._json_response(sched.history(job_id))
         else:
             self.send_error(404)
 

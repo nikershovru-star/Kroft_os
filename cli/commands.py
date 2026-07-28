@@ -247,7 +247,7 @@ def cmd_schedule(args, container) -> None:
     effective = _resolve_config(args, container)
     k = Kernel(container, autosave_interval_sec=effective["autosave_interval"])
     k.initialize()
-    atexit.register(lambda: k.stop())
+    atexit.register(lambda: (k.stop(), sched.save()))
     sched: SchedulerService = container.resolve("SchedulerService")
     action = args.action
     if action == "add":
@@ -264,6 +264,9 @@ def cmd_schedule(args, container) -> None:
             return
         ok = sched.cancel(args.id)
         print(json.dumps({"ok": ok, "id": args.id}))
+    elif action == "history":
+        records = sched.history(args.job_id)
+        print(json.dumps(records, ensure_ascii=False))
     elif action == "start":
         sched.start()
         print(json.dumps({"ok": True, "status": "started"}))

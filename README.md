@@ -944,4 +944,22 @@ python main.py agent "открой первую"        # implicit ref -> top-1 
 - `open_app` не контролирует, какое приложение откроет файл (os.system start/open/xdg-open).
 - MockDesktopAdapter: click/type — no-ops; cursor возвращает (0,0).
 
+
+## STAGE 38 — Scheduler Persistence & Execution History
+
+```bash
+# Jobs auto-restore on restart
+python main.py schedule add --cron "daily 09:00" --cmd "export json"
+# Execution log (in-proc + JSON Lines file)
+python main.py schedule history
+python main.py schedule history job-1
+# HTTP
+GET /api/schedule/history?job_id=job-1
+```
+
+- `SchedulerService` persists jobs to `.kos/scheduler.json` (snapshot on every mutating operation).
+- Execution history: in-memory ring buffer (last 1000 runs) + append-only `.kos/scheduler.log` (JSON Lines).
+- `restore()` preserves original job IDs (fixes Stage 35 ID regeneration bug).
+- Fail-safe: I/O errors during save/load are swallowed; scheduler never crashes on disk issues.
+
 ## Test gates

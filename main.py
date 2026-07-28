@@ -5,6 +5,7 @@ referenced) and dispatches CLI commands. Run: `python main.py <command>`.
 """
 from __future__ import annotations
 
+import os as _os
 import sys as _sys
 
 from infrastructure import (
@@ -143,8 +144,13 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
     c.register_instance("PluginLoader", loader)
     if loader is not None:
         loader.apply_exporters(c)
-    # Stage 35: Task Scheduler (executor wired to IAgent.execute)
-    c.register_instance("SchedulerService", SchedulerService())
+    # Stage 38: Scheduler persistence (JSON snapshot + JSON Lines execution log)
+    data_dir = _os.path.join(vault_path, ".kos")
+    sched = SchedulerService(
+        persistence_path=_os.path.join(data_dir, "scheduler.json"),
+        log_path=_os.path.join(data_dir, "scheduler.log"),
+    )
+    c.register_instance("SchedulerService", sched)
     _wire_scheduler(c)
     return c
 

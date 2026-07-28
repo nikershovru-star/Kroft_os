@@ -55,6 +55,7 @@ _COMMANDS = (
     ("schedule add [--cron EXPR] CMD", "schedule a command (every N / daily HH:MM)"),
     ("schedule list", "show scheduled jobs"),
     ("schedule cancel ID", "cancel a job"),
+    ("schedule history [ID]", "show execution log (newest first)"),
     ("schedule start", "start the scheduler daemon"),
     ("schedule stop", "stop the scheduler daemon"),
     ("desktop list_notes QUERY", "list top-k note candidates from hybrid search"),
@@ -446,6 +447,9 @@ class KnowledgeOSRepl:
         elif action == "stop":
             sched.stop()
             print(json.dumps({"ok": True, "status": "stopped"}))
+        elif action == "history":
+            job_id = args[1] if len(args) > 1 else None
+            print(json.dumps(sched.history(job_id), ensure_ascii=False))
         else:
             print(f"schedule: unknown action {action}", file=sys.stderr)
 

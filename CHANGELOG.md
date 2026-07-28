@@ -1,4 +1,10 @@
 # Changelog
+## v5.1.0 (Stage 38)
+- Scheduler Persistence: auto-save to `.kos/scheduler.json`, auto-restore on boot.
+- Execution History: `schedule history [job-id]` (CLI/REPL/HTTP) + `.kos/scheduler.log` (JSON Lines).
+- Fixed Stage 35 bug: `restore()` now preserves original job IDs instead of re-generating them.
+- 6 tests (test_scheduler_persistence.py); suite 307 -> 313 passed.
+
 ## v5.0.0 (Stage 37)
 - Agent spec alignment to System Prompt v5.0.
 - `show <query>`/`покажи` -> show_note (inline content via IFileSystem).

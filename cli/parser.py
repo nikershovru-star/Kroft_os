@@ -131,8 +131,10 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
                     help="Path to the vault directory (or read from knowledgeos.yaml)")
 
     psch = sub.add_parser("schedule", help="Task scheduler (Stage 35)")
-    psch.add_argument("action", choices=["add", "list", "cancel", "start", "stop"],
+    psch.add_argument("action", choices=["add", "list", "cancel", "start", "stop", "history"],
                       help="Scheduler action")
+    psch.add_argument("job_id", nargs="?", default=None,
+                      help="Job ID filter (for history)")
     psch.add_argument("--cron", default="every 60",
                       help="Cron expression: 'every N' or 'daily HH:MM'")
     psch.add_argument("--cmd", default=None,
