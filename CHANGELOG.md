@@ -1,4 +1,10 @@
 # Changelog
+## v5.7.0 (Stage 44)
+- Agent Graph Mutation: `link`/`unlink`/`tag`/`untag` NL intents (EN + RU).
+- `GraphQueryEngine`: `add_link`, `remove_link`, `add_tag`, `remove_tag` (resolve via hybrid_search).
+- Contract: `IGraphBuilder.remove_edge`, `add_tag`, `remove_tag`; `add_edge` idempotent; `meta['tags']` default [].
+- 5 tests (test_graph_mutations.py); suite 338 -> 343 passed.
+
 ## v5.6.0 (Stage 43)
 - Graph-Aware Reasoning: `neighbors`, `path`, `cluster` NL intents.
 - `GraphQueryEngine`: `get_neighbors`, `shortest_path`, `get_cluster` (networkx, lazy import).

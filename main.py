@@ -263,6 +263,23 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
     registry.register("graph_cluster", _graph_cluster,
                       "Personalized PageRank cluster around a note")
 
+    # Stage 44: graph mutation tools
+    def _graph_link(from_query: str, to_query: str, relation: str = "links"):
+        return engine.add_link(from_query, to_query, relation)
+    registry.register("graph_link", _graph_link, "Create a link between two notes")
+
+    def _graph_unlink(from_query: str, to_query: str):
+        return engine.remove_link(from_query, to_query)
+    registry.register("graph_unlink", _graph_unlink, "Remove a link between two notes")
+
+    def _graph_tag(query: str, tag: str):
+        return engine.add_tag(query, tag)
+    registry.register("graph_tag", _graph_tag, "Add a tag to a note")
+
+    def _graph_untag(query: str, tag: str):
+        return engine.remove_tag(query, tag)
+    registry.register("graph_untag", _graph_untag, "Remove a tag from a note")
+
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)
     loader = container.try_resolve("PluginLoader")  # None if no plugins loaded

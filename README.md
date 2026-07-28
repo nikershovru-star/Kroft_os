@@ -1077,4 +1077,24 @@ python main.py agent "путь от питона до бюджета"
 - All tools resolve the query to the best-matching node via `hybrid_search`, then traverse the graph.
 - `networkx` is imported lazily inside the engine (arch-gate clean: services stay stdlib-only at module level).
 
+
+## STAGE 44 — Agent Graph Mutation
+
+```bash
+python main.py agent "link python to budget"
+python main.py agent "tag python as urgent"
+python main.py agent "link python to ml as references"
+# Russian
+python main.py agent "связать питон с бюджет"
+python main.py agent "тег питон важно"
+python main.py agent "отвязать питон от бюджет"
+python main.py agent "убрать тег питон важно"
+```
+
+- `graph_link` — create edge (idempotent; `as <relation>` sets edge type).
+- `graph_unlink` — remove edge.
+- `graph_tag` / `graph_untag` — add/remove tag on node `meta['tags']` (unique list).
+- All resolve query -> node id via `hybrid_search` (top-1, with direct id/label fallback).
+- New contract methods: `IGraphBuilder.remove_edge`, `add_tag`, `remove_tag`; `add_edge` now idempotent; `meta['tags']` default `[]`.
+
 ## Test gates

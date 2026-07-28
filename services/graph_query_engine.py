@@ -209,6 +209,68 @@ class GraphQueryEngine(IGraphQuery):
             for nid, s in sorted_nodes[:k]
         ]
 
+    # ----- Stage 44: graph mutation (natural-language driven) -----
+    def _resolve(self, query: str) -> Optional[str]:
+        """Resolve a free-text query to a node id via hybrid_search top-1.
+
+        Falls back to a direct id/label match against the live graph when the
+        search index is unavailable (e.g. GraphQueryEngine built without a
+        ContentIndex), so graph-mutation commands still work in unit tests
+        and minimal setups. Returns the node id, or None if unresolved.
+        """
+        results = self.hybrid_search(query, top_k=1)
+        if results:
+            return results[0][0]
+        snap = self._snapshot()
+        q = (query or "").strip().lower()
+        for n in snap.get("nodes", []):
+            nid = n.get("id", "")
+            if nid == query or nid == query + ".md" or nid.replace(".md", "").lower() == q:
+                return nid
+            if n.get("label", "").lower() == q:
+                return nid
+        return None
+
+    def add_link(self, from_query: str, to_query: str, relation: str = "links") -> Dict[str, Any]:
+        """Resolve two queries to node ids and create an edge (idempotent)."""
+        from_id = self._resolve(from_query)
+        to_id = self._resolve(to_query)
+        if not from_id or not to_id:
+            return {"ok": False, "error": "no results"}
+        snap = self._snapshot()
+        exists = any(
+            e.get("from") == from_id and e.get("to") == to_id for e in snap.get("edges", [])
+        )
+        if exists:
+            return {"ok": True, "from": from_id, "to": to_id, "created": False}
+        self._graph.add_edge(from_id, to_id, relation)
+        return {"ok": True, "from": from_id, "to": to_id, "created": True}
+
+    def remove_link(self, from_query: str, to_query: str) -> Dict[str, Any]:
+        """Resolve two queries to node ids and remove the edge if present."""
+        from_id = self._resolve(from_query)
+        to_id = self._resolve(to_query)
+        if not from_id or not to_id:
+            return {"ok": False, "error": "no results"}
+        removed = self._graph.remove_edge(from_id, to_id)
+        return {"ok": True, "from": from_id, "to": to_id, "removed": bool(removed)}
+
+    def add_tag(self, query: str, tag: str) -> Dict[str, Any]:
+        """Resolve query to node id, append tag to node meta['tags'] (unique)."""
+        node_id = self._resolve(query)
+        if not node_id:
+            return {"ok": False, "error": "no results"}
+        added = self._graph.add_tag(node_id, tag)
+        return {"ok": True, "node": node_id, "tag": tag, "added": bool(added)}
+
+    def remove_tag(self, query: str, tag: str) -> Dict[str, Any]:
+        """Resolve query to node id, remove tag from node meta['tags']."""
+        node_id = self._resolve(query)
+        if not node_id:
+            return {"ok": False, "error": "no results"}
+        removed = self._graph.remove_tag(node_id, tag)
+        return {"ok": True, "node": node_id, "tag": tag, "removed": bool(removed)}
+
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:
             return None

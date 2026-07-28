@@ -117,6 +117,66 @@ class AgentService:
                 "k": int(m.group(2) or 5),
             })],
         ),
+        # Stage 44: graph mutation (English)
+        (
+            r"link\s+(.+?)\s+to\s+(.+?)(?:\s+as\s+(.+))?$",
+            [("graph_link", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+                "relation": (m.group(3) or "links").strip(),
+            })],
+        ),
+        (
+            r"unlink\s+(.+?)\s+from\s+(.+)$",
+            [("graph_unlink", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"untag\s+(.+?)\s+(.+)$",
+            [("graph_untag", lambda m: {
+                "query": m.group(1).strip(),
+                "tag": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"tag\s+(.+?)\s+as\s+(.+)$",
+            [("graph_tag", lambda m: {
+                "query": m.group(1).strip(),
+                "tag": m.group(2).strip(),
+            })],
+        ),
+        # Stage 44: graph mutation (Russian)
+        (
+            r"связать\s+(.+?)\s+с\s+(.+?)(?:\s+как\s+(.+))?$",
+            [("graph_link", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+                "relation": (m.group(3) or "links").strip(),
+            })],
+        ),
+        (
+            r"отвязать\s+(.+?)\s+от\s+(.+)$",
+            [("graph_unlink", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"убрать\s+тег\s+(.+?)\s+(.+)$",
+            [("graph_untag", lambda m: {
+                "query": m.group(1).strip(),
+                "tag": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"тег\s+(.+?)\s+(.+)$",
+            [("graph_tag", lambda m: {
+                "query": m.group(1).strip(),
+                "tag": m.group(2).strip(),
+            })],
+        ),
         (
             r"take\s+a\s+screenshot",
             [("screenshot", lambda m: {})],
