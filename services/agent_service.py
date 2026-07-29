@@ -44,15 +44,7 @@ class AgentService:
             r"open_app\s+(.+)$",
             [("desktop_open_app", lambda m: {"name": m.group(1).strip()})],
         ),
-        (
-            r"find\s+(.+?)(?:\s+and\s+open)?$",
-            [("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
-        ),
-        (
-            r"open\s+(.+)$",
-            [("open_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
-        ),
-        # Stage 49: graph constraints & auto-fix (must precede generic `find ...`)
+        # Stage 49: graph constraints/auto-fix; must precede generic `find ...`
         (
             r"validate\s+graph",
             [("validate_graph", lambda m: {})],
@@ -64,6 +56,14 @@ class AgentService:
         (
             r"fix\s+graph",
             [("fix_graph", lambda m: {})],
+        ),
+        (
+            r"find\s+(.+?)(?:\s+and\s+open)?$",
+            [("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
+        ),
+        (
+            r"open\s+(.+)$",
+            [("open_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
         ),
         (
             r"show\s+(?:me\s+)?(.+)$",
@@ -284,6 +284,19 @@ class AgentService:
         (
             r"take\s+a\s+screenshot",
             [("screenshot", lambda m: {})],
+        ),
+        # Stage 49: graph constraints & auto-fix (Russian)
+        (
+            r"проверить\s+граф",
+            [("validate_graph", lambda m: {})],
+        ),
+        (
+            r"найти\s+битые\s+ссылки",
+            [("find_broken_links", lambda m: {})],
+        ),
+        (
+            r"исправить\s+граф",
+            [("fix_graph", lambda m: {})],
         ),
         (
             r"cursor\s+position",
