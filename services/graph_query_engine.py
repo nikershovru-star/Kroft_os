@@ -11,6 +11,7 @@ contracts.IGraphBuilder / contracts.IGraphQuery ports.
 """
 from __future__ import annotations
 import re
+import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -504,6 +505,85 @@ class GraphQueryEngine(IGraphQuery):
             "configured": bool(self._fs and self._snapshot_path),
             "path": self._snapshot_path,
         }
+
+    def graph_enhanced_search(
+        self,
+        query: str,
+        top_k: int = 10,
+        oversample: int = 3,
+        alpha: float = 0.5,
+        beta: float = 0.3,
+        gamma: float = 0.2,
+    ) -> List[Dict[str, Any]]:
+        """Graph-enhanced ranking pipeline over hybrid_search candidates."""
+        if not query or not query.strip():
+            return []
+        query = query.strip()
+        raw = self.hybrid_search(query, top_k=top_k * oversample)
+        if not raw:
+            return []
+        # normalize semantic scores to 0..1
+        max_sem = max(s for _, s in raw)
+        if max_sem <= 0:
+            max_sem = 1.0
+        candidates = []
+        for nid, sem in raw:
+            candidates.append({
+                "id": nid,
+                "semantic_score": round(sem / max_sem, 4),
+            })
+
+        snap = self._snapshot()
+        nodes = {n["id"]: n for n in snap.get("nodes", [])}
+        succ: Dict[str, set] = {}
+        pred: Dict[str, set] = {}
+        for e in snap.get("edges", []):
+            f, t = e.get("from"), e.get("to")
+            if f is None or t is None:
+                continue
+            succ.setdefault(f, set()).add(t)
+            pred.setdefault(t, set()).add(f)
+
+        def neighbors(nid: str) -> set:
+            return succ.get(nid, set()) | pred.get(nid, set())
+
+        semantic_map = {c["id"]: c["semantic_score"] for c in candidates}
+        now = time.time()
+        for c in candidates:
+            nid = c["id"]
+            node = nodes.get(nid, {})
+            title = node.get("label") or nid.replace(".md", "").replace("-", " ")
+            c["title"] = title
+            neigh = neighbors(nid)
+            if neigh and semantic_map:
+                neighbor_scores = [semantic_map[n] for n in neigh if n in semantic_map]
+                if neighbor_scores:
+                    g_score = max(neighbor_scores) * 0.6 + (sum(neighbor_scores) / len(neighbor_scores)) * 0.4
+                else:
+                    g_score = 0.0
+            else:
+                g_score = 0.0
+            c["graph_score"] = round(g_score, 4)
+            modified = (node.get("meta") or {}).get("modified")
+            if modified is not None:
+                try:
+                    recency = 1.0 / (1.0 + 0.001 * (now - float(modified)))
+                except Exception:
+                    recency = 0.5
+            else:
+                recency = 0.5
+            c["recency_score"] = round(recency, 4)
+            c["final_score"] = round(
+                alpha * c["semantic_score"] + beta * c["graph_score"] + gamma * c["recency_score"], 4
+            )
+            c["reason"] = (
+                f"semantic={c['semantic_score']:.3f} "
+                f"graph={c['graph_score']:.3f} "
+                f"recency={c['recency_score']:.3f}"
+            )
+
+        candidates.sort(key=lambda x: x["final_score"], reverse=True)
+        return candidates[:top_k]
 
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:

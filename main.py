@@ -316,6 +316,13 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
         return engine.auto_snapshot_status()
     registry.register("auto_save", _auto_save, "Toggle auto-snapshot after mutations")
 
+    # Stage 48: graph-enhanced hybrid search
+    def _enhanced_search(query: str):
+        results = engine.graph_enhanced_search(query)
+        return {"ok": True, "query": query, "count": len(results), "results": results}
+    registry.register("enhanced_search", _enhanced_search,
+                      "Graph-enhanced hybrid search (semantic + graph proximity + recency)")
+
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)
     loader = container.try_resolve("PluginLoader")  # None if no plugins loaded

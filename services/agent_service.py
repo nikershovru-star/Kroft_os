@@ -259,6 +259,15 @@ class AgentService:
             r"автосохранение\s+(вкл|выкл)",
             [("auto_save", lambda m: {"enabled": m.group(1).lower() == "вкл"})],
         ),
+        # Stage 48: graph-enhanced hybrid search
+        (
+            r"hybrid\s+search\s+(.+)$",
+            [("enhanced_search", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"гибридный\s+поиск\s+(.+)$",
+            [("enhanced_search", lambda m: {"query": m.group(1).strip()})],
+        ),
         (
             r"take\s+a\s+screenshot",
             [("screenshot", lambda m: {})],
