@@ -486,6 +486,39 @@ class AgentService:
                 "to_query": m.group(2).strip(),
             })],
         ),
+        # Stage 53: graph-based agent context memory (EN + RU)
+        (
+            r"remember\s+(?:that\s+)?(.+)",
+            [("record_user_query", lambda m: {"query_text": m.group(1).strip(), "intent": "explicit_memory"})],
+        ),
+        (
+            r"what\s+do\s+you\s+know\s+about\s+my\s+(?:interests|context)",
+            [("get_session_context", lambda m: {})],
+        ),
+        (
+            r"suggest\s+(?:something|what\s+next)",
+            [("suggest_next", lambda m: {})],
+        ),
+        (
+            r"personalized\s+summary\s+(?:of\s+)?(.+)",
+            [("get_personalized_summary", lambda m: {"target_node": m.group(1).strip()})],
+        ),
+        (
+            r"запомни\s+(?:что\s+)?(.+)",
+            [("record_user_query", lambda m: {"query_text": m.group(1).strip(), "intent": "explicit_memory"})],
+        ),
+        (
+            r"что\s+ты\s+знаешь\s+об\s+моих\s+(?:интересах|запросах)",
+            [("get_session_context", lambda m: {})],
+        ),
+        (
+            r"что\s+посоветуешь|что\s+дальше",
+            [("suggest_next", lambda m: {})],
+        ),
+        (
+            r"персонализированный\s+обзор\s+(?:узла\s+)?(.+)",
+            [("get_personalized_summary", lambda m: {"target_node": m.group(1).strip()})],
+        ),
         (
             r"cursor\s+position",
             [("cursor_position", lambda m: {})],

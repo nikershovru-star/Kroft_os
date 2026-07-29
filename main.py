@@ -376,6 +376,27 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
     registry.register("expand_knowledge", _expand_knowledge,
                       "Expand knowledge from a seed via cluster analysis and link suggestions")
 
+    # Stage 53: graph-based agent context memory
+    def _record_user_query(session_id: str, query_text: str, hit_nodes: List[str], intent: str = "unknown"):
+        return engine.record_user_query(session_id, query_text, hit_nodes, intent)
+    registry.register("record_user_query", _record_user_query,
+                      "Record user query into graph context memory")
+
+    def _get_session_context(session_id: str, depth: int = 2):
+        return engine.get_session_context(session_id, depth)
+    registry.register("get_session_context", _get_session_context,
+                      "Retrieve session context from graph memory")
+
+    def _suggest_next(session_id: str, top_n: int = 3):
+        return engine.suggest_next(session_id, top_n)
+    registry.register("suggest_next", _suggest_next,
+                      "Proactive suggestions based on interest graph")
+
+    def _get_personalized_summary(session_id: str, target_node: str):
+        return engine.get_personalized_summary(session_id, target_node)
+    registry.register("get_personalized_summary", _get_personalized_summary,
+                      "Personalized node summary with session context")
+
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)
     loader = container.try_resolve("PluginLoader")  # None if no plugins loaded

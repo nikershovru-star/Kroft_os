@@ -10,10 +10,11 @@ services never reference each other -- they are coupled only through the
 contracts.IGraphBuilder / contracts.IGraphQuery ports.
 """
 from __future__ import annotations
+import hashlib
 import re
 import time
 from collections import deque
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from contracts import IService, IGraphBuilder, IGraphQuery
 
@@ -1050,6 +1051,226 @@ class GraphQueryEngine(IGraphQuery):
             "cluster": [{"id": item.get("id") or item.get("node_id"), "score": item.get("score", 0.0)} for item in cluster[: top_k * 2]],
             "expansion_targets": expansion_targets[:top_k],
             "plan": plan,
+        }
+
+    def record_user_query(
+        self,
+        session_id: str,
+        query_text: str,
+        hit_nodes: List[str],
+        intent: str = "unknown",
+    ) -> Dict[str, Any]:
+        """Record user query as a context subgraph for later interest profiling."""
+        sid_node = f"session:{session_id}"
+        qhash = hashlib.sha256(query_text.encode("utf-8")).hexdigest()[:16]
+        query_node = f"query:{qhash}"
+        ts = time.time()
+
+        snap = self._snapshot()
+        nodes = {n["id"]: n for n in snap.get("nodes", [])}
+        edges = {tuple(sorted((e.get("from"), e.get("to")))): e for e in snap.get("edges", [])}
+
+        if sid_node not in nodes:
+            self._graph.add_node(sid_node, session_id, {"type": "session", "last_query": query_text})
+        self._graph.add_node(sid_node, session_id, {"type": "session", "last_query": query_text})
+
+        if query_node not in nodes:
+            self._graph.add_node(query_node, query_text[:200], {"type": "query", "text": query_text, "ts": ts, "intent": intent})
+
+        self._graph.add_edge(sid_node, query_node, "user_query")
+        # backfill relation/meta idempotently via snapshot mutation
+        self._ensure_edge_meta(sid_node, query_node, {"relation": "user_query"})
+
+        hits_recorded = 0
+        for node_id in hit_nodes:
+            if not node_id:
+                continue
+            if node_id not in nodes:
+                self._graph.add_node(node_id, node_id.replace(".md", "").replace("-", " "), {})
+            self._graph.add_edge(query_node, node_id, "query_hit")
+            self._ensure_edge_meta(query_node, node_id, {"relation": "query_hit"})
+            hits_recorded += 1
+
+        interest_updates = 0
+        existing_interest = {
+            e.get("to"): e
+            for e in self._graph._edges
+            if e.get("from") == sid_node and e.get("relation") == "interest"
+        }
+        for node_id in hit_nodes:
+            if not node_id:
+                continue
+            weight = 1
+            if node_id in existing_interest:
+                weight = int((existing_interest[node_id].get("meta") or {}).get("weight", 1) + 1)
+                self._graph.remove_edge(sid_node, node_id)
+            self._graph.add_edge(sid_node, node_id, "interest")
+            self._ensure_edge_meta(sid_node, node_id, {"relation": "interest", "weight": weight})
+            interest_updates += 1
+
+        self._maybe_snapshot()
+        self._append_audit("context_query", {"session_id": session_id}, {"hits": hits_recorded, "interests": interest_updates})
+
+        return {
+            "ok": True,
+            "session_node": sid_node,
+            "query_node": query_node,
+            "hits_recorded": hits_recorded,
+            "interests_updated": interest_updates,
+        }
+
+    def _ensure_edge_meta(self, from_id: str, to_id: str, meta: Dict[str, Any]) -> None:
+        for e in self._graph._edges:
+            if e.get("from") == from_id and e.get("to") == to_id:
+                edge_meta = dict(e.get("meta") or {})
+                edge_meta.update(meta or {})
+                e["meta"] = edge_meta
+                return
+        new_edge = {"from": from_id, "to": to_id, "relation": (meta or {}).get("relation", "")}
+        if meta:
+            new_edge["meta"] = dict(meta)
+        self._graph._edges.append(new_edge)
+
+    def get_session_context(self, session_id: str, depth: int = 2) -> Dict[str, Any]:
+        """Extract session context from graph memory."""
+        g = self._snapshot()
+        sid_node = f"session:{session_id}"
+        nodes = {n["id"]: n for n in g.get("nodes", [])}
+        if sid_node not in nodes:
+            return {"ok": True, "session_id": session_id, "recent_queries": [], "interest_profile": [], "related_nodes": []}
+
+        edges = g.get("edges", [])
+        query_nodes = {}
+        interest_nodes = {}
+
+        for e in edges:
+            if e.get("from") == sid_node:
+                if e.get("relation") == "user_query":
+                    qnid = e["to"]
+                    qn = nodes.get(qnid, {})
+                    query_nodes[qnid] = {
+                        "text": (qn.get("meta") or {}).get("text") or qn.get("label", ""),
+                        "intent": (qn.get("meta") or {}).get("intent", "unknown"),
+                        "ts": (qn.get("meta") or {}).get("ts") or 0.0,
+                        "hits": [],
+                    }
+                elif e.get("relation") == "interest":
+                    interest_nodes[e["to"]] = (e.get("meta") or {}).get("weight", 1)
+
+        for e in edges:
+            if e.get("from") in query_nodes and e.get("relation") == "query_hit":
+                query_nodes[e["from"]]["hits"].append(e["to"])
+
+        recent_queries = sorted(
+            [
+                {
+                    "text": q["text"],
+                    "intent": q["intent"],
+                    "ts": q["ts"],
+                    "hits": q["hits"],
+                }
+                for q in query_nodes.values()
+            ],
+            key=lambda x: x["ts"],
+            reverse=True,
+        )[:10]
+
+        interest_profile = sorted(
+            [{"node": nid, "weight": weight} for nid, weight in interest_nodes.items()],
+            key=lambda x: x["weight"],
+            reverse=True,
+        )
+
+        interest_ids = set(interest_nodes.keys()) - {sid_node}
+        related_nodes: List[str] = []
+        if interest_ids:
+            related_ids = set()
+            for e in edges:
+                if e.get("relation") == "links" and (e.get("from") in interest_ids or e.get("to") in interest_ids):
+                    related_ids.add(e.get("from"))
+                    related_ids.add(e.get("to"))
+            related_nodes = sorted(list(related_ids - interest_ids - {sid_node}))
+
+        return {
+            "ok": True,
+            "session_id": session_id,
+            "recent_queries": recent_queries,
+            "interest_profile": interest_profile,
+            "related_nodes": related_nodes,
+        }
+
+    def suggest_next(self, session_id: str, top_n: int = 3) -> Dict[str, Any]:
+        """Proactive suggestions from the interest graph."""
+        ctx = self.get_session_context(session_id)
+        interest_nodes = [i["node"] for i in ctx.get("interest_profile", [])[:top_n]]
+        visited = set()
+        for q in ctx.get("recent_queries", []):
+            visited.update(q.get("hits", []))
+        visited.update(interest_nodes)
+        visited.add(f"session:{session_id}")
+
+        g = self._snapshot()
+        score_counter: Dict[str, float] = {}
+
+        for nid in interest_nodes:
+            for e in g.get("edges", []):
+                if e.get("relation") == "links" and e.get("from") == nid:
+                    target = e.get("to")
+                    if target and target not in visited:
+                        score_counter[target] = score_counter.get(target, 0.0) + 1.0
+
+        top_nodes = sorted(score_counter.items(), key=lambda x: x[1], reverse=True)[:top_n]
+        suggestions = []
+        for nid, score in top_nodes:
+            suggestions.append(
+                {
+                    "node": nid,
+                    "title": nid.replace(".md", "").replace("-", " "),
+                    "reason": f"Linked from your interest in {nid.replace('.md', '').replace('-', ' ')}",
+                    "score": score,
+                }
+            )
+        return {"ok": True, "suggestions": suggestions}
+
+    def get_personalized_summary(self, session_id: str, target_node: str) -> Dict[str, Any]:
+        """Return personalized summary for target node based on session history."""
+        ctx = self.get_session_context(session_id)
+        related_queries = []
+        for q in ctx.get("recent_queries", []):
+            if target_node in q.get("hits", []):
+                related_queries.append(q["text"])
+
+        personalized_note = None
+        if related_queries:
+            snap_now = self._snapshot()
+            nodes_now = {n["id"]: n for n in snap_now.get("nodes", [])}
+            meta_now = (nodes_now.get(target_node) or {}).get("meta") or {}
+            snapshot_at_hit = {}
+            recent_from_ids = {f"query:{hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]}" for text in related_queries}
+            qh_edge = next(
+                (
+                    e
+                    for e in snap_now.get("edges", [])
+                    if e.get("relation") == "query_hit"
+                    and e.get("to") == target_node
+                    and e.get("from") in recent_from_ids
+                ),
+                None,
+            )
+            if qh_edge:
+                snapshot_at_hit = qh_edge.get("meta") or {}
+            if snapshot_at_hit and meta_now:
+                if snapshot_at_hit.get("snapshot_at_hit") != {"tags": meta_now.get("tags"), "modified": meta_now.get("modified")}:
+                    personalized_note = (
+                        f"You asked about this before. Changes since last time: tags={meta_now.get('tags')}, modified={meta_now.get('modified')}"
+                    )
+
+        return {
+            "ok": True,
+            "node": target_node,
+            "base_summary": target_node,
+            "personalized_note": personalized_note,
+            "related_past_queries": related_queries,
         }
 
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
