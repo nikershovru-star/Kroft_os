@@ -112,6 +112,8 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
             index=c.resolve("ContentIndex"),
             semantic_index=c.resolve("SemanticIndex"),
             embedding=c.resolve("Embedding"),
+            fs=c.resolve("IFileSystem"),
+            snapshot_path=_os.path.join(vault_path, ".kos", "graph.json"),
         ),
     )
     # Stage 23: graph exporters registered as instances. The composition root
@@ -303,6 +305,16 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
     def _graph_health():
         return engine.graph_health()
     registry.register("graph_health", _graph_health, "Graph health check")
+
+    # Stage 47: graph snapshot persistence
+    def _save_graph():
+        return engine.save_graph()
+    registry.register("save_graph", _save_graph, "Explicitly persist graph to disk")
+
+    def _auto_save(enabled: bool):
+        engine.set_auto_snapshot(enabled)
+        return engine.auto_snapshot_status()
+    registry.register("auto_save", _auto_save, "Toggle auto-snapshot after mutations")
 
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)

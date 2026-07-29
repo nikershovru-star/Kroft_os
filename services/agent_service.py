@@ -241,6 +241,24 @@ class AgentService:
             r"здоровье\s+графа",
             [("graph_health", lambda m: {})],
         ),
+        # Stage 47: graph snapshot persistence (English)
+        (
+            r"save\s+graph",
+            [("save_graph", lambda m: {})],
+        ),
+        (
+            r"auto\s+save\s+(on|off)",
+            [("auto_save", lambda m: {"enabled": m.group(1).lower() == "on"})],
+        ),
+        # Stage 47: graph snapshot persistence (Russian)
+        (
+            r"сохранить\s+граф",
+            [("save_graph", lambda m: {})],
+        ),
+        (
+            r"автосохранение\s+(вкл|выкл)",
+            [("auto_save", lambda m: {"enabled": m.group(1).lower() == "вкл"})],
+        ),
         (
             r"take\s+a\s+screenshot",
             [("screenshot", lambda m: {})],

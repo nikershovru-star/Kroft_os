@@ -37,8 +37,8 @@ class GraphQueryEngine(IGraphQuery):
     """Pure read-only structural query engine over a shared IGraphBuilder."""
 
     def __init__(self, graph: IGraphBuilder, index: Optional[Any] = None,
-                 semantic_index: Optional[Any] = None,
-                 embedding: Optional[Any] = None) -> None:
+                 semantic_index: Optional[Any] = None, embedding: Optional[Any] = None,
+                 fs: Optional[Any] = None, snapshot_path: Optional[str] = None) -> None:
         # Snapshot-on-read: every query pulls a fresh deep-copy snapshot via
         # graph.get_graph(), so the crawler may mutate the live graph (add
         # nodes/edges) between our calls without corrupting an in-flight query.
@@ -55,6 +55,10 @@ class GraphQueryEngine(IGraphQuery):
         # same DI convention). Either None => semantic_search() returns [].
         self._semantic_index = semantic_index
         self._embedding = embedding
+        # Stage 47: optional persistence port for graph snapshots.
+        self._fs = fs
+        self._snapshot_path = snapshot_path
+        self._auto_snapshot = bool(fs and snapshot_path)
 
     # ----- IService -----
     def name(self) -> str:
@@ -244,6 +248,7 @@ class GraphQueryEngine(IGraphQuery):
         if exists:
             return {"ok": True, "from": from_id, "to": to_id, "created": False}
         self._graph.add_edge(from_id, to_id, relation)
+        self._maybe_snapshot()
         return {"ok": True, "from": from_id, "to": to_id, "created": True}
 
     def remove_link(self, from_query: str, to_query: str) -> Dict[str, Any]:
@@ -253,6 +258,7 @@ class GraphQueryEngine(IGraphQuery):
         if not from_id or not to_id:
             return {"ok": False, "error": "no results"}
         removed = self._graph.remove_edge(from_id, to_id)
+        self._maybe_snapshot()
         return {"ok": True, "from": from_id, "to": to_id, "removed": bool(removed)}
 
     def add_tag(self, query: str, tag: str) -> Dict[str, Any]:
@@ -261,6 +267,7 @@ class GraphQueryEngine(IGraphQuery):
         if not node_id:
             return {"ok": False, "error": "no results"}
         added = self._graph.add_tag(node_id, tag)
+        self._maybe_snapshot()
         return {"ok": True, "node": node_id, "tag": tag, "added": bool(added)}
 
     def remove_tag(self, query: str, tag: str) -> Dict[str, Any]:
@@ -269,7 +276,50 @@ class GraphQueryEngine(IGraphQuery):
         if not node_id:
             return {"ok": False, "error": "no results"}
         removed = self._graph.remove_tag(node_id, tag)
+        self._maybe_snapshot()
         return {"ok": True, "node": node_id, "tag": tag, "removed": bool(removed)}
+
+    # ---- Stage 47: snapshot persistence helpers ----
+    def set_auto_snapshot(self, enabled: bool) -> None:
+        """Toggle automatic snapshot after mutations."""
+        self._auto_snapshot = enabled
+
+    def _maybe_snapshot(self) -> None:
+        """Persist graph if auto-snapshot is enabled. Never raises."""
+        if not self._auto_snapshot or not self._fs or not self._snapshot_path:
+            return
+        try:
+            self._graph.snapshot(self._fs, self._snapshot_path)
+        except Exception:
+            pass
+
+    def save_graph(self) -> Dict[str, Any]:
+        """Explicit snapshot regardless of auto-save toggle."""
+        if not self._fs or not self._snapshot_path:
+            return {
+                "ok": False,
+                "error": "filesystem or snapshot path not configured",
+            }
+        try:
+            self._graph.snapshot(self._fs, self._snapshot_path)
+        except Exception as e:
+            return {
+                "ok": False,
+                "error": str(e),
+            }
+        return {
+            "ok": True,
+            "path": self._snapshot_path,
+        }
+
+    def auto_snapshot_status(self) -> Dict[str, Any]:
+        """Return auto-snapshot state (read-only)."""
+        return {
+            "ok": True,
+            "enabled": self._auto_snapshot,
+            "configured": bool(self._fs and self._snapshot_path),
+            "path": self._snapshot_path,
+        }
 
     def suggest_links(self, query: str, top_k: int = 5, min_score: float = 0.01) -> List[Dict[str, Any]]:
         """Recommend missing links for a node (graph proximity + content overlap).
@@ -412,6 +462,48 @@ class GraphQueryEngine(IGraphQuery):
         stats = self.graph_stats()
         healthy = stats["orphans"] == 0 and stats["density"] > 0
         return {"ok": True, "healthy": healthy, "stats": stats}
+
+    # ---- Stage 47: snapshot persistence helpers ----
+    def set_auto_snapshot(self, enabled: bool) -> None:
+        """Toggle automatic snapshot after mutations."""
+        self._auto_snapshot = enabled
+
+    def _maybe_snapshot(self) -> None:
+        """Persist graph if auto-snapshot is enabled. Never raises."""
+        if not self._auto_snapshot or not self._fs or not self._snapshot_path:
+            return
+        try:
+            self._graph.snapshot(self._fs, self._snapshot_path)
+        except Exception:
+            pass
+
+    def save_graph(self) -> Dict[str, Any]:
+        """Explicit snapshot regardless of auto-save toggle."""
+        if not self._fs or not self._snapshot_path:
+            return {
+                "ok": False,
+                "error": "filesystem or snapshot path not configured",
+            }
+        try:
+            self._graph.snapshot(self._fs, self._snapshot_path)
+        except Exception as e:
+            return {
+                "ok": False,
+                "error": str(e),
+            }
+        return {
+            "ok": True,
+            "path": self._snapshot_path,
+        }
+
+    def auto_snapshot_status(self) -> Dict[str, Any]:
+        """Return auto-snapshot state (read-only)."""
+        return {
+            "ok": True,
+            "enabled": self._auto_snapshot,
+            "configured": bool(self._fs and self._snapshot_path),
+            "path": self._snapshot_path,
+        }
 
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:
