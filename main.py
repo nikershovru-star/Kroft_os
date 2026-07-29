@@ -336,6 +336,19 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
         return engine.fix_graph()
     registry.register("fix_graph", _fix_graph, "Auto-fix graph issues (tag orphans, remove broken links)")
 
+    # Stage 50: graph temporal audit log
+    def _audit_log():
+        return {"ok": True, "log": engine.get_audit_log()}
+    registry.register("audit_log", _audit_log, "Show graph temporal audit log")
+
+    def _recent_changes():
+        return {"ok": True, "log": engine.get_audit_log()[-10:]}
+    registry.register("recent_changes", _recent_changes, "Show recent graph changes")
+
+    def _mutations_since(ts_min: float):
+        return {"ok": True, "mutations": engine.mutations_since(ts_min)}
+    registry.register("mutations_since", _mutations_since, "Graph mutations since timestamp")
+
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)
     loader = container.try_resolve("PluginLoader")  # None if no plugins loaded

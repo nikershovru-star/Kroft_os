@@ -60,6 +60,19 @@ class GraphQueryEngine(IGraphQuery):
         self._fs = fs
         self._snapshot_path = snapshot_path
         self._auto_snapshot = bool(fs and snapshot_path)
+        # Stage 50: temporal audit log (in-memory, append-only).
+        self._audit: List[Dict[str, Any]] = []
+
+    def _append_audit(self, action: str, before: Dict[str, Any], after: Dict[str, Any]) -> Dict[str, Any]:
+        """Record a temporal delta for a graph mutation."""
+        entry = {
+            "ts": (before.get("meta") or {}).get("modified") or after.get("ts", time.time()),
+            "action": action,
+            "before": before,
+            "after": after,
+        }
+        self._audit.append(entry)
+        return entry
 
     # ----- IService -----
     def name(self) -> str:
@@ -238,6 +251,7 @@ class GraphQueryEngine(IGraphQuery):
 
     def add_link(self, from_query: str, to_query: str, relation: str = "links") -> Dict[str, Any]:
         """Resolve two queries to node ids and create an edge (idempotent)."""
+        before = self._snapshot()
         from_id = self._resolve(from_query)
         to_id = self._resolve(to_query)
         if not from_id or not to_id:
@@ -250,6 +264,8 @@ class GraphQueryEngine(IGraphQuery):
             return {"ok": True, "from": from_id, "to": to_id, "created": False}
         self._graph.add_edge(from_id, to_id, relation)
         self._maybe_snapshot()
+        after = self._snapshot()
+        self._append_audit("add_link", {"edge": {"from": from_id, "to": to_id}}, {"edge": {"from": from_id, "to": to_id}})
         return {"ok": True, "from": from_id, "to": to_id, "created": True}
 
     def remove_link(self, from_query: str, to_query: str) -> Dict[str, Any]:
@@ -260,6 +276,12 @@ class GraphQueryEngine(IGraphQuery):
             return {"ok": False, "error": "no results"}
         removed = self._graph.remove_edge(from_id, to_id)
         self._maybe_snapshot()
+        after = self._snapshot()
+        self._append_audit(
+            "remove_link",
+            {"edge": {"from": from_id, "to": to_id}},
+            {"edge": {"from": from_id, "to": to_id}, "removed": bool(removed)},
+        )
         return {"ok": True, "from": from_id, "to": to_id, "removed": bool(removed)}
 
     def add_tag(self, query: str, tag: str) -> Dict[str, Any]:
@@ -267,8 +289,11 @@ class GraphQueryEngine(IGraphQuery):
         node_id = self._resolve(query)
         if not node_id:
             return {"ok": False, "error": "no results"}
+        before_node = next((n for n in self._snapshot().get('nodes', []) if n['id'] == node_id), {})
         added = self._graph.add_tag(node_id, tag)
         self._maybe_snapshot()
+        after_node = next((n for n in self._snapshot().get('nodes', []) if n['id'] == node_id), {})
+        self._append_audit("add_tag", {"node": before_node}, {"node": after_node})
         return {"ok": True, "node": node_id, "tag": tag, "added": bool(added)}
 
     def remove_tag(self, query: str, tag: str) -> Dict[str, Any]:
@@ -276,8 +301,11 @@ class GraphQueryEngine(IGraphQuery):
         node_id = self._resolve(query)
         if not node_id:
             return {"ok": False, "error": "no results"}
+        before_node = next((n for n in self._snapshot().get('nodes', []) if n['id'] == node_id), {})
         removed = self._graph.remove_tag(node_id, tag)
         self._maybe_snapshot()
+        after_node = next((n for n in self._snapshot().get('nodes', []) if n['id'] == node_id), {})
+        self._append_audit("remove_tag", {"node": before_node}, {"node": after_node})
         return {"ok": True, "node": node_id, "tag": tag, "removed": bool(removed)}
 
     # ---- Stage 47: snapshot persistence helpers ----
@@ -700,7 +728,6 @@ class GraphQueryEngine(IGraphQuery):
         for nid in self.orphan_nodes():
             self._graph.add_tag(nid, "orphan")
             fixes["orphans_tagged"] += 1
-        # tag nodes without tags
         for n in snap.get("nodes", []):
             nid = n["id"]
             tags = (n.get("meta") or {}).get("tags")
@@ -709,7 +736,18 @@ class GraphQueryEngine(IGraphQuery):
                 fixes["untagged_tagged"] += 1
         if any(fixes.values()):
             self._maybe_snapshot()
+            after_snap = self._snapshot()
+            for action in ["remove_link", "add_tag"]:
+                self._append_audit(action, {}, {"fixes": fixes, "after": after_snap})
         return {"ok": True, "fixes": fixes}
+
+    def get_audit_log(self) -> List[Dict[str, Any]]:
+        """Return the full temporal audit log for this engine instance (read-only)."""
+        return list(self._audit)
+
+    def mutations_since(self, ts_min: float) -> List[Dict[str, Any]]:
+        """Return audit entries with timestamp >= ts_min (read-only)."""
+        return [entry for entry in self._audit if entry.get("ts", 0) >= ts_min]
 
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:
