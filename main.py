@@ -336,6 +336,17 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
         return engine.fix_graph()
     registry.register("fix_graph", _fix_graph, "Auto-fix graph issues (tag orphans, remove broken links)")
 
+    # Stage 51: graph-driven review queue & compound filtering
+    def _review_queue(top_k: int = 10):
+        return {"ok": True, "queue": engine.review_queue(top_k=top_k)}
+    registry.register("review_queue", _review_queue,
+                      "Prioritized review queue (orphans, stale, untagged, peripheral)")
+
+    def _compound_query(**filters):
+        return {"ok": True, "matches": engine.compound_query(**filters)}
+    registry.register("compound_query", _compound_query,
+                      "Compound graph query (tags, degree, orphan, recency, linked_to)")
+
     # Stage 50: graph temporal audit log
     def _audit_log():
         return {"ok": True, "log": engine.get_audit_log()}

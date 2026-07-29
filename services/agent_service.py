@@ -98,6 +98,61 @@ class AgentService:
             r"open\s+(.+)$",
             [("open_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
         ),
+        # Stage 51: review queue & compound filtering (EN + RU; must precede generic `show ...`)
+        (
+            r"review\s+queue(?:\s+top\s+(\d+))?$",
+            [("review_queue", lambda m: {"top_k": int(m.group(1) or 10)})],
+        ),
+        (
+            r"what\s+(?:to\s+)?review",
+            [("review_queue", lambda m: {"top_k": 10})],
+        ),
+        (
+            r"show\s+(?:me\s+)?orphans?",
+            [("compound_query", lambda m: {"orphan": True})],
+        ),
+        (
+            r"show\s+(?:me\s+)?untagged",
+            [("compound_query", lambda m: {"untagged": True})],
+        ),
+        (
+            r"notes\s+tagged\s+(.+?)(?:\s+with\s+degree\s+>\s+(\d+))?$",
+            [("compound_query", lambda m: {
+                "tags": [t.strip() for t in m.group(1).split(",")],
+                "min_degree": int(m.group(2) or 0),
+            })],
+        ),
+        (
+            r"notes\s+not\s+linked\s+to\s+(.+)$",
+            [("compound_query", lambda m: {"not_linked_to": m.group(1).strip()})],
+        ),
+        (
+            r"очередь\s+ревью(?:\s+топ\s+(\d+))?$",
+            [("review_queue", lambda m: {"top_k": int(m.group(1) or 10)})],
+        ),
+        (
+            r"что\s+почитать",
+            [("review_queue", lambda m: {"top_k": 10})],
+        ),
+        (
+            r"покажи\s+сирот",
+            [("compound_query", lambda m: {"orphan": True})],
+        ),
+        (
+            r"покажи\s+без\s+тегов",
+            [("compound_query", lambda m: {"untagged": True})],
+        ),
+        (
+            r"заметки\s+с\s+тегом\s+(.+?)(?:\s+и\s+степенью\s+>\s+(\d+))?$",
+            [("compound_query", lambda m: {
+                "tags": [t.strip() for t in m.group(1).split(",")],
+                "min_degree": int(m.group(2) or 0),
+            })],
+        ),
+        (
+            r"заметки\s+не\s+связанные\s+с\s+(.+)$",
+            [("compound_query", lambda m: {"not_linked_to": m.group(1).strip()})],
+        ),
         (
             r"show\s+(?:me\s+)?(.+)$",
             [("show_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
@@ -330,6 +385,61 @@ class AgentService:
         (
             r"исправить\s+граф",
             [("fix_graph", lambda m: {})],
+        ),
+        # Stage 51: review queue & compound filtering (EN + RU)
+        (
+            r"review\s+queue(?:\s+top\s+(\d+))?$",
+            [("review_queue", lambda m: {"top_k": int(m.group(1) or 10)})],
+        ),
+        (
+            r"what\s+(?:to\s+)?review",
+            [("review_queue", lambda m: {"top_k": 10})],
+        ),
+        (
+            r"show\s+(?:me\s+)?orphans?",
+            [("compound_query", lambda m: {"orphan": True})],
+        ),
+        (
+            r"show\s+(?:me\s+)?untagged",
+            [("compound_query", lambda m: {"untagged": True})],
+        ),
+        (
+            r"notes\s+tagged\s+(.+?)(?:\s+with\s+degree\s+>\s+(\d+))?$",
+            [("compound_query", lambda m: {
+                "tags": [t.strip() for t in m.group(1).split(",")],
+                "min_degree": int(m.group(2) or 0),
+            })],
+        ),
+        (
+            r"notes\s+not\s+linked\s+to\s+(.+)$",
+            [("compound_query", lambda m: {"not_linked_to": m.group(1).strip()})],
+        ),
+        (
+            r"очередь\s+ревью(?:\s+топ\s+(\d+))?$",
+            [("review_queue", lambda m: {"top_k": int(m.group(1) or 10)})],
+        ),
+        (
+            r"что\s+почитать",
+            [("review_queue", lambda m: {"top_k": 10})],
+        ),
+        (
+            r"покажи\s+сирот",
+            [("compound_query", lambda m: {"orphan": True})],
+        ),
+        (
+            r"покажи\s+без\s+тегов",
+            [("compound_query", lambda m: {"untagged": True})],
+        ),
+        (
+            r"заметки\s+с\s+тегом\s+(.+?)(?:\s+и\s+степенью\s+>\s+(\d+))?$",
+            [("compound_query", lambda m: {
+                "tags": [t.strip() for t in m.group(1).split(",")],
+                "min_degree": int(m.group(2) or 0),
+            })],
+        ),
+        (
+            r"заметки\s+не\s+связанные\s+с\s+(.+)$",
+            [("compound_query", lambda m: {"not_linked_to": m.group(1).strip()})],
         ),
         (
             r"cursor\s+position",

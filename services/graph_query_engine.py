@@ -749,11 +749,142 @@ class GraphQueryEngine(IGraphQuery):
         """Return audit entries with timestamp > ts_min (strict, read-only)."""
         return [entry for entry in self._audit if entry.get("ts", 0) > ts_min]
 
+    def review_queue(self, top_k: int = 10) -> List[Dict[str, Any]]:
+        """Prioritized list of notes needing attention (read-only)."""
+        g = self._snapshot()
+        nodes = {n["id"]: n for n in g.get("nodes", [])}
+        if not nodes:
+            return []
+
+        orphan_ids = set(self.orphan_nodes())
+        undirected_degree: Dict[str, int] = {nid: 0 for nid in nodes}
+        for e in g.get("edges", []):
+            src, dst = e.get("from"), e.get("to")
+            if src in undirected_degree:
+                undirected_degree[src] += 1
+            if dst in undirected_degree:
+                undirected_degree[dst] += 1
+
+        pr_map = {item["id"]: item["score"] for item in self.top_central(k=len(nodes), metric="pagerank")}
+        max_pr = max(pr_map.values()) if pr_map else 0.0
+        now = time.time()
+
+        scored: List[Dict[str, Any]] = []
+        for nid, n in nodes.items():
+            reasons: List[str] = []
+            actions: List[str] = []
+            priority = 0.0
+            if nid in orphan_ids:
+                priority += 2.0
+                reasons.append("orphan")
+                actions.extend(["link to most central node", "tag as 'orphan'"])
+            tags = (n.get("meta") or {}).get("tags") or []
+            if not tags:
+                priority += 1.0
+                reasons.append("untagged")
+                actions.append("add tags")
+            deg = undirected_degree.get(nid, 0)
+            priority += 1.0 / (1 + deg)
+            if deg <= 1:
+                reasons.append(f"peripheral (degree {deg})")
+            modified = (n.get("meta") or {}).get("modified") or 0.0
+            if modified > 0:
+                days_since = max((now - modified) / 86400.0, 0.0)
+                stale_score = min(days_since / 30.0, 3.0)
+                if stale_score > 0:
+                    priority += stale_score
+                    reasons.append(f"stale ({int(days_since)}d)")
+                    actions.extend(["review content", "update modified timestamp"])
+            pr = pr_map.get(nid, 0.0)
+            if max_pr > 0:
+                priority -= 1.0 * (pr / max_pr)
+            scored.append({
+                "id": nid,
+                "title": nid.replace(".md", "").replace("-", " "),
+                "priority": round(priority, 4),
+                "reasons": reasons,
+                "actions": actions,
+            })
+
+        scored.sort(key=lambda x: x["priority"], reverse=True)
+        return scored[:top_k]
+
+    def compound_query(self, **filters) -> List[Dict[str, Any]]:
+        """Filter nodes by compound criteria (AND logic, read-only)."""
+        g = self._snapshot()
+        nodes = {n["id"]: n for n in g.get("nodes", [])}
+        if not nodes:
+            return []
+
+        neighbor_sets: Dict[str, set] = {nid: set() for nid in nodes}
+        for e in g.get("edges", []):
+            src, dst = e.get("from"), e.get("to")
+            if src in neighbor_sets and dst in neighbor_sets:
+                neighbor_sets[src].add(dst)
+                neighbor_sets[dst].add(src)
+
+        linked_to = filters.get("linked_to")
+        if linked_to is not None and linked_to in neighbor_sets:
+            linked_neighbors = neighbor_sets[linked_to]
+        else:
+            linked_neighbors = set()
+
+        not_linked_to = filters.get("not_linked_to")
+        if not_linked_to is not None and not_linked_to in neighbor_sets:
+            not_linked_neighbors = neighbor_sets[not_linked_to]
+        else:
+            not_linked_neighbors = set()
+
+        orphan_ids = set(self.orphan_nodes())
+        required_tags = filters.get("tags", []) or []
+        min_degree = filters.get("min_degree")
+        max_degree = filters.get("max_degree")
+        modified_after = filters.get("modified_after")
+        modified_before = filters.get("modified_before")
+        orphan_filter = filters.get("orphan")
+        untagged_filter = filters.get("untagged")
+
+        results: List[Dict[str, Any]] = []
+        for nid, n in nodes.items():
+            matches: Dict[str, bool] = {}
+            if orphan_filter is not None:
+                matches["orphan"] = nid in orphan_ids
+            if untagged_filter is not None:
+                tags = (n.get("meta") or {}).get("tags") or []
+                matches["untagged"] = not tags
+            if required_tags:
+                tags = (n.get("meta") or {}).get("tags") or []
+                matches["tags"] = all(tag in tags for tag in required_tags)
+            if min_degree is not None:
+                matches["min_degree"] = len(neighbor_sets.get(nid, set())) >= int(min_degree)
+            if max_degree is not None:
+                matches["max_degree"] = len(neighbor_sets.get(nid, set())) <= int(max_degree)
+            if modified_after is not None:
+                modified = (n.get("meta") or {}).get("modified") or 0.0
+                matches["modified_after"] = modified > float(modified_after)
+            if modified_before is not None:
+                matched_before = (n.get("meta") or {}).get("modified") or 0.0
+                matches["modified_before"] = matched_before < float(modified_before)
+            if linked_to is not None:
+                matches["linked_to"] = nid in linked_neighbors
+            if not_linked_to is not None:
+                matches["not_linked_to"] = nid not in not_linked_neighbors
+
+            if all(v is not False for k, v in matches.items() if k in filters):
+                results.append({
+                    "id": nid,
+                    "title": nid.replace(".md", "").replace("-", " "),
+                    "degree": len(neighbor_sets.get(nid, set())),
+                    "tags": (n.get("meta") or {}).get("tags") or [],
+                    "modified": (n.get("meta") or {}).get("modified") or 0.0,
+                    "matches": matches,
+                })
+        return results
+
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:
             return None
         g = self._snapshot()
-        # adjacency (directed forward edges only)
         adj: Dict[str, List[str]] = {}
         for n in g["nodes"]:
             adj.setdefault(n["id"], [])
@@ -766,7 +897,6 @@ class GraphQueryEngine(IGraphQuery):
             return None
         if from_id == to_id:
             return [from_id]
-        # BFS for shortest path
         queue: "deque[str]" = deque([from_id])
         visited = {from_id}
         parent: Dict[str, Optional[str]] = {from_id: None}
@@ -774,7 +904,6 @@ class GraphQueryEngine(IGraphQuery):
         while queue:
             cur = queue.popleft()
             if cur == to_id:
-                # reconstruct
                 path: List[str] = []
                 node: Optional[str] = cur
                 while node is not None:
