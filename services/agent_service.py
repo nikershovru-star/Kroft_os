@@ -90,6 +90,39 @@ class AgentService:
             r"журнал\s+изменений",
             [("audit_log", lambda m: {})],
         ),
+        # Stage 54: graph health monitor (EN + RU) — must precede generic `find ...`
+        (
+            r"graph\s+health\s+report",
+            [("graph_health_report", lambda m: {})],
+        ),
+        (
+            r"find\s+duplicates?",
+            [("find_duplicate_candidates", lambda m: {})],
+        ),
+        (
+            r"cleanup\s+orphans?",
+            [("cleanup_orphans", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"merge\s+(.+?)\s+into\s+(.+)",
+            [("merge_nodes", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "dry_run": False})],
+        ),
+        (
+            r"полный\s+отчёт\s+о\s+графе",
+            [("graph_health_report", lambda m: {})],
+        ),
+        (
+            r"найди\s+дубликаты?",
+            [("find_duplicate_candidates", lambda m: {})],
+        ),
+        (
+            r"очисти\s+осиротевшие\s+узлы?",
+            [("cleanup_orphans", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"объедини\s+(.+?)\s+в\s+(.+)",
+            [("merge_nodes", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "dry_run": False})],
+        ),
         (
             r"find\s+(.+?)(?:\s+and\s+open)?$",
             [("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
@@ -323,7 +356,7 @@ class AgentService:
         ),
         (
             r"graph\s+health",
-            [("graph_health", lambda m: {})],
+            [("graph_health_report", lambda m: {})],
         ),
         # Stage 46: graph analytics & health (Russian)
         (
@@ -340,7 +373,7 @@ class AgentService:
         ),
         (
             r"здоровье\s+графа",
-            [("graph_health", lambda m: {})],
+            [("graph_health_report", lambda m: {})],
         ),
         # Stage 47: graph snapshot persistence (English)
         (
@@ -518,6 +551,43 @@ class AgentService:
         (
             r"персонализированный\s+обзор\s+(?:узла\s+)?(.+)",
             [("get_personalized_summary", lambda m: {"target_node": m.group(1).strip()})],
+        ),
+        # Stage 54: graph health monitor (EN + RU)
+        (
+            r"graph\s+health\s+report",
+            [("graph_health_report", lambda m: {})],
+        ),
+        (
+            r"find\s+duplicates?",
+            [("find_duplicate_candidates", lambda m: {})],
+        ),
+        (
+            r"cleanup\s+orphans?",
+            [("cleanup_orphans", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"merge\s+(.+?)\s+into\s+(.+)",
+            [("merge_nodes", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "dry_run": False})],
+        ),
+        (
+            r"полный\s+отчёт\s+о\s+графе",
+            [("graph_health_report", lambda m: {})],
+        ),
+        (
+            r"здоровье\s+графа",
+            [("graph_health_report", lambda m: {})],
+        ),
+        (
+            r"найди\s+дубликаты?",
+            [("find_duplicate_candidates", lambda m: {})],
+        ),
+        (
+            r"очисти\s+осиротевшие\s+узлы?",
+            [("cleanup_orphans", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"объедини\s+(.+?)\s+в\s+(.+)",
+            [("merge_nodes", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "dry_run": False})],
         ),
         (
             r"cursor\s+position",

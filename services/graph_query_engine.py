@@ -1273,6 +1273,193 @@ class GraphQueryEngine(IGraphQuery):
             "related_past_queries": related_queries,
         }
 
+    # ----- Stage 54: graph health monitor -----
+    def graph_health_report(self) -> Dict[str, Any]:
+        """Full diagnostic: orphans, broken links, clusters, density."""
+        snap = self._snapshot()
+        nodes = snap.get("nodes", [])
+        edges = snap.get("edges", [])
+        all_ids = {n["id"] for n in nodes}
+
+        content_nodes = [
+            n for n in nodes
+            if not n["id"].startswith(("session:", "query:"))
+        ]
+        content_ids = {n["id"] for n in content_nodes}
+        content_edges = [
+            e for e in edges
+            if e.get("relation") not in {"user_query", "query_hit", "interest"}
+            and not str(e.get("from", "")).startswith(("session:", "query:"))
+            and not str(e.get("to", "")).startswith(("session:", "query:"))
+        ]
+
+        deg = {nid: 0 for nid in content_ids}
+        for e in content_edges:
+            f, t = e.get("from"), e.get("to")
+            if f in deg:
+                deg[f] += 1
+            if t in deg:
+                deg[t] += 1
+        orphans = [nid for nid, d in deg.items() if d == 0]
+
+        broken = [
+            e for e in content_edges
+            if e.get("from") not in all_ids or e.get("to") not in all_ids
+        ]
+
+        adj: Dict[str, set] = {nid: set() for nid in content_ids}
+        for e in content_edges:
+            f, t = e.get("from"), e.get("to")
+            if f in adj and t in adj:
+                adj[f].add(t)
+                adj[t].add(f)
+        visited: set = set()
+        clusters = 0
+        for nid in content_ids:
+            if nid not in visited:
+                clusters += 1
+                stack = [nid]
+                while stack:
+                    cur = stack.pop()
+                    if cur in visited:
+                        continue
+                    visited.add(cur)
+                    stack.extend(adj[cur] - visited)
+
+        n = len(content_nodes)
+        density = len(content_edges) / (n * (n - 1)) if n > 1 else 0.0
+
+        return {
+            "ok": True,
+            "total_nodes": len(nodes),
+            "content_nodes": n,
+            "content_edges": len(content_edges),
+            "orphans": orphans,
+            "orphan_count": len(orphans),
+            "broken_links": broken,
+            "broken_count": len(broken),
+            "clusters": clusters,
+            "density": round(density, 4),
+        }
+
+    def find_duplicate_candidates(self, threshold: float = 0.8) -> Dict[str, Any]:
+        """Find node pairs that look like duplicates by title + tags."""
+        snap = self._snapshot()
+        nodes = [n for n in snap.get("nodes", []) if not n["id"].startswith(("session:", "query:"))]
+        candidates: List[Dict[str, Any]] = []
+        for i in range(len(nodes)):
+            for j in range(i + 1, len(nodes)):
+                a, b = nodes[i], nodes[j]
+                ta = (a.get("label") or a.get("title") or a["id"]).lower().strip()
+                tb = (b.get("label") or b.get("title") or b["id"]).lower().strip()
+
+                if ta == tb:
+                    t_sim = 1.0
+                elif ta in tb or tb in ta:
+                    t_sim = 0.9
+                else:
+                    sa, sb = set(ta.split()), set(tb.split())
+                    u = len(sa | sb)
+                    t_sim = len(sa & sb) / u if u else 0.0
+
+                ma = (a.get("meta") or {})
+                mb = (b.get("meta") or {})
+                tag_sim = 0.0
+                ta_set = set(ma.get("tags", []))
+                tb_set = set(mb.get("tags", []))
+                if ta_set or tb_set:
+                    tag_sim = len(ta_set & tb_set) / len(ta_set | tb_set)
+
+                score = t_sim
+                reason = f"title={round(t_sim,2)}"
+                if ta_set or tb_set:
+                    score = t_sim * 0.7 + tag_sim * 0.3
+                    reason = f"title={round(t_sim,2)}, tags={round(tag_sim,2)}"
+                if score >= threshold:
+                    candidates.append({
+                        "from": a["id"],
+                        "to": b["id"],
+                        "score": round(score, 4),
+                        "reason": reason,
+                    })
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+        return {"ok": True, "candidates": candidates[:20]}
+
+    def cleanup_orphans(self, dry_run: bool = True) -> Dict[str, Any]:
+        """Remove content nodes with zero content-degree."""
+        report = self.graph_health_report()
+        orphans = report.get("orphans", [])
+        if not dry_run and orphans:
+            bad = set(orphans)
+            if isinstance(self._graph._nodes, dict):
+                self._graph._nodes = {k: n for k, n in self._graph._nodes.items() if n["id"] not in bad}
+            else:
+                self._graph._nodes = [n for n in self._graph._nodes if n["id"] not in bad]
+            self._graph._edges = [
+                e for e in self._graph._edges
+                if e.get("from") not in bad and e.get("to") not in bad
+            ]
+            self._append_audit("cleanup_orphans", {"dry_run": False}, {"removed": len(orphans)})
+            self._maybe_snapshot()
+        return {
+            "ok": True,
+            "dry_run": dry_run,
+            "orphans_found": orphans,
+            "removed": 0 if dry_run else len(orphans),
+        }
+
+    def merge_nodes(self, from_node: str, to_node: str, dry_run: bool = True) -> Dict[str, Any]:
+        """Merge from_node into to_node: transfer edges, union tags, drop from_node."""
+        snap = self._snapshot()
+        ids = {n["id"] for n in snap.get("nodes", [])}
+        if from_node not in ids or to_node not in ids:
+            return {"ok": False, "error": "node not found"}
+        if from_node == to_node:
+            return {"ok": False, "error": "cannot merge into itself"}
+
+        if not dry_run:
+            seen: set = set()
+            new_edges: List[dict] = []
+            for e in self._graph._edges:
+                f, t, rel = e.get("from"), e.get("to"), e.get("relation")
+                if f == from_node:
+                    f = to_node
+                if t == from_node:
+                    t = to_node
+                if f == t:
+                    continue
+                key = (f, t, rel)
+                if key not in seen:
+                    seen.add(key)
+                    new_edges.append({**e, "from": f, "to": t})
+            self._graph._edges = new_edges
+
+            nodes_map = {n["id"]: dict(n) for n in (self._graph._nodes.values() if isinstance(self._graph._nodes, dict) else self._graph._nodes)}
+            to_meta = dict(nodes_map.get(to_node, {}).get("meta") or {})
+            from_meta = dict(nodes_map.get(from_node, {}).get("meta") or {})
+            to_meta["tags"] = list(set(to_meta.get("tags", []) + from_meta.get("tags", [])))
+            if isinstance(self._graph._nodes, dict):
+                self._graph._nodes[to_node] = dict(self._graph._nodes.get(to_node, {"id": to_node}), meta=to_meta)
+            else:
+                for n in self._graph._nodes:
+                    if n["id"] == to_node:
+                        n["meta"] = to_meta
+                        break
+            if isinstance(self._graph._nodes, dict):
+                self._graph._nodes.pop(from_node, None)
+            else:
+                self._graph._nodes = [n for n in self._graph._nodes if n["id"] != from_node]
+            self._append_audit("merge_nodes", {"from": from_node, "to": to_node}, {})
+            self._maybe_snapshot()
+
+        return {
+            "ok": True,
+            "dry_run": dry_run,
+            "from": from_node,
+            "to": to_node,
+            "message": f"Would merge {from_node} into {to_node}" if dry_run else f"Merged {from_node} into {to_node}",
+        }
+
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:
             return None

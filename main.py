@@ -397,6 +397,25 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
     registry.register("get_personalized_summary", _get_personalized_summary,
                       "Personalized node summary with session context")
 
+    # Stage 54: graph health monitor
+    registry.register("graph_health_report", engine.graph_health_report,
+                      "Full graph health diagnostic")
+
+    def _find_duplicate_candidates(threshold: float = 0.8):
+        return engine.find_duplicate_candidates(threshold)
+    registry.register("find_duplicate_candidates", _find_duplicate_candidates,
+                      "Find duplicate node candidates")
+
+    def _cleanup_orphans(dry_run: bool = True):
+        return engine.cleanup_orphans(dry_run)
+    registry.register("cleanup_orphans", _cleanup_orphans,
+                      "Remove orphaned content nodes")
+
+    def _merge_nodes(from_node: str, to_node: str, dry_run: bool = True):
+        return engine.merge_nodes(from_node, to_node, dry_run)
+    registry.register("merge_nodes", _merge_nodes,
+                      "Merge two graph nodes into one")
+
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)
     loader = container.try_resolve("PluginLoader")  # None if no plugins loaded
