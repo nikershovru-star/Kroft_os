@@ -57,6 +57,39 @@ class AgentService:
             r"fix\s+graph",
             [("fix_graph", lambda m: {})],
         ),
+        # Stage 50: graph temporal audit log (EN + RU)
+        (
+            r"show\s+audit\s+log",
+            [("audit_log", lambda m: {})],
+        ),
+        (
+            r"show\s+recent\s+changes",
+            [("recent_changes", lambda m: {})],
+        ),
+        (
+            r"mutations\s+since\s+([0-9]+(?:\.[0-9]+)?)",
+            [("mutations_since", lambda m: {"ts_min": float(m.group(1))})],
+        ),
+        (
+            r"audit\s+log",
+            [("audit_log", lambda m: {})],
+        ),
+        (
+            r"recent\s+changes",
+            [("recent_changes", lambda m: {})],
+        ),
+        (
+            r"мутации\s+с\s+([0-9]+(?:\.[0-9]+)?)",
+            [("mutations_since", lambda m: {"ts_min": float(m.group(1))})],
+        ),
+        (
+            r"недавние\s+изменения",
+            [("recent_changes", lambda m: {})],
+        ),
+        (
+            r"журнал\s+изменений",
+            [("audit_log", lambda m: {})],
+        ),
         (
             r"find\s+(.+?)(?:\s+and\s+open)?$",
             [("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5})],

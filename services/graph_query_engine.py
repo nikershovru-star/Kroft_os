@@ -746,8 +746,8 @@ class GraphQueryEngine(IGraphQuery):
         return list(self._audit)
 
     def mutations_since(self, ts_min: float) -> List[Dict[str, Any]]:
-        """Return audit entries with timestamp >= ts_min (read-only)."""
-        return [entry for entry in self._audit if entry.get("ts", 0) >= ts_min]
+        """Return audit entries with timestamp > ts_min (strict, read-only)."""
+        return [entry for entry in self._audit if entry.get("ts", 0) > ts_min]
 
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:
