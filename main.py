@@ -323,6 +323,19 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
     registry.register("enhanced_search", _enhanced_search,
                       "Graph-enhanced hybrid search (semantic + graph proximity + recency)")
 
+    # Stage 49: graph constraints & auto-fix
+    def _validate_graph():
+        return engine.validate_graph()
+    registry.register("validate_graph", _validate_graph, "Validate graph constraints")
+
+    def _find_broken_links():
+        return {"ok": True, "broken": engine.find_broken_links()}
+    registry.register("find_broken_links", _find_broken_links, "Find edges pointing to missing nodes")
+
+    def _fix_graph():
+        return engine.fix_graph()
+    registry.register("fix_graph", _fix_graph, "Auto-fix graph issues (tag orphans, remove broken links)")
+
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)
     loader = container.try_resolve("PluginLoader")  # None if no plugins loaded

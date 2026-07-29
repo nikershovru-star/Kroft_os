@@ -585,6 +585,132 @@ class GraphQueryEngine(IGraphQuery):
         candidates.sort(key=lambda x: x["final_score"], reverse=True)
         return candidates[:top_k]
 
+    def _find_cycles(self, snap: Dict[str, Any]) -> List[List[str]]:
+        """Return all simple directed cycles (up to a cap of 10 for performance)."""
+        nodes = [n["id"] for n in snap.get("nodes", [])]
+        adj: Dict[str, List[str]] = {nid: [] for nid in nodes}
+        for e in snap.get("edges", []):
+            src, dst = e.get("from"), e.get("to")
+            if src in adj and dst in adj:
+                adj[src].append(dst)
+        cycles: List[List[str]] = []
+
+        def dfs(path: List[str], visited: set) -> None:
+            if len(cycles) >= 10:
+                return
+            last = path[-1]
+            for nxt in adj.get(last, []):
+                if nxt == path[0] and len(path) >= 2:
+                    cycles.append(path.copy())
+                    return
+                if nxt not in visited:
+                    visited.add(nxt)
+                    path.append(nxt)
+                    dfs(path, visited)
+                    path.pop()
+                    visited.remove(nxt)
+
+        for nid in nodes:
+            dfs([nid], {nid})
+        # deduplicate rotations
+        seen: set = set()
+        uniq: List[List[str]] = []
+        for c in cycles:
+            key = tuple(sorted(c))
+            if key not in seen:
+                seen.add(key)
+                uniq.append(c)
+        return uniq
+
+    def validate_graph(self) -> Dict[str, Any]:
+        """Full constraint check. Returns structured report."""
+        snap = self._snapshot()
+        nodes = {n["id"] for n in snap.get("nodes", [])}
+        edges = snap.get("edges", [])
+        issues = []
+        # orphans
+        orphans = self.orphan_nodes()
+        if orphans:
+            issues.append({
+                "type": "orphan",
+                "severity": "warning",
+                "nodes": orphans,
+                "message": f"{len(orphans)} orphan note(s) with no links",
+            })
+        # nodes without tags
+        no_tags = [n["id"] for n in snap.get("nodes", []) if not (n.get("meta") or {}).get("tags")]
+        if no_tags:
+            issues.append({
+                "type": "no_tags",
+                "severity": "info",
+                "nodes": no_tags,
+                "message": f"{len(no_tags)} note(s) without tags",
+            })
+        # broken links
+        broken = []
+        for e in edges:
+            src, dst = e.get("from"), e.get("to")
+            if src not in nodes or dst not in nodes:
+                broken.append({"from": src, "to": dst})
+        if broken:
+            issues.append({
+                "type": "broken_link",
+                "severity": "error",
+                "nodes": list({n for b in broken for n in (b.get("from"), b.get("to")) if n is not None}),
+                "message": f"{len(broken)} edge(s) referencing missing nodes",
+                "edges": broken,
+            })
+        # cycles (directed)
+        cycles = self._find_cycles(snap)
+        if cycles:
+            issues.append({
+                "type": "cycle",
+                "severity": "warning",
+                "nodes": list({n for c in cycles for n in c}),
+                "message": f"{len(cycles)} directed cycle(s) detected",
+                "cycles": cycles,
+            })
+        fixable = sum(1 for i in issues if i["type"] in ("orphan", "no_tags", "broken_link"))
+        return {"ok": True, "issues": issues, "fixable": fixable, "total_issues": len(issues)}
+
+    def find_broken_links(self) -> List[Dict[str, Any]]:
+        """Return only broken edges (src or dst missing from node set)."""
+        snap = self._snapshot()
+        nodes = {n["id"] for n in snap.get("nodes", [])}
+        broken = []
+        for e in snap.get("edges", []):
+            src, dst = e.get("from"), e.get("to")
+            if src not in nodes or dst not in nodes:
+                broken.append({"from": src, "to": dst, "relation": e.get("relation", "links")})
+        return broken
+
+    def fix_graph(self) -> Dict[str, Any]:
+        """Auto-fix: remove broken links, tag orphans with 'orphan', tag no-tag nodes with 'untagged'.
+        Returns summary of applied fixes. Calls _maybe_snapshot() once at the end if any fix applied."""
+        snap = self._snapshot()
+        nodes = {n["id"] for n in snap.get("nodes", [])}
+        fixes = {"broken_removed": 0, "orphans_tagged": 0, "untagged_tagged": 0}
+        # remove broken links
+        for e in snap.get("edges", []):
+            src, dst = e.get("from"), e.get("to")
+            if src not in nodes or dst not in nodes:
+                self._graph.remove_edge(src, dst)
+                fixes["broken_removed"] += 1
+        # tag orphans
+        for nid in self.orphan_nodes():
+            self._graph.add_tag(nid, "orphan")
+            fixes["orphans_tagged"] += 1
+        # tag nodes without tags
+        for n in snap.get("nodes", []):
+            nid = n["id"]
+            tags = (n.get("meta") or {}).get("tags")
+            if not tags:
+                self._graph.add_tag(nid, "untagged")
+                fixes["untagged_tagged"] += 1
+        if any(fixes.values()):
+            self._maybe_snapshot()
+        return {"ok": True, "fixes": fixes}
+
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:
             return None

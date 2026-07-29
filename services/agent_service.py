@@ -52,6 +52,19 @@ class AgentService:
             r"open\s+(.+)$",
             [("open_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
         ),
+        # Stage 49: graph constraints & auto-fix (must precede generic `find ...`)
+        (
+            r"validate\s+graph",
+            [("validate_graph", lambda m: {})],
+        ),
+        (
+            r"find\s+broken\s+links",
+            [("find_broken_links", lambda m: {})],
+        ),
+        (
+            r"fix\s+graph",
+            [("fix_graph", lambda m: {})],
+        ),
         (
             r"show\s+(?:me\s+)?(.+)$",
             [("show_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],

@@ -1,4 +1,9 @@
 # Changelog
+## v5.12.0 (Stage 49)
+- Agent Graph Constraints & Auto-Fix NL intents (EN + RU): validate / find broken links / fix graph.
+- `GraphQueryEngine` read-only checks: `validate_graph`, `find_broken_links`, `fix_graph`; DFS cycle detection cap 10.
+- 5 tests (test_graph_validate.py); suite 366 -> 371 passed.
+
 ## v5.9.0 (Stage 46)
 - Agent Graph Analytics & Health NL intents (EN + RU): stats / central / orphans / health.
 - `GraphQueryEngine`: `graph_stats`, `top_central` (pagerank/degree, pure stdlib), `graph_health`.

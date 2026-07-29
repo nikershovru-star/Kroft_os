@@ -1134,4 +1134,22 @@ python main.py agent "здоровье графа"
 - `graph_health` — stats + heuristics (healthy = no orphans AND density > 0).
 - Pure-stdlib over the snapshot graph (no new deps).
 
+
+## STAGE 49 — Agent Graph Constraints & Auto-Fix
+
+```bash
+python main.py agent "validate graph"
+python main.py agent "find broken links"
+python main.py agent "fix graph"
+# Russian
+python main.py agent "проверить граф"
+python main.py agent "найти битые ссылки"
+python main.py agent "исправить граф"
+```
+
+- `validate_graph` — constraint report: orphans, untagged nodes, broken links, directed cycles.
+- `find_broken_links` — edges pointing to missing nodes.
+- `fix_graph` — auto-remove broken links, tag orphans with `orphan`, tag untagged nodes with `untagged`; explicit snapshot after fixes.
+- Pure-stdlib DFS cycle detection capped at 10 cycles.
+
 ## Test gates
