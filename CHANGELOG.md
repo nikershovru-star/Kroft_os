@@ -581,3 +581,10 @@
 - 10 new tests (`tests/test_semantic_search.py`). Full suite now 249 green.
 - HONEST LIMITATIONS: Mock embedding is NOT real semantics; brute-force O(nodes);
   no incremental semantic update on watch recrawl; no FAISS (out of arch gate).
+
+## v5.14.0 (Integration Audit)
+- End-to-end integration verification completed via `data/tmp/verify_os_boot.py`.
+- 12/12 core components verified: Kernel Lifecycle, DI Container, EventBus,
+  PluginManager, Knowledge Engine, Memory, Scheduler, API/HTTP, MCP,
+  DesktopService, WatchService, Health Check.
+- Ad-hoc verifier cleaned up; no production changes required.
