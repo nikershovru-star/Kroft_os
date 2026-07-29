@@ -881,6 +881,177 @@ class GraphQueryEngine(IGraphQuery):
                 })
         return results
 
+    def research_topic(self, query: str, depth: int = 2) -> Dict[str, Any]:
+        """High-level research workflow over the knowledge graph."""
+        seed_id = self._resolve(query)
+        if not seed_id:
+            return {"ok": False, "error": "seed not found"}
+        seed_title = seed_id.replace(".md", "").replace("-", " ").title()
+
+        g = self._snapshot()
+        nodes = {n["id"]: n for n in g.get("nodes", [])}
+
+        neighborhood = []
+        neighbor_ids = set()
+        for item in self.get_neighbors(seed_id, "both", depth=depth):
+            nid = item.get("id") or item.get("node_id")
+            if nid and nid != seed_id and nid in nodes:
+                neighborhood.append({
+                    "id": nid,
+                    "title": item.get("title") or nid.replace(".md", "").replace("-", " "),
+                    "depth": item.get("depth", 1),
+                })
+                neighbor_ids.add(nid)
+
+        lateral = []
+        for item in self.graph_enhanced_search(query, top_k=10):
+            lid = item.get("id") or item.get("node_id")
+            if lid and lid in nodes:
+                lateral.append({
+                    "id": lid,
+                    "title": item.get("title") or lid.replace(".md", "").replace("-", " "),
+                    "final_score": item.get("final_score", 0.0),
+                })
+
+        undirected_degree: Dict[str, int] = {nid: 0 for nid in nodes}
+        for e in g.get("edges", []):
+            src, dst = e.get("from"), e.get("to")
+            if src in undirected_degree:
+                undirected_degree[src] += 1
+            if dst in undirected_degree:
+                undirected_degree[dst] += 1
+
+        gaps: List[Dict[str, Any]] = []
+        for nid in neighbor_ids | (neighbor_ids - set()):
+            if not nodes.get(nid):
+                continue
+            reasons: List[str] = []
+            if nid in self.orphan_nodes():
+                reasons.append("orphan")
+            if undirected_degree.get(nid, 0) <= 1:
+                reasons.append("peripheral")
+            if reasons:
+                gaps.append({
+                    "id": nid,
+                    "title": nid.replace(".md", "").replace("-", " "),
+                    "reason": " | ".join(reasons),
+                })
+
+        suggested: List[Dict[str, Any]] = []
+        for item in self.suggest_links(seed_id, top_k=5):
+            suggested.append({
+                "id": item.get("id") or item.get("node_id"),
+                "score": item.get("score", 0.0),
+                "reason": item.get("reason", ""),
+            })
+
+        plan: List[str] = []
+        for item in suggested:
+            sid = item.get("id")
+            if sid:
+                plan.append(f"link seed to {sid}")
+        for item in gaps:
+            plan.append(f"review orphan {item['id']}")
+        for item in lateral:
+            lid = item.get("id")
+            if lid and lid not in neighbor_ids:
+                plan.append(f"explore {lid}")
+
+        return {
+            "ok": True,
+            "seed": seed_id,
+            "seed_title": seed_title,
+            "neighbors": neighborhood,
+            "lateral": lateral[:10],
+            "gaps": gaps,
+            "suggested_links": suggested,
+            "plan": plan,
+        }
+
+    def bridge_topics(self, from_query: str, to_query: str) -> Dict[str, Any]:
+        """Connect two disconnected or weakly connected topics via the graph."""
+        from_id = self._resolve(from_query)
+        to_id = self._resolve(to_query)
+        if not from_id or not to_id:
+            return {"ok": False, "error": "node not found"}
+
+        path = self.shortest_path(from_id, to_id)
+        if path:
+            return {
+                "ok": True,
+                "connected": True,
+                "path": path,
+                "length": len(path) - 1 if len(path) > 1 else 0,
+                "plan": ["Path exists; strengthen intermediate links"],
+            }
+
+        neighbors_from = self.get_neighbors(from_id, "both", depth=2)
+        neighbors_to = self.get_neighbors(to_id, "both", depth=2)
+        ids_from = {item.get("id") or item.get("node_id") for item in neighbors_from}
+        ids_to = {item.get("id") or item.get("node_id") for item in neighbors_to}
+        common = ids_from & ids_to
+
+        bridge_candidates: List[Dict[str, Any]] = []
+        lateral_query = f"{from_query} {to_query}"
+        for item in self.graph_enhanced_search(lateral_query, top_k=10):
+            lid = item.get("id") or item.get("node_id")
+            if lid:
+                bridge_candidates.append({
+                    "id": lid,
+                    "title": item.get("title") or lid.replace(".md", "").replace("-", " "),
+                    "score": item.get("final_score", 0.0),
+                })
+
+        plan: List[str] = []
+        if common:
+            bridge = sorted(common)[0]
+            plan.append(f"link {from_id} and {to_id} via common neighbor {bridge}")
+        elif bridge_candidates:
+            bridge = bridge_candidates[0]["id"]
+            plan.append(f"create link from {from_id} to {bridge}")
+            if len(bridge_candidates) > 1:
+                plan.append(f"create link from {bridge_candidates[1]['id']} to {to_id}")
+            else:
+                plan.append(f"create link from {bridge} to {to_id}")
+
+        return {
+            "ok": True,
+            "connected": False,
+            "path": None,
+            "bridge_candidates": bridge_candidates[:5],
+            "common_neighbors": sorted(common),
+            "plan": plan,
+        }
+
+    def expand_knowledge(self, query: str, top_k: int = 5) -> Dict[str, Any]:
+        """Active expansion: find the most promising node to grow from."""
+        seed_id = self._resolve(query)
+        if not seed_id:
+            return {"ok": False, "error": "seed not found"}
+
+        cluster = self.get_cluster(seed_id, k=top_k * 2)
+        cluster_ids = [item.get("id") or item.get("node_id") for item in cluster if item.get("id") or item.get("node_id")]
+        seen: set = set()
+        expansion_targets: List[Dict[str, Any]] = []
+        for cid in cluster_ids:
+            for item in self.suggest_links(cid, top_k=top_k):
+                target = item.get("id") or item.get("node_id")
+                if target and target != seed_id and target not in seen:
+                    seen.add(target)
+                    expansion_targets.append({
+                        "from": cid,
+                        "to": target,
+                        "reason": item.get("reason", ""),
+                    })
+        plan = [f"link {item['from']} to {item['to']}" for item in expansion_targets[:top_k]]
+        return {
+            "ok": True,
+            "seed": seed_id,
+            "cluster": [{"id": item.get("id") or item.get("node_id"), "score": item.get("score", 0.0)} for item in cluster[: top_k * 2]],
+            "expansion_targets": expansion_targets[:top_k],
+            "plan": plan,
+        }
+
     def path(self, from_id: str, to_id: str, max_depth: int = 10) -> Optional[List[str]]:
         if max_depth < 0:
             return None

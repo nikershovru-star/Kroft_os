@@ -438,8 +438,53 @@ class AgentService:
             })],
         ),
         (
-            r"заметки\s+не\s+связанные\s+с\s+(.+)$",
+            r"notes not linked to (.+)$",
             [("compound_query", lambda m: {"not_linked_to": m.group(1).strip()})],
+        ),
+        # Stage 52: graph-driven workflows (EN + RU)
+        (
+            r"research\s+(.+)$",
+            [("research_topic", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"bridge\s+(.+?)\s+and\s+(.+)$",
+            [("bridge_topics", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"expand\s+(.+)$",
+            [("expand_knowledge", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"connect\s+(.+?)\s+to\s+(.+)$",
+            [("bridge_topics", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"исследовать\s+(.+)$",
+            [("research_topic", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"соединить\s+(.+?)\s+и\s+(.+)$",
+            [("bridge_topics", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"расширить\s+(.+)$",
+            [("expand_knowledge", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"связать\s+(.+?)\s+с\s+(.+)$",
+            [("bridge_topics", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
         ),
         (
             r"cursor\s+position",

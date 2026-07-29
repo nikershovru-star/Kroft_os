@@ -360,6 +360,22 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
         return {"ok": True, "mutations": engine.mutations_since(ts_min)}
     registry.register("mutations_since", _mutations_since, "Graph mutations since timestamp")
 
+    # Stage 52: graph-driven workflows
+    def _research_topic(query: str):
+        return engine.research_topic(query)
+    registry.register("research_topic", _research_topic,
+                      "Research a topic through the knowledge graph (neighbors, gaps, lateral links)")
+
+    def _bridge_topics(from_query: str, to_query: str):
+        return engine.bridge_topics(from_query, to_query)
+    registry.register("bridge_topics", _bridge_topics,
+                      "Bridge two topics via shortest path or common neighbors")
+
+    def _expand_knowledge(query: str):
+        return engine.expand_knowledge(query)
+    registry.register("expand_knowledge", _expand_knowledge,
+                      "Expand knowledge from a seed via cluster analysis and link suggestions")
+
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)
     loader = container.try_resolve("PluginLoader")  # None if no plugins loaded
