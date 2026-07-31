@@ -37,6 +37,17 @@ from .i_memory import (
     MemoryKind,
     ConsolidationReport,
 )
+from .i_workflow import (
+    IPlanner,
+    IExecutor,
+    IReflection,
+    IRetryManager,
+    Workflow,
+    Step,
+    StepStatus,
+    WorkflowStatus,
+    RouterFn,
+)
 
 __all__ = [
     "IService",
@@ -85,4 +96,13 @@ __all__ = [
     "MemoryQuery",
     "MemoryKind",
     "ConsolidationReport",
+    "IPlanner",
+    "IExecutor",
+    "IReflection",
+    "IRetryManager",
+    "Workflow",
+    "Step",
+    "StepStatus",
+    "WorkflowStatus",
+    "RouterFn",
 ]
