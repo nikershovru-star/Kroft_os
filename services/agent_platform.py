@@ -24,6 +24,7 @@ from contracts.i_policy import PolicyContext
 from contracts.i_workflow import IExecutor, IPlanner, StepStatus, Workflow, WorkflowStatus
 from contracts.i_learning import ExecutionTrace, ILearningStore, StepTrace
 from contracts.i_optimization import IOptimizer, Recommendation
+from contracts.i_autonomy import EvaluationReport, IAutonomyController, ISelfEvaluator
 
 # structural router port (LAW 2): a callable, not the concrete Router
 RouterFn = Callable[[ModelQuery], LlmResponse]
@@ -64,6 +65,8 @@ class AgentPlatform(IAgentPlatform):
         policy_engine: object = None,
         learning_store: Optional[ILearningStore] = None,
         optimizer: Optional[IOptimizer] = None,
+        autonomy_controller: Optional[IAutonomyController] = None,
+        self_evaluator: Optional[ISelfEvaluator] = None,
         session_id: Optional[str] = None,
     ) -> None:
         self._planner = planner
@@ -76,6 +79,8 @@ class AgentPlatform(IAgentPlatform):
         self._engine = policy_engine
         self._learning_store = learning_store
         self._optimizer = optimizer
+        self._autonomy_controller = autonomy_controller
+        self._self_evaluator = self_evaluator
         self._session_id = session_id or f"agent:{uuid.uuid4().hex[:8]}"
 
     # --- IAgentPlatform ---------------------------------------------------
@@ -128,6 +133,12 @@ class AgentPlatform(IAgentPlatform):
         #    without an optimizer the run is unchanged.
         if self._optimizer is not None:
             result = self._recommend(result)
+
+        # 9. Autonomy: optional self-initiated retrospective (Wave 14, ADR-017).
+        #    Observe-only: writes an EvaluationReport to autonomy_log, never mutates.
+        #    Requires BOTH an autonomy_controller AND a learning_store (traces source).
+        if self._autonomy_controller is not None:
+            result = self._retrospect(result)
 
         return self._finalize(result, wf)
 
@@ -201,6 +212,30 @@ class AgentPlatform(IAgentPlatform):
         except Exception:
             pass
         return result
+
+    def _retrospect(self, result: AgentResult) -> AgentResult:
+        """Self-initiated retrospective — observe-only (ADR-017 §2).
+
+        Requires a learning_store (the source of traces) AND a self_evaluator
+        (Wave 14 port). If either is absent, the retrospective is skipped
+        (warn, never crash). Produces an EvaluationReport into autonomy_log;
+        NEVER calls ConfigApplier.apply().
+
+        Patterns are NOT needed here: SimpleSelfEvaluator computes metrics from
+        traces (success) + rec_statuses snapshot (drift/yield). The optimizer's
+        `extract` is a separate Wave 12/13 concern and is intentionally not
+        invoked to keep the retrospective observe-only.
+        """
+        if self._learning_store is None or self._self_evaluator is None:
+            return result
+        try:
+            traces = self._learning_store.query("")  # all recent traces
+            if not self._autonomy_controller.should_retrospect(traces, {}):
+                return result
+            report = self._self_evaluator.evaluate(traces, [])
+            return result.with_autonomy(report)
+        except Exception:
+            return result
 
     def _record_trace(self, result: AgentResult, wf: Workflow) -> AgentResult:
         """Build an immutable ExecutionTrace from the completed run (ADR-015 §2).
