@@ -48,6 +48,11 @@ from .i_workflow import (
     WorkflowStatus,
     RouterFn,
 )
+from .i_agent_platform import (
+    IAgentPlatform,
+    AgentResult,
+    AgentStatus,
+)
 
 __all__ = [
     "IService",
@@ -105,4 +110,7 @@ __all__ = [
     "StepStatus",
     "WorkflowStatus",
     "RouterFn",
+    "IAgentPlatform",
+    "AgentResult",
+    "AgentStatus",
 ]
