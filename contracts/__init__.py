@@ -28,6 +28,15 @@ from .i_knowledge import (
     Fact,
     IngestReport,
 )
+from .i_memory import (
+    IMemoryStore,
+    ISemanticMemory,
+    IProceduralMemory,
+    MemoryItem,
+    MemoryQuery,
+    MemoryKind,
+    ConsolidationReport,
+)
 
 __all__ = [
     "IService",
@@ -69,4 +78,11 @@ __all__ = [
     "Hypothesis",
     "Fact",
     "IngestReport",
+    "IMemoryStore",
+    "ISemanticMemory",
+    "IProceduralMemory",
+    "MemoryItem",
+    "MemoryQuery",
+    "MemoryKind",
+    "ConsolidationReport",
 ]
