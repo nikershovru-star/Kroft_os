@@ -8,12 +8,10 @@ to generate Recommendations from Patterns, but is bound by the SAME constraints:
 Every rec still flows through IGuardrail before ConfigApplier (enforced by the
 caller — this adapter only proposes).
 
-v0.1: if no `llm_fn` is supplied, delegates to `PatternBasedOptimizer` as a
-deterministic fallback so the adapter is testable without a live LLM.
-
-LAW 2: imports only contracts.* + stdlib + the sibling concrete optimizer
-(which itself imports only contracts.* — no domain->adapter violation, since an
-*adapter* implementing a port is allowed to know its fallback).
+v0.1: if no `llm_fn` is supplied AND no `fallback` is injected, returns [].
+The fallback is INJECTED by the composition root (e.g. workflow_runner style
+wiring), never imported here — keeping this adapter LAW 2 clean (no sibling
+services imports; only contracts.* + stdlib).
 """
 from __future__ import annotations
 
@@ -27,7 +25,6 @@ from contracts.i_optimization import (
     IOptimizer,
     Recommendation,
 )
-from services.pattern_based_optimizer import PatternBasedOptimizer
 
 
 MIN_CONFIDENCE = 0.7
@@ -49,14 +46,17 @@ class LlmOptimizer(IOptimizer):
         min_confidence: float = MIN_CONFIDENCE,
     ) -> None:
         self._llm_fn = llm_fn
-        self._fallback = fallback or PatternBasedOptimizer()
+        self._fallback = fallback  # injected by composition root; may be None
         self._min_confidence = min_confidence
 
     def recommend(
         self, patterns: List[Pattern], current_config: Dict
     ) -> List[Recommendation]:
         if self._llm_fn is None:
-            # deterministic fallback path (v0.1, no live LLM)
+            # deterministic fallback path (v0.1). The caller injects a concrete
+            # IOptimizer (e.g. PatternBasedOptimizer) via `fallback`.
+            if self._fallback is None:
+                return []
             return self._fallback.recommend(patterns, current_config)
 
         recs: List[Recommendation] = []
