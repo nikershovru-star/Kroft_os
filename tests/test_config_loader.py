@@ -26,7 +26,7 @@ BROKEN = "vault: [unterminated\nautosave_interval: not a number"
 
 
 def test_load_yaml():
-    cfg = ConfigLoader().load("vault", FakeFS({"knowledgeos.yaml": YAML}))
+    cfg = ConfigLoader().load("vault", FakeFS({"kroft_os.yaml": YAML}))
     assert cfg == {
         "vault": ".",
         "autosave_interval": 15,
@@ -36,7 +36,7 @@ def test_load_yaml():
 
 def test_load_json_fallback():
     # No YAML present -> JSON is parsed.
-    cfg = ConfigLoader().load("vault", FakeFS({"knowledgeos.json": JSON}))
+    cfg = ConfigLoader().load("vault", FakeFS({"kroft_os.json": JSON}))
     assert cfg["autosave_interval"] == 15
     assert cfg["vault"] == "."
 
@@ -64,5 +64,5 @@ def test_merge_config_defaults():
 def test_load_invalid_yaml():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        cfg = ConfigLoader().load("vault", FakeFS({"knowledgeos.yaml": BROKEN}))
+        cfg = ConfigLoader().load("vault", FakeFS({"kroft_os.yaml": BROKEN}))
     assert cfg == {}

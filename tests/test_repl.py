@@ -1,6 +1,6 @@
 """Stage 16 - Interactive REPL tests (8).
 
-Drives KnowledgeOSRepl with an injectable line reader (a list of inputs)
+Drives KROFT_OSRepl with an injectable line reader (a list of inputs)
 so the loop runs without real stdin. The Kernel is created ONCE and handed
 to the REPL, proving the kernel lives for the whole session (not rebuilt per
 command).
@@ -27,7 +27,7 @@ from infrastructure import (
 from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter
 from services import VaultStreamCrawler, GraphQueryEngine
-from cli.repl import KnowledgeOSRepl
+from cli.repl import KROFT_OSRepl
 
 
 def _make_vault(tmp_path: Path) -> str:
@@ -64,7 +64,7 @@ def _build_container(vault: str) -> DependencyContainer:
 def _repl_with(kernel, container, inputs):
     """Build a REPL whose reader yields `inputs` then ends via 'exit'."""
     it = iter(inputs)
-    repl = KnowledgeOSRepl(kernel, container, reader=lambda: next(it))
+    repl = KROFT_OSRepl(kernel, container, reader=lambda: next(it))
     return repl
 
 
@@ -150,7 +150,7 @@ def test_repl_help(tmp_path, capsys):
     k.start()
     _repl_with(k, c, ["help", "exit"]).run()
     out = capsys.readouterr().out
-    assert "KnowledgeOS v5 REPL" in out
+    assert "KROFT_OS v5 REPL" in out
     assert "crawl" in out
     assert "query" in out
     assert "backlinks" in out
@@ -181,7 +181,7 @@ def test_repl_keyboard_interrupt(tmp_path):
     def raising_reader():
         raise KeyboardInterrupt()
 
-    repl = KnowledgeOSRepl(k, c, reader=raising_reader)
+    repl = KROFT_OSRepl(k, c, reader=raising_reader)
     repl.run()  # Ctrl+C -> graceful save + stop
     assert k.state.name == "STOPPED"
 

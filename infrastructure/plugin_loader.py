@@ -58,7 +58,7 @@ class PluginLoader:
         return self.plugins
 
     def _load_one(self, name: str, path: str) -> Any:
-        mod_name = f"knowledgeos_plugin_{name[:-3]}"
+        mod_name = f"kroft_os_plugin_{name[:-3]}"
         spec = importlib.util.spec_from_file_location(mod_name, path)
         if spec is None or spec.loader is None:
             raise ImportError(f"cannot build import spec for {path}")

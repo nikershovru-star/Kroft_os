@@ -1,6 +1,6 @@
-"""KnowledgeOS v5 — Config Loader (Stage 15).
+"""KROFT_OS v5 — Config Loader (Stage 15).
 
-Reads ``knowledgeos.yaml`` (preferred) or ``knowledgeos.json`` (fallback) from
+Reads ``kroft_os.yaml`` (preferred) or ``kroft_os.json`` (fallback) from
 the vault root via the ``IFileSystem`` port. Resolves effective configuration
 by merging YAML/JSON with CLI arguments:
 
@@ -36,9 +36,9 @@ from contracts import IFileSystem
 
 # Candidate filenames, in priority order (YAML preferred, JSON fallback).
 _CONFIG_FILENAMES: Tuple[str, ...] = (
-    "knowledgeos.yaml",
-    "knowledgeos.yml",
-    "knowledgeos.json",
+    "kroft_os.yaml",
+    "kroft_os.yml",
+    "kroft_os.json",
 )
 
 # Hardcoded defaults (lowest priority).
@@ -49,7 +49,7 @@ _KNOWN_KEYS = frozenset({"vault", "autosave_interval", "features"})
 
 
 class ConfigLoader:
-    """Loads and merges KnowledgeOS v5 per-vault configuration."""
+    """Loads and merges KROFT_OS v5 per-vault configuration."""
 
     def __init__(
         self,

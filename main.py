@@ -1,4 +1,4 @@
-"""KnowledgeOS v5 entrypoint.
+"""KROFT_OS v5 entrypoint.
 
 Wires concrete adapters through the DI container (the ONLY place adapters are
 referenced) and dispatches CLI commands. Run: `python main.py <command>`.
@@ -18,7 +18,7 @@ from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter
 from adapters.exporters import export_dot, export_json, export_gexf
 from adapters.file_watcher import FileWatcher
-from adapters.http_server import KnowledgeOSServer
+from adapters.http_server import KROFT_OSServer
 from adapters.embedding import MockEmbeddingAdapter
 
 from cli.parser import parse_args
@@ -141,8 +141,8 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
     # the composition root only; cli/ resolves it by name and overrides
     # _host/_port before start() -- cli/ must NOT import adapters directly.
     c.register_factory(
-        "KnowledgeOSServer",
-        lambda: KnowledgeOSServer(c, host="127.0.0.1", port=8080),
+        "KROFT_OSServer",
+        lambda: KROFT_OSServer(c, host="127.0.0.1", port=8080),
     )
     # Stage 25: plugin system. The loader (if any) merges plugin exporters
     # into the container and is itself registered so cli/ can fire hooks
@@ -415,6 +415,47 @@ def _wire_agent(container: DependencyContainer) -> AgentService:
         return engine.merge_nodes(from_node, to_node, dry_run)
     registry.register("merge_nodes", _merge_nodes,
                       "Merge two graph nodes into one")
+
+    # Stage 57–60: graph tools DI
+    registry.register("find_hidden_connections", engine.find_hidden_connections,
+                      "Find hidden connections in graph")
+    registry.register("apply_suggested_link", engine.apply_suggested_link,
+                      "Apply a suggested link between nodes")
+    registry.register("query_dsl", engine.query_dsl,
+                      "Execute a graph query DSL statement")
+    registry.register("rebuild_semantic_index", engine.rebuild_semantic_index,
+                      "Rebuild the semantic search index")
+    registry.register("semantic_search", engine.semantic_search,
+                      "Semantic search across graph nodes")
+    registry.register("semantic_similarity", engine.semantic_similarity,
+                      "Compute semantic similarity between nodes")
+    registry.register("run_maintenance_cycle", engine.run_maintenance_cycle,
+                      "Run graph maintenance cycle")
+    registry.register("get_maintenance_history", engine.get_maintenance_history,
+                      "Get graph maintenance history")
+    registry.register("configure_maintenance", engine.configure_maintenance,
+                      "Configure graph maintenance settings")
+
+    # Stage 62: graph multi-user isolation
+    def _set_user_context(user_id: str, session_id: str):
+        return engine.set_user_context(user_id, session_id)
+    registry.register("set_user_context", _set_user_context,
+                      "Bind session to user")
+
+    def _get_user_context(user_id: str):
+        return engine.get_user_context(user_id)
+    registry.register("get_user_context", _get_user_context,
+                      "Get unified user context")
+
+    def _share_session(from_user: str, to_user: str, session_id: str):
+        return engine.share_session(from_user, to_user, session_id)
+    registry.register("share_session", _share_session,
+                      "Share session with another user")
+
+    def _revoke_session(user_id: str, session_id: str):
+        return engine.revoke_session(user_id, session_id)
+    registry.register("revoke_session", _revoke_session,
+                      "Revoke session access")
 
     session = container.resolve("SessionStore")
     # Stage 40: plugin agent extensions (tools + patterns)

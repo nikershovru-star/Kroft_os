@@ -1,4 +1,4 @@
-"""Interactive REPL for KnowledgeOS v5 (Stage 16).
+"""Interactive REPL for KROFT_OS v5 (Stage 16).
 
 A long-running, line-oriented read-eval-print loop. The Kernel (and therefore
 the whole DI container + services) is created ONCE by ``cmd_repl`` and stays
@@ -36,7 +36,7 @@ if TYPE_CHECKING:  # keep runtime imports minimal + arch-clean
 
 
 # Prompt string shown before each read.
-_PROMPT = "knowledgeos> "
+_PROMPT = "kroft_os> "
 
 # Known command verbs (for help + unknown-command feedback).
 _COMMANDS = (
@@ -89,7 +89,7 @@ def ensure_index(container, vault: str) -> None:  # pragma: no cover - legacy no
     return None
 
 
-class KnowledgeOSRepl:
+class KROFT_OSRepl:
     """Line-oriented REPL driving a single long-lived Kernel instance."""
 
     def __init__(
@@ -543,7 +543,7 @@ class KnowledgeOSRepl:
     def _do_serve(self, args: List[str]) -> None:
         """Start the HTTP server (Stage 22) in a background thread.
 
-        Resolves ``KnowledgeOSServer`` from the DI container by name (cli/
+        Resolves ``KROFT_OSServer`` from the DI container by name (cli/
         never imports adapters directly). The REPL loop keeps running, so
         'stop' / 'exit' leaves the REPL -- it does NOT shut the server down.
         """
@@ -555,7 +555,7 @@ class KnowledgeOSRepl:
                 return
         else:
             port = 8080
-        server = self._container.resolve("KnowledgeOSServer")
+        server = self._container.resolve("KROFT_OSServer")
         server._port = port
         server.start()
         print(
@@ -573,7 +573,7 @@ class KnowledgeOSRepl:
         self._kernel.save()
 
     def _do_help(self) -> None:
-        print("KnowledgeOS v5 REPL -- commands:")
+        print("KROFT_OS v5 REPL -- commands:")
         for name, desc in _COMMANDS:
             print(f"  {name:<22} {desc}")
 
@@ -608,7 +608,7 @@ class KnowledgeOSRepl:
 
     def _print_banner(self) -> None:
         print(
-            "KnowledgeOS v5 interactive REPL. Type 'help' for commands, "
+            "KROFT_OS v5 interactive REPL. Type 'help' for commands, "
             "'exit' to quit.",
             file=sys.stderr,
         )

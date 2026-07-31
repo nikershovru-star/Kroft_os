@@ -1,4 +1,4 @@
-# KnowledgeOS v5
+# KROFT_OS v5
 
 Autonomous Knowledge Operating System — hexagonal-core bootstrap.
 
@@ -247,13 +247,13 @@ python main.py status --vault ./my-vault --autosave 30
 ## STAGE 15 — Config File & Profiles
 
 Закрыто честное ограничение Этапа 13: «Нет конфиг-файла — все параметры через
-CLI args.» Теперь каждый vault может хранить `knowledgeos.yaml` (или `.json`)
+CLI args.» Теперь каждый vault может хранить `kroft_os.yaml` (или `.json`)
 в корне; CLI читает его автоматически, а аргументы командной строки
 переопределяют значения из файла.
 
 - `infrastructure/config_loader.py` — `ConfigLoader`:
-  - `load(vault_path, fs: IFileSystem) -> dict` ищет `knowledgeos.yaml` →
-    `knowledgeos.yml` → `knowledgeos.json` через порт (YAML preferred, JSON
+  - `load(vault_path, fs: IFileSystem) -> dict` ищет `kroft_os.yaml` →
+    `kroft_os.yml` → `kroft_os.json` через порт (YAML preferred, JSON
     fallback). Нет файла → `{}`. Битый/нет файла → `{}` (не падает).
   - `merge_with_cli(cli_args, config) -> dict`: приоритет
     **CLI arg (≠ None) > config > hardcoded default**.
@@ -266,13 +266,13 @@ CLI args.» Теперь каждый vault может хранить `knowledge
   команда: `fs = container.resolve("IFileSystem")` →
   `config = ConfigLoader().load(".", fs)` →
   `effective = ConfigLoader().merge_with_cli(args, config)`.
-  - `init` пишет шаблон `knowledgeos.yaml` (vault, autosave_interval, features).
+  - `init` пишет шаблон `kroft_os.yaml` (vault, autosave_interval, features).
   - `crawl`/`status`/`query` пробрасывают `effective["autosave_interval"]` в Kernel.
 - Конфиг остаётся на уровне CLI — Kernel получает уже готовые параметры
   (не лезет в сервисы/контракты).
 
 ```bash
-python main.py init  --vault ./my-vault      # создаёт knowledgeos.yaml
+python main.py init  --vault ./my-vault      # создаёт kroft_os.yaml
 python main.py crawl --vault ./my-vault       # читает autosave_interval из YAML
 python main.py crawl --vault ./my-vault --autosave 30   # CLI override
 ```
@@ -288,25 +288,25 @@ python main.py crawl --vault ./my-vault --autosave 30   # CLI override
 ## STAGE 16 — Interactive REPL
 
 Закрыто честное ограничение Этапа 13: «Нет интерактивного REPL — только
-batch-команды.» Новый слой `cli/repl.py` — `KnowledgeOSRepl`: долгоживущий
+batch-команды.» Новый слой `cli/repl.py` — `KROFT_OSRepl`: долгоживущий
 построчный REPL-цикл. **Kernel (и DI-контейнер, и общий граф) создаётся ОДИН
 раз** в `cmd_repl` и живёт весь сеанс — он НЕ пересоздаётся на каждую команду
 (доказано `tests/test_repl.py::test_repl_kernel_lifecycle`).
 
 ```bash
 python main.py repl --vault ./my-vault
-knowledgeos> crawl
+kroft_os> crawl
 # -> {"files_scanned": 3, "nodes": 3, "edges": 2}
-knowledgeos> query backlinks "C.md"
+kroft_os> query backlinks "C.md"
 # -> ["A.md"]
-knowledgeos> query path "A.md" "C.md"
+kroft_os> query path "A.md" "C.md"
 # -> ["A.md", "C.md"]
-knowledgeos> query orphans
+kroft_os> query orphans
 # -> []
-knowledgeos> status
+kroft_os> status
 # -> {"state": "RUNNING", "graph_nodes": 3, "graph_edges": 2}
-knowledgeos> save        # форсированный snapshot, Kernel остаётся RUNNING
-knowledgeos> exit        # graceful shutdown (snapshot + stop)
+kroft_os> save        # форсированный snapshot, Kernel остаётся RUNNING
+kroft_os> exit        # graceful shutdown (snapshot + stop)
 ```
 
 Новый публичный метод `Kernel.save()` (Stage 16): best-effort
@@ -411,7 +411,7 @@ python main.py search "hello python" --vault ./my-vault
 # -> ["B.md"]                                # AND: оба слова в одном файле
 
 python main.py repl --vault ./my-vault
-knowledgeos> search hello python
+kroft_os> search hello python
 # -> ["B.md"]
 ```
 
@@ -624,7 +624,7 @@ python main.py watch --vault ./my-vault --interval 1.0 --no-watchdog
 
 ## STAGE 25 — Plugin System (Entry Points)
 
-KnowledgeOS перестаёт быть монолитом и становится платформой: новые форматы
+KROFT_OS перестаёт быть монолитом и становится платформой: новые форматы
 экспорта, CLI-команды и crawl-хуки добавляются **без правки core**.
 
 - `contracts/plugin.py` — порт `IPlugin` (ABC): `register_commands(parser)`,
@@ -685,7 +685,7 @@ python main.py serve --port 8080 --auth admin:secret
 ```
 
 - Login-форма на `/login.html` (POST `/api/login`, JSON `{"user","pass"}`).
-- Session cookie `knowledgeos_session` (HttpOnly, Path=/), токен —
+- Session cookie `kroft_os_session` (HttpOnly, Path=/), токен —
   `secrets.token_hex(32)`; сравнение кредов — `secrets.compare_digest`.
 - Неавторизованный `GET /` → 302 на `/login.html`; все остальные маршруты
   (включая `/static/*`) → 401. Публичны только `/api/login` и `/login.html`.
@@ -763,7 +763,7 @@ python main.py hybrid "how to configure python" --top-k 5
 
 ## STAGE 31 — Desktop Automation
 
-Управление рабочим столом через ядро KnowledgeOS:
+Управление рабочим столом через ядро KROFT_OS:
 
 ```bash
 python main.py desktop click 100 200
@@ -819,7 +819,7 @@ python main.py desktop list_notes "python" --top-k 5
 
 ## STAGE 33 — Hermes Agent: Natural Language Commands
 
-Голосовой/текстовой интерфейс к KnowledgeOS — говоришь естественно, система понимает:
+Голосовой/текстовой интерфейс к KROFT_OS — говоришь естественно, система понимает:
 
 ```bash
 python main.py agent "find python notes"

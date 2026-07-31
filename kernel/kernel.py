@@ -1,4 +1,4 @@
-"""KnowledgeOS v5 Kernel — lifecycle orchestrator.
+"""KROFT_OS v5 Kernel — lifecycle orchestrator.
 
 The kernel owns a single DependencyContainer (the composition root) and
 drives a strict lifecycle state machine. It does NOT import concrete

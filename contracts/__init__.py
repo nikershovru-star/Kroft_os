@@ -1,4 +1,4 @@
-"""KnowledgeOS v5 contracts (ports).
+"""KROFT_OS v5 contracts (ports).
 
 Abstract interfaces that define the system's hexagonal boundaries.
 """

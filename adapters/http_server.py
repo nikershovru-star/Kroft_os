@@ -7,7 +7,7 @@ Architecture contract:
     (adapters may import only contracts + stdlib; here we need no contracts).
   * The server resolves its collaborators (`GraphQueryEngine`, `ContentIndex`)
     from the DI container passed into it by the composition root (main.py),
-    never importing them directly. cli/ also resolves `KnowledgeOSServer` by
+    never importing them directly. cli/ also resolves `KROFT_OSServer` by
     name -- so cli/ never imports this adapter (arch gate: cli -> no adapters).
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ class _Handler(BaseHTTPRequestHandler):
         super().__init__(*args, **kwargs)
 
     # ----- auth (Stage 28) -----
-    _COOKIE_NAME = "knowledgeos_session"
+    _COOKIE_NAME = "kroft_os_session"
 
     @property
     def _auth(self):
@@ -330,7 +330,7 @@ class _Handler(BaseHTTPRequestHandler):
         pass  # suppress default stderr logging
 
 
-class KnowledgeOSServer:
+class KROFT_OSServer:
     """HTTP server wrapper. Runs serve_forever in a daemon thread."""
 
     def __init__(self, container: Any, host: str = "127.0.0.1", port: int = 8080):

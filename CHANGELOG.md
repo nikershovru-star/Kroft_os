@@ -1,4 +1,10 @@
 # Changelog
+## [Unreleased] — Rebrand: KnowledgeOS v5 → KROFT_OS
+- Project renamed from **KnowledgeOS v5** to **KROFT_OS** (brand only; no package
+  import name changed — no `knowledgeos` package existed).
+- `KnowledgeOSServer` → `KROFT_OSServer`; config file `knowledgeos.yaml` → `kroft_os.yaml`.
+- Historical entries below are preserved verbatim.
+
 ## v5.12.0 (Stage 49)
 - Agent Graph Constraints & Auto-Fix NL intents (EN + RU): validate / find broken links / fix graph.
 - `GraphQueryEngine` read-only checks: `validate_graph`, `find_broken_links`, `fix_graph`; DFS cycle detection cap 10.

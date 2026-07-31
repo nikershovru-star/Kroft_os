@@ -42,14 +42,14 @@ def test_e2e_kernel_writes_file_to_disk(project_sandbox):
     # 3. During RUNNING, resolve IFileSystem from container and write
     fs_resolved = container.resolve("IFileSystem")
     assert isinstance(fs_resolved, IFileSystem)
-    assert fs_resolved.write_content("e2e.txt", "KnowledgeOS v5 OK") is True
+    assert fs_resolved.write_content("e2e.txt", "KROFT_OS v5 OK") is True
 
     # 4. File REALLY exists on disk at an absolute path
     abs_path = (project_sandbox / "e2e.txt").resolve()
     assert os.path.isabs(str(abs_path))
     assert os.path.exists(str(abs_path)) is True
     with open(str(abs_path), "r", encoding="utf-8") as fh:
-        assert fh.read() == "KnowledgeOS v5 OK"
+        assert fh.read() == "KROFT_OS v5 OK"
 
     # 5. CapabilityRegistry in container is the SAME singleton the kernel uses
     assert kernel.wired["ICapabilityRegistry"] is registry

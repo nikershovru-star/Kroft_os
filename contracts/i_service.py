@@ -1,6 +1,6 @@
 """Core service port (Hexagonal Architecture).
 
-Every domain capability in KnowledgeOS is expressed as an IService.
+Every domain capability in KROFT_OS is expressed as an IService.
 Adapters and concrete implementations depend on this abstraction, never
 the other way around.
 """

@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 
 def export_dot(graph: Dict[str, Any]) -> str:
     """Render a graph dict as a Graphviz ``digraph`` in DOT syntax."""
-    lines = ["digraph KnowledgeOS {"]
+    lines = ["digraph KROFT_OS {"]
     for n in graph.get("nodes", []):
         label = (n.get("label") or n["id"]).replace('"', '\\"')
         lines.append(f'  "{n["id"]}" [label="{label}"];')

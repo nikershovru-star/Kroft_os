@@ -28,7 +28,7 @@ from infrastructure import (
 )
 from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter
-from adapters.http_server import KnowledgeOSServer
+from adapters.http_server import KROFT_OSServer
 
 
 # ------------------------------------------------------------------- helpers
@@ -44,7 +44,7 @@ def _wait_ready(host, port, timeout=5.0):
 
 
 def _start_server(container, port=0):
-    server = KnowledgeOSServer(container, host="127.0.0.1", port=port)
+    server = KROFT_OSServer(container, host="127.0.0.1", port=port)
     server.start()
     _wait_ready("127.0.0.1", server.port)
     return server

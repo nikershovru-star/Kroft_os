@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 # Make the project importable when run directly.
-ROOT = r"C:\Users\Nikita\Documents\Obsidian Vault\02-Projects\KnowledgeOS-v5"
+ROOT = r"C:\Users\Nikita\Documents\Obsidian Vault\02-Projects\KROFT_OS"
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 

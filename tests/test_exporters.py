@@ -32,7 +32,7 @@ _SAMPLE = {
 def test_export_dot_basic():
     """DOT contains a digraph, both nodes, and the labeled edge."""
     out = export_dot(_SAMPLE)
-    assert out.startswith("digraph KnowledgeOS {")
+    assert out.startswith("digraph KROFT_OS {")
     assert '"A.md" [label="Alpha"];' in out
     # Quotes in the label must be escaped.
     assert '"B.md" [label="Qu\\"ote"];' in out
@@ -43,7 +43,7 @@ def test_export_dot_basic():
 def test_export_dot_empty():
     """Empty graph -> valid empty digraph."""
     out = export_dot({"nodes": [], "edges": []})
-    assert out == "digraph KnowledgeOS {\n}"
+    assert out == "digraph KROFT_OS {\n}"
 
 
 def test_export_json_roundtrip():

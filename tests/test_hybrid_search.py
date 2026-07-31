@@ -27,7 +27,7 @@ from infrastructure import (
 )
 from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter, MockEmbeddingAdapter
-from adapters.http_server import KnowledgeOSServer
+from adapters.http_server import KROFT_OSServer
 
 
 # ------------------------------------------------------------------- helpers
@@ -43,7 +43,7 @@ def _wait_ready(host, port, timeout=5.0):
 
 
 def _start_server(container, port=0):
-    server = KnowledgeOSServer(container, host="127.0.0.1", port=port)
+    server = KROFT_OSServer(container, host="127.0.0.1", port=port)
     server.start()
     _wait_ready("127.0.0.1", server.port)
     return server
@@ -183,7 +183,7 @@ class TestRRF:
 
     def test_hybrid_repl_dispatch(self):
         """REPL 'hybrid python' calls engine.hybrid_search and prints JSON."""
-        from cli.repl import KnowledgeOSRepl
+        from cli.repl import KROFT_OSRepl
         from services import ContentIndex
         c = DependencyContainer()
         c.register_instance("IGraphBuilder", InMemoryGraphBuilder())
@@ -201,7 +201,7 @@ class TestRRF:
                 embedding=c.resolve("Embedding"),
             ),
         )
-        repl = KnowledgeOSRepl.__new__(KnowledgeOSRepl)
+        repl = KROFT_OSRepl.__new__(KROFT_OSRepl)
         repl._container = c
         # capture printed output
         import io

@@ -1,4 +1,4 @@
-"""Task Scheduler — cron-like job runner for KnowledgeOS (Stage 35 + 38)."""
+"""Task Scheduler — cron-like job runner for KROFT_OS (Stage 35 + 38)."""
 from __future__ import annotations
 
 import json

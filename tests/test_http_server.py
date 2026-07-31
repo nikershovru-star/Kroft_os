@@ -1,6 +1,6 @@
 """Stage 22 - HTTP server adapter tests (15).
 
-Drives the stdlib-only ``KnowledgeOSServer`` over real TCP:
+Drives the stdlib-only ``KROFT_OSServer`` over real TCP:
   * exercise every API route (/api/search, /api/fuzzy, /api/suggest,
     /api/graph, /api/node, POST /api/crawl) and static serving,
   * assert CORS header, path-traversal guard, 404s, port binding,
@@ -30,7 +30,7 @@ from infrastructure import (
 from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter
 from services import VaultStreamCrawler, GraphQueryEngine, ContentIndex
-from adapters.http_server import KnowledgeOSServer
+from adapters.http_server import KROFT_OSServer
 
 
 # --------------------------------------------------------------------------
@@ -79,8 +79,8 @@ def _crawl(container: DependencyContainer) -> None:
     asyncio.run(crawler.crawl())
 
 
-def _start_server(container: DependencyContainer, port: int = 0) -> KnowledgeOSServer:
-    server = KnowledgeOSServer(container, host="127.0.0.1", port=port)
+def _start_server(container: DependencyContainer, port: int = 0) -> KROFT_OSServer:
+    server = KROFT_OSServer(container, host="127.0.0.1", port=port)
     server.start()
     _wait_ready("127.0.0.1", server.port)
     return server
@@ -221,7 +221,7 @@ def test_static_index_html(tmp_path):
         assert r.status == 200
         html = r.read().decode("utf-8")
         assert "<html" in html
-        assert "KnowledgeOS" in html
+        assert "KROFT_OS" in html
     finally:
         server.stop()
 
@@ -252,7 +252,7 @@ def test_cors_header(tmp_path):
 # 10. start/stop lifecycle
 def test_server_start_stop(tmp_path):
     c = _build_container(_make_vault(tmp_path))
-    server = KnowledgeOSServer(c, host="127.0.0.1", port=0)
+    server = KROFT_OSServer(c, host="127.0.0.1", port=0)
     assert server._server is None
     server.start()
     assert server._server is not None
@@ -280,7 +280,7 @@ def test_server_port_binding(tmp_path):
         sock.listen(1)
         occupied_port = sock.getsockname()[1]
         c = _build_container(_make_vault(tmp_path))
-        server = KnowledgeOSServer(c, host="127.0.0.1", port=occupied_port)
+        server = KROFT_OSServer(c, host="127.0.0.1", port=occupied_port)
         with pytest.raises(OSError):
             server.start()
         # The port must remain reported as the requested one (no silent remap).
@@ -315,7 +315,7 @@ def test_cli_serve(tmp_path, monkeypatch):
             self._stopped = True
 
     fake = FakeServer()
-    c.register_instance("KnowledgeOSServer", fake)
+    c.register_instance("KROFT_OSServer", fake)
 
     # Make the serve loop exit immediately on the first sleep (simulated Ctrl-C).
     monkeypatch.setattr(time, "sleep", lambda *_a, **_k: (_ for _ in ()).throw(KeyboardInterrupt))
@@ -331,7 +331,7 @@ def test_cli_serve(tmp_path, monkeypatch):
 # 13. REPL `serve` verb does not crash
 def test_repl_serve_verb(tmp_path):
     from kernel import Kernel
-    from cli.repl import KnowledgeOSRepl
+    from cli.repl import KROFT_OSRepl
 
     vault = _make_vault(tmp_path)
     c = _build_container(vault)
@@ -350,13 +350,13 @@ def test_repl_serve_verb(tmp_path):
             self._started = True
 
     fake = FakeServer()
-    c.register_instance("KnowledgeOSServer", fake)
+    c.register_instance("KROFT_OSServer", fake)
 
     k = Kernel(c)
     k.initialize()
     k.start()
     it = iter(["serve 9999", "exit"])
-    KnowledgeOSRepl(k, c, reader=lambda: next(it)).run()
+    KROFT_OSRepl(k, c, reader=lambda: next(it)).run()
     assert fake._started is True
     assert k.state.name == "STOPPED"
 

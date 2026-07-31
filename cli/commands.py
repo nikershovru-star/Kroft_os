@@ -4,7 +4,7 @@ Each command owns its Kernel lifecycle: build (or receive) a DI container,
 drive Kernel init -> start -> stop, print a JSON result to stdout. There is NO
 long-running daemon -- every invocation spins the Kernel up and tears it down.
 
-Stage 15: every command first loads ``knowledgeos.yaml`` (or .json) from the
+Stage 15: every command first loads ``kroft_os.yaml`` (or .json) from the
 vault via the ``IFileSystem`` port and merges it with CLI args, so the config
 file closes the historical limitation "no config file -- all params via CLI".
 cli/ never imports adapters directly; it resolves ports through the container.
@@ -21,11 +21,11 @@ from typing import Optional
 from kernel import Kernel
 from infrastructure import ConfigLoader
 from services import VaultStreamCrawler, GraphQueryEngine
-from cli.repl import KnowledgeOSRepl
+from cli.repl import KROFT_OSRepl
 
 # Template written by `init` if no config exists yet.
 _CONFIG_TEMPLATE = """\
-# KnowledgeOS v5 Configuration
+# KROFT_OS v5 Configuration
 vault: .  # relative to this file's directory (the vault root)
 autosave_interval: 60  # seconds; 0 to disable periodic autosave
 features:
@@ -54,12 +54,12 @@ def _resolve_config(args, container) -> dict:
 
 
 def cmd_init(args, container: Optional[object] = None) -> None:
-    """Create <vault>/ and <vault>/data/ and a knowledgeos.yaml template."""
+    """Create <vault>/ and <vault>/data/ and a kroft_os.yaml template."""
     vault = args.vault or "."
     os.makedirs(vault, exist_ok=True)
     data_dir = os.path.join(vault, "data")
     os.makedirs(data_dir, exist_ok=True)
-    config_path = os.path.join(vault, "knowledgeos.yaml")
+    config_path = os.path.join(vault, "kroft_os.yaml")
     if not os.path.exists(config_path):
         with open(config_path, "w", encoding="utf-8") as fh:
             fh.write(_CONFIG_TEMPLATE)
@@ -365,7 +365,7 @@ def cmd_repl(args, container) -> None:
     """Launch the interactive REPL (Stage 16).
 
     The Kernel is created ONCE, initialized + started, and handed to a
-    ``KnowledgeOSRepl`` that drives it for the whole session. Every REPL
+    ``KROFT_OSRepl`` that drives it for the whole session. Every REPL
     command resolves services from the SAME container, so the kernel (and the
     shared graph) never gets rebuilt between commands. On REPL exit the kernel
     is stopped (which snapshots the graph) -- closing the Stage-13 limitation
@@ -379,7 +379,7 @@ def cmd_repl(args, container) -> None:
     # Kernel.initialize() (cold start is O(1), no vault re-read). The old
     # Stage-18 ensure_index() rebuild was removed.
     try:
-        KnowledgeOSRepl(k, container).run()
+        KROFT_OSRepl(k, container).run()
     finally:
         # Guarantee shutdown even if the REPL loop propagates unexpectedly.
         k.stop()
@@ -446,7 +446,7 @@ def cmd_serve(args, container) -> None:
     """Start the HTTP server for the web UI (Stage 22).
 
     Builds a Kernel (restores graph/index from snapshot), starts it, then
-    resolves the ``KnowledgeOSServer`` adapter from the DI container (cli/
+    resolves the ``KROFT_OSServer`` adapter from the DI container (cli/
     must NOT import adapters directly -- arch gate) and runs its serve_forever
     loop on a daemon thread while the main thread sleeps until Ctrl+C.
 
@@ -461,7 +461,7 @@ def cmd_serve(args, container) -> None:
     k.start()
     atexit.register(lambda: k.stop())
 
-    server = container.resolve("KnowledgeOSServer")
+    server = container.resolve("KROFT_OSServer")
     # Stage 28: optional basic auth. Registered into DI here (composition
     # concern) — the adapter resolves "AuthService" per-request; without
     # --auth nothing is registered and the server behaves exactly as Stage 22.

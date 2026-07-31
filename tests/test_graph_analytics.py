@@ -24,7 +24,7 @@ from infrastructure import (
 )
 from runtime import CapabilityRegistry
 from services import GraphQueryEngine, ContentIndex
-from adapters.http_server import KnowledgeOSServer
+from adapters.http_server import KROFT_OSServer
 
 
 def _engine(edges=(), nodes=()):
@@ -112,7 +112,7 @@ def test_api_stats_endpoints():
     c.register_instance("ICapabilityRegistry", CapabilityRegistry())
     c.register_instance("ContentIndex", ContentIndex())
     c.register_factory("GraphQueryEngine", lambda: GraphQueryEngine(g))
-    server = KnowledgeOSServer(c, host="127.0.0.1", port=0)
+    server = KROFT_OSServer(c, host="127.0.0.1", port=0)
     server.start()
     try:
         _wait_ready("127.0.0.1", server.port)

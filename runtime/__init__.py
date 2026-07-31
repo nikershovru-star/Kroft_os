@@ -1,4 +1,4 @@
-"""KnowledgeOS v5 runtime context."""
+"""KROFT_OS v5 runtime context."""
 from .capability_registry import CapabilityRegistry
 from .context import RuntimeContext
 

@@ -1,6 +1,6 @@
 """IPlugin — plugin extension port (Stage 25).
 
-KnowledgeOS stops being a monolith: third-party code can add CLI commands,
+KROFT_OS stops being a monolith: third-party code can add CLI commands,
 graph exporters and crawl hooks WITHOUT touching main.py / cli/commands.py.
 
 Convention (enforced by infrastructure.PluginLoader):
@@ -56,7 +56,7 @@ class IPlugin(abc.ABC):
 
 
 class Plugin:
-    """Base class for KnowledgeOS plugins (Stage 40: agent extension hooks).
+    """Base class for KROFT_OS plugins (Stage 40: agent extension hooks).
 
     Concrete (non-abstract) so plugin authors may subclass and override only
     the hooks they need. Runtime imports are avoided (stdlib-only contract):

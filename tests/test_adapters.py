@@ -27,9 +27,9 @@ def test_adapter_implements_ifilesystem(fs_adapter):
 
 
 def test_write_then_read_roundtrip(fs_adapter):
-    ok = fs_adapter.write_content("doc/note.md", "KnowledgeOS v5 OK")
+    ok = fs_adapter.write_content("doc/note.md", "KROFT_OS v5 OK")
     assert ok is True
-    assert fs_adapter.read_content("doc/note.md") == "KnowledgeOS v5 OK"
+    assert fs_adapter.read_content("doc/note.md") == "KROFT_OS v5 OK"
 
 
 def test_exists_after_write_and_delete(fs_adapter):

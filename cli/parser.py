@@ -1,4 +1,4 @@
-"""CLI argument parser (argparse) for KnowledgeOS v5."""
+"""CLI argument parser (argparse) for KROFT_OS v5."""
 import argparse
 import sys
 
@@ -6,7 +6,7 @@ import sys
 def build_parser(loader=None) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="main.py",
-        description="KnowledgeOS v5 -- knowledge operating system CLI",
+        description="KROFT_OS v5 -- knowledge operating system CLI",
     )
     # Stage 25: plugin directory. Parsed twice: pre-scanned in main() (before
     # this parser exists, so plugins can add subcommands) and declared here
@@ -17,18 +17,18 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
 
     pi = sub.add_parser("init", help="Create data/ and vault/ directory structure")
     pi.add_argument("--vault", default=None,
-                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+                    help="Path to the vault directory (or read from kroft_os.yaml)")
 
     pc = sub.add_parser("crawl", help="Crawl a Vault and build the knowledge graph")
     pc.add_argument("--vault", default=None,
-                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+                    help="Path to the vault directory (or read from kroft_os.yaml)")
     pc.add_argument("--autosave", type=float, default=None,
                     help="Graph autosave interval in seconds (default 60; 0 disables; "
-                         "overrides knowledgeos.yaml)")
+                         "overrides kroft_os.yaml)")
 
     pq = sub.add_parser("query", help="Query the knowledge graph")
     pq.add_argument("--vault", default=None,
-                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+                    help="Path to the vault directory (or read from kroft_os.yaml)")
     pq.add_argument("--backlinks", metavar="ID", help="Nodes that link TO <ID>")
     pq.add_argument("--path", nargs=2, metavar=("FROM", "TO"),
                     help="Shortest path FROM -> TO (BFS)")
@@ -51,23 +51,23 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     )
     pse.add_argument(
         "--vault", default=None,
-        help="Path to the vault directory (or read from knowledgeos.yaml)",
+        help="Path to the vault directory (or read from kroft_os.yaml)",
     )
 
     ps = sub.add_parser("status", help="Show kernel state and graph size")
     ps.add_argument("--vault", default=None,
-                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+                    help="Path to the vault directory (or read from kroft_os.yaml)")
     ps.add_argument("--autosave", type=float, default=None,
                     help="Graph autosave interval in seconds (default 60; 0 disables; "
-                         "overrides knowledgeos.yaml)")
+                         "overrides kroft_os.yaml)")
 
     pst = sub.add_parser("stop", help="Graceful shutdown (pid-file only; no daemon)")
     pst.add_argument("--vault", default=None,
-                     help="Path to the vault directory (or read from knowledgeos.yaml)")
+                     help="Path to the vault directory (or read from kroft_os.yaml)")
 
     pr = sub.add_parser("repl", help="Interactive REPL (kernel lives for the session)")
     pr.add_argument("--vault", default=None,
-                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+                    help="Path to the vault directory (or read from kroft_os.yaml)")
 
     pex = sub.add_parser("export", help="Export graph to dot/json/gexf (Stage 23; plugins may add formats)")
     pex.add_argument("--format", default="json",
@@ -76,11 +76,11 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     pex.add_argument("--output", default="-",
                      help="Output file path ('-' for stdout)")
     pex.add_argument("--vault", default=None,
-                     help="Path to the vault directory (or read from knowledgeos.yaml)")
+                     help="Path to the vault directory (or read from kroft_os.yaml)")
 
     pw = sub.add_parser("watch", help="Watch a vault and auto-recrawl on .md change (Stage 27)")
     pw.add_argument("--vault", default=None,
-                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+                    help="Path to the vault directory (or read from kroft_os.yaml)")
     pw.add_argument("--interval", type=float, default=2.0,
                     help="Polling interval in seconds (default 2.0; ignored if watchdog active)")
     pw.add_argument("--no-watchdog", action="store_true",
@@ -95,7 +95,7 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     psv.add_argument("--port", type=int, default=8080,
                      help="Bind port (default 8080)")
     psv.add_argument("--vault", default=None,
-                     help="Path to the vault directory (or read from knowledgeos.yaml)")
+                     help="Path to the vault directory (or read from kroft_os.yaml)")
     psv.add_argument("--auth", default=None,
                      help='Basic auth "user:pass" for the web UI (Stage 28)')
 
@@ -104,14 +104,14 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     psm.add_argument("--top-k", type=int, default=10,
                      help="Number of nearest results (default 10)")
     psm.add_argument("--vault", default=None,
-                     help="Path to the vault directory (or read from knowledgeos.yaml)")
+                     help="Path to the vault directory (or read from kroft_os.yaml)")
 
     ph = sub.add_parser("hybrid", help="Hybrid lexical+semantic search (Stage 30)")
     ph.add_argument("query", nargs="+", help="Query text")
     ph.add_argument("--top-k", type=int, default=10,
                     help="Number of results (default 10)")
     ph.add_argument("--vault", default=None,
-                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+                    help="Path to the vault directory (or read from kroft_os.yaml)")
 
     pd = sub.add_parser("desktop", help="Desktop automation (Stage 31/32)")
     pd.add_argument("action", choices=["click", "type", "screenshot", "cursor", "open", "open_note", "list_notes"],
@@ -121,7 +121,7 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     pd.add_argument("--top-k", type=int, default=None,
                     help="top-k for open_note / list_notes (default 1/5)")
     pd.add_argument("--vault", default=None,
-                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+                    help="Path to the vault directory (or read from kroft_os.yaml)")
 
     pa = sub.add_parser("agent", help="Hermes agent: natural language command (Stage 33)")
     pa.add_argument("text", nargs="*", help="Natural language command")
@@ -140,7 +140,7 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     pa.add_argument("--continue-on-error", action="store_true",
                     help="Continue batch on step failure (Stage 42)")
     pa.add_argument("--vault", default=None,
-                    help="Path to the vault directory (or read from knowledgeos.yaml)")
+                    help="Path to the vault directory (or read from kroft_os.yaml)")
 
     psch = sub.add_parser("schedule", help="Task scheduler (Stage 35)")
     psch.add_argument("action", choices=["add", "list", "cancel", "start", "stop", "history"],
@@ -154,7 +154,7 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     psch.add_argument("--id", default=None,
                       help="Job ID (for cancel)")
     psch.add_argument("--vault", default=None,
-                      help="Path to the vault directory (or read from knowledgeos.yaml)")
+                      help="Path to the vault directory (or read from kroft_os.yaml)")
 
     # Stage 25: plugins add their own subcommands LAST (they can never
     # displace a built-in: argparse raises on duplicate names and the loader
