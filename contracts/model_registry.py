@@ -26,13 +26,13 @@ class ModelRegistry(IModelMetadata):
         for m in source.catalog():
             self._by_id[m.id] = m
 
+    def register_model(self, model: ModelInfo) -> None:
+        """Directly declare a model (hand-built catalog, no adapter needed)."""
+        self._by_id[model.id] = model
+
     def catalog(self) -> List[ModelInfo]:
-        # de-dup by id, last registration wins on conflict
-        seen: Dict[str, ModelInfo] = {}
-        for src in self._sources:
-            for m in src.catalog():
-                seen[m.id] = m
-        return list(seen.values())
+        # single source of truth is _by_id (filled by register_source + register_model)
+        return list(self._by_id.values())
 
     def capabilities(self, model_id: str) -> Optional[ModelInfo]:
         return self._by_id.get(model_id)
