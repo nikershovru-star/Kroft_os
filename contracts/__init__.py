@@ -16,6 +16,7 @@ from .agent import IAgent, Tool
 from .i_llm import ILlm, IModelMetadata, IHealth, ModelQuery, LlmResponse, ModelInfo
 from .model_registry import ModelRegistry
 from .i_policy import IPolicy, PolicyContext, PolicyDecision, CallRecord
+from .i_eval import IEvaluator, IBenchmark, IScorecard, Task, Metric, Scorecard, TaskCategory
 
 __all__ = [
     "IService",
@@ -41,4 +42,11 @@ __all__ = [
     "PolicyContext",
     "PolicyDecision",
     "CallRecord",
+    "IEvaluator",
+    "IBenchmark",
+    "IScorecard",
+    "Task",
+    "Metric",
+    "Scorecard",
+    "TaskCategory",
 ]
