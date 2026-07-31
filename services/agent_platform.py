@@ -14,6 +14,7 @@ Boundaries (LAW 2):
 """
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Any, Callable, List, Optional
 
@@ -21,6 +22,7 @@ from contracts.i_agent_platform import AgentResult, AgentStatus, IAgentPlatform
 from contracts.i_llm import LlmResponse, ModelQuery
 from contracts.i_policy import PolicyContext
 from contracts.i_workflow import IExecutor, IPlanner, StepStatus, Workflow, WorkflowStatus
+from contracts.i_learning import ExecutionTrace, ILearningStore, StepTrace
 
 # structural router port (LAW 2): a callable, not the concrete Router
 RouterFn = Callable[[ModelQuery], LlmResponse]
@@ -59,6 +61,7 @@ class AgentPlatform(IAgentPlatform):
         evaluator: object = None,
         tools: ToolHandler = None,
         policy_engine: object = None,
+        learning_store: Optional[ILearningStore] = None,
         session_id: Optional[str] = None,
     ) -> None:
         self._planner = planner
@@ -69,6 +72,7 @@ class AgentPlatform(IAgentPlatform):
         self._evaluator = evaluator
         self._tools = tools
         self._engine = policy_engine
+        self._learning_store = learning_store
         self._session_id = session_id or f"agent:{uuid.uuid4().hex[:8]}"
 
     # --- IAgentPlatform ---------------------------------------------------
@@ -110,6 +114,11 @@ class AgentPlatform(IAgentPlatform):
         # 6. Tools: optional delegation (Stage 33)
         if self._tools is not None:
             result = self._delegate_tools(result, goal)
+
+        # 7. Learning: record an immutable ExecutionTrace for later analysis
+        #    (Wave 12, ADR-015). Optional — never breaks the run when absent.
+        if self._learning_store is not None:
+            self._record_trace(result, wf)
 
         return self._finalize(result, wf)
 
@@ -168,6 +177,43 @@ class AgentPlatform(IAgentPlatform):
             plan = out.get("plan") or out.get("results")
             return f"tool ok: {plan}"
         return f"tool: {out}"
+
+    def _record_trace(self, result: AgentResult, wf: Workflow) -> AgentResult:
+        """Build an immutable ExecutionTrace from the completed run (ADR-015 §2).
+
+        Best-effort: recording must never fail the agent run. Steps carry the
+        actual model via `route_used` and the quality signal via
+        `reflection_score` (surfaced as `eval_score`).
+        """
+        try:
+            steps = tuple(
+                StepTrace(
+                    step_id=s.id,
+                    model_id=s.route_used or "unknown",
+                    prompt=getattr(s, "task", ""),
+                    output=s.output,
+                    tools_used=(),
+                    cost=0.0,  # cost not tracked per-step in v0.1 (Wave 13)
+                    latency_ms=0.0,  # latency not tracked per-step in v0.1
+                    eval_score=s.reflection_score,
+                )
+                for s in wf.plan
+            )
+            trace = ExecutionTrace(
+                trace_id=f"trace:{uuid.uuid4().hex[:12]}",
+                goal=wf.goal,
+                workflow_id=wf.id,
+                steps=steps,
+                total_cost=0.0,
+                total_latency_ms=0.0,
+                final_status=wf.status,
+                timestamp=time.time(),
+                tags=(wf.status,),
+            )
+            self._learning_store.record(trace)
+        except Exception:
+            pass
+        return result
 
     def _finalize(self, result: AgentResult, wf: Workflow) -> AgentResult:
         # attach the (possibly failed) workflow to the result for full traceability
