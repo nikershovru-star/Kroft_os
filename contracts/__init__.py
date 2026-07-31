@@ -17,6 +17,17 @@ from .i_llm import ILlm, IModelMetadata, IHealth, ModelQuery, LlmResponse, Model
 from .model_registry import ModelRegistry
 from .i_policy import IPolicy, PolicyContext, PolicyDecision, CallRecord
 from .i_eval import IEvaluator, IBenchmark, IScorecard, Task, Metric, Scorecard, TaskCategory
+from .i_knowledge import (
+    IKnowledgeGraph,
+    IEntityExtractor,
+    IValidator,
+    IFactChecker,
+    Entity,
+    Relation,
+    Hypothesis,
+    Fact,
+    IngestReport,
+)
 
 __all__ = [
     "IService",
@@ -49,4 +60,13 @@ __all__ = [
     "Metric",
     "Scorecard",
     "TaskCategory",
+    "IKnowledgeGraph",
+    "IEntityExtractor",
+    "IValidator",
+    "IFactChecker",
+    "Entity",
+    "Relation",
+    "Hypothesis",
+    "Fact",
+    "IngestReport",
 ]
