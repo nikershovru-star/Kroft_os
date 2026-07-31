@@ -61,6 +61,13 @@ from .i_optimization import (
     IOptimizer,
     IGuardrail,
 )
+from .i_autonomy import (
+    EvaluationReport,
+    DocSyncResult,
+    IAutonomyController,
+    ISelfEvaluator,
+    IDocMaintainer,
+)
 from .i_agent_platform import (
     IAgentPlatform,
     AgentResult,
@@ -119,6 +126,11 @@ __all__ = [
     "GuardrailResult",
     "IOptimizer",
     "IGuardrail",
+    "EvaluationReport",
+    "DocSyncResult",
+    "IAutonomyController",
+    "ISelfEvaluator",
+    "IDocMaintainer",
     "MemoryItem",
     "MemoryQuery",
     "MemoryKind",

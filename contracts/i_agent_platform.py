@@ -28,6 +28,7 @@ from typing import Optional, Tuple
 from contracts.i_policy import PolicyContext
 from contracts.i_workflow import Workflow
 from contracts.i_optimization import Recommendation
+from contracts.i_autonomy import EvaluationReport
 
 
 class AgentStatus:
@@ -59,6 +60,7 @@ class AgentResult:
     tool_results: Tuple[str, ...] = ()
     error: str = ""
     optimization_recommendations: Tuple["Recommendation", ...] = ()  # Wave 13: observe-only
+    autonomy_log: Tuple["EvaluationReport", ...] = ()  # Wave 14: observe-only
 
     def with_memory(self, *refs: str) -> "AgentResult":
         return self.__class__(**{**self.__dict__, "memory_refs": self.memory_refs + tuple(refs)})
@@ -77,6 +79,9 @@ class AgentResult:
 
     def with_optimization(self, *recs: "Recommendation") -> "AgentResult":
         return self.__class__(**{**self.__dict__, "optimization_recommendations": self.optimization_recommendations + tuple(recs)})
+
+    def with_autonomy(self, *reports: "EvaluationReport") -> "AgentResult":
+        return self.__class__(**{**self.__dict__, "autonomy_log": self.autonomy_log + tuple(reports)})
 
     def with_status(self, status: str, error: str = "") -> "AgentResult":
         return self.__class__(**{**self.__dict__, "status": status, "error": error})
