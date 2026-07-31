@@ -37,8 +37,9 @@ class MemoryKind:
     SEMANTIC = "semantic"
     PROCEDURAL = "procedural"
     CONSOLIDATED = "consolidated"
+    LEARNING = "learning"  # Wave 12: ExecutionTrace audit records (ADR-015)
 
-    ALL = (WORKING, SESSION, LONG_TERM, SEMANTIC, PROCEDURAL, CONSOLIDATED)
+    ALL = (WORKING, SESSION, LONG_TERM, SEMANTIC, PROCEDURAL, CONSOLIDATED, LEARNING)
 
 
 # --------------------------------------------------------------------------
