@@ -55,6 +55,12 @@ from .i_learning import (
     ILearningStore,
     IPatternExtractor,
 )
+from .i_optimization import (
+    Recommendation,
+    GuardrailResult,
+    IOptimizer,
+    IGuardrail,
+)
 from .i_agent_platform import (
     IAgentPlatform,
     AgentResult,
@@ -109,6 +115,10 @@ __all__ = [
     "Pattern",
     "ILearningStore",
     "IPatternExtractor",
+    "Recommendation",
+    "GuardrailResult",
+    "IOptimizer",
+    "IGuardrail",
     "MemoryItem",
     "MemoryQuery",
     "MemoryKind",

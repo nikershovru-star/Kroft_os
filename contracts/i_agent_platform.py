@@ -27,6 +27,7 @@ from typing import Optional, Tuple
 
 from contracts.i_policy import PolicyContext
 from contracts.i_workflow import Workflow
+from contracts.i_optimization import Recommendation
 
 
 class AgentStatus:
@@ -57,6 +58,7 @@ class AgentResult:
     route_log: Tuple[str, ...] = ()
     tool_results: Tuple[str, ...] = ()
     error: str = ""
+    optimization_recommendations: Tuple["Recommendation", ...] = ()  # Wave 13: observe-only
 
     def with_memory(self, *refs: str) -> "AgentResult":
         return self.__class__(**{**self.__dict__, "memory_refs": self.memory_refs + tuple(refs)})
@@ -72,6 +74,9 @@ class AgentResult:
 
     def with_tools(self, *results: str) -> "AgentResult":
         return self.__class__(**{**self.__dict__, "tool_results": self.tool_results + tuple(results)})
+
+    def with_optimization(self, *recs: "Recommendation") -> "AgentResult":
+        return self.__class__(**{**self.__dict__, "optimization_recommendations": self.optimization_recommendations + tuple(recs)})
 
     def with_status(self, status: str, error: str = "") -> "AgentResult":
         return self.__class__(**{**self.__dict__, "status": status, "error": error})
