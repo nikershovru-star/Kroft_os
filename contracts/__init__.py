@@ -13,6 +13,8 @@ from .plugin import IPlugin
 from .embedding import IEmbedding
 from .desktop import IDesktop
 from .agent import IAgent, Tool
+from .i_llm import ILlm, IModelMetadata, IHealth, ModelQuery, LlmResponse, ModelInfo
+from .model_registry import ModelRegistry
 
 __all__ = [
     "IService",
@@ -27,4 +29,11 @@ __all__ = [
     "IDesktop",
     "IAgent",
     "Tool",
+    "ILlm",
+    "IModelMetadata",
+    "IHealth",
+    "ModelQuery",
+    "LlmResponse",
+    "ModelInfo",
+    "ModelRegistry",
 ]
