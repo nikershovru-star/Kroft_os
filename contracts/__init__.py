@@ -48,6 +48,13 @@ from .i_workflow import (
     WorkflowStatus,
     RouterFn,
 )
+from .i_learning import (
+    ExecutionTrace,
+    StepTrace,
+    Pattern,
+    ILearningStore,
+    IPatternExtractor,
+)
 from .i_agent_platform import (
     IAgentPlatform,
     AgentResult,
@@ -97,6 +104,11 @@ __all__ = [
     "IMemoryStore",
     "ISemanticMemory",
     "IProceduralMemory",
+    "ExecutionTrace",
+    "StepTrace",
+    "Pattern",
+    "ILearningStore",
+    "IPatternExtractor",
     "MemoryItem",
     "MemoryQuery",
     "MemoryKind",
