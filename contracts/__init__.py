@@ -15,6 +15,7 @@ from .desktop import IDesktop
 from .agent import IAgent, Tool
 from .i_llm import ILlm, IModelMetadata, IHealth, ModelQuery, LlmResponse, ModelInfo
 from .model_registry import ModelRegistry
+from .i_policy import IPolicy, PolicyContext, PolicyDecision, CallRecord
 
 __all__ = [
     "IService",
@@ -36,4 +37,8 @@ __all__ = [
     "LlmResponse",
     "ModelInfo",
     "ModelRegistry",
+    "IPolicy",
+    "PolicyContext",
+    "PolicyDecision",
+    "CallRecord",
 ]

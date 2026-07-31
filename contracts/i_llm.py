@@ -71,6 +71,7 @@ class ModelInfo:
     json_mode: bool = False
     context_window: int = 0
     free: bool = True
+    cost_per_1k: float = 0.0     # USD per 1k tokens (0.0 for keyless/free) — ADR-009
 
 
 class ILlm(abc.ABC):
