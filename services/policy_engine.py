@@ -72,10 +72,13 @@ class PolicyEngine:
         # Phase 2-3: Filter + Rank
         filtered = list(catalog)
         rankings: Dict[str, float] = {m.id: 0.0 for m in filtered}
+        audit_trail: List[str] = []
         for p in self._policies:
             if p.can_veto:
                 continue
             d = p.evaluate(context, filtered)
+            # LAW 4: carry each policy's explanation into the decision trace
+            audit_trail.extend(d.audit_log)
             # filter: keep only models the policy kept in its fallback_chain
             if d.fallback_chain:
                 keep = {m.id for m in d.fallback_chain}
@@ -93,7 +96,7 @@ class PolicyEngine:
             selected_model=sorted_models[0],
             fallback_chain=sorted_models[1:4],
             reason=f"Selected {sorted_models[0].id} via PolicyEngine",
-            audit_log=[f"engine: {len(sorted_models)} candidates ranked"],
+            audit_log=audit_trail + [f"engine: {len(sorted_models)} candidates ranked"],
             constraints_applied=[p.name for p in self._policies],
         )
 
