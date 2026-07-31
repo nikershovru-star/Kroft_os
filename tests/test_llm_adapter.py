@@ -129,3 +129,61 @@ def test_golden_keyless_auto_ping():
     assert r.ok(), r.error
     assert r.text.strip()
     assert r.actual_model, "double-routing: actual_model must be reported"
+
+
+# ---- Wave 6: gateway routing mode (dumb_pipe=False) ----------------------
+def test_wave6_gateway_routes_when_dumb_pipe_off():
+    class _Spy(OmniRouteAdapter):
+        def __init__(self):
+            super().__init__(dumb_pipe=False)
+            self.sent_model = None
+        def _post(self, path, payload):
+            self.sent_model = payload["model"]
+            # simulate OmniRoute returning authoritative routing headers
+            return {
+                "model": "felo-chat",
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
+                "_headers": {
+                    "x-omniroute-model": "felo-chat",
+                    "x-omniroute-provider": "felo",
+                    "x-omniroute-decision": "strategy=auto; provider=felo; latency_ms=2810",
+                },
+            }
+    s = _Spy()
+    r = s.complete(ModelQuery(task="reasoning"))  # we do NOT pick a model
+    assert s.sent_model == "auto", "gateway should route when dumb_pipe=False"
+    assert r.actual_model == "felo-chat"          # truth from header, not body
+    assert r.actual_provider == "felo"
+    assert "strategy=auto" in r.decision
+    assert r.tokens_in == 5 and r.tokens_out == 2
+
+
+def test_wave6_dumb_pipe_true_still_uses_hermes_routing():
+    class _Spy(OmniRouteAdapter):
+        def __init__(self):
+            super().__init__(dumb_pipe=True)
+            self.sent_model = None
+        def _post(self, path, payload):
+            self.sent_model = payload["model"]
+            return {"model": payload["model"], "choices": [{"message": {"content": "ok"}}], "usage": {}, "_headers": {}}
+    s = _Spy()
+    s.complete(ModelQuery(task="cheap"))
+    assert s.sent_model == "Pollinations"  # Hermes still the router in dumb-pipe
+    # in dumb-pipe mode there is no gateway header, so actual_model = what we sent
+    r = s.complete(ModelQuery(task="reasoning"))
+    assert r.actual_model == "Qoder/Kimi-K2-Free"
+
+
+@pytest.mark.skipif(
+    os.environ.get("OMNIROUTE_LIVE") != "1",
+    reason="set OMNIROUTE_LIVE=1 to verify header-based actual_model from a live gateway",
+)
+def test_golden_wave6_header_actual_model():
+    a = OmniRouteAdapter(base_url=OMNIROUTE_URL, dumb_pipe=False)
+    r = a.complete(ModelQuery(prompt="Reply with one short word.", preferred_provider="auto"))
+    assert r.ok(), r.error
+    # live gateway returns X-OmniRoute-Model header; actual_model must be populated
+    assert r.actual_model, f"actual_model missing from gateway headers: {r.decision}"
+    assert r.actual_provider, "actual_provider missing from gateway headers"
+

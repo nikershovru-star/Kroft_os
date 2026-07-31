@@ -58,15 +58,34 @@ class OpenAiCompatibleClient(ILlm, IModelMetadata, IHealth):
             text = data["choices"][0]["message"]["content"]
             usage = data.get("usage", {})
             tokens = int(usage.get("total_tokens", 0))
-            actual = data.get("model", model)
+            tokens_in = int(usage.get("prompt_tokens", 0))
+            tokens_out = int(usage.get("completion_tokens", 0))
+            # Gateway routing truth (Wave 6): prefer authoritative response
+            # headers over the body's `model` field when present.
+            hdr = data.get("_headers", {})
+            actual_provider = (
+                hdr.get("x-omniroute-provider")
+                or hdr.get("x-provider")
+                or ""
+            )
+            actual_model = (
+                hdr.get("x-omniroute-model")
+                or hdr.get("x-model")
+                or data.get("model", model)
+            )
+            decision = hdr.get("x-omniroute-decision", "")
             self._stats["total_latency_ms"] += (time.monotonic() - t0) * 1000
             return LlmResponse(
                 text=text,
                 trace_id=trace_id,
                 provider=self.base_url,
                 model=model,
-                actual_model=actual,
+                actual_provider=actual_provider,
+                actual_model=actual_model,
+                decision=decision,
                 tokens=tokens,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
                 latency_ms=round((time.monotonic() - t0) * 1000, 1),
                 cost=0.0,
             )
@@ -125,7 +144,11 @@ class OpenAiCompatibleClient(ILlm, IModelMetadata, IHealth):
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            body = json.loads(resp.read().decode("utf-8"))
+            # capture response headers for gateway routing truth (Wave 6)
+            headers = {k.lower(): v for k, v in resp.getheaders()}
+            body["_headers"] = headers
+            return body
 
     def _get(self, path: str) -> dict:
         req = urllib.request.Request(

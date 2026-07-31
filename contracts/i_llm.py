@@ -34,16 +34,26 @@ class ModelQuery:
 @dataclass
 class LlmResponse:
     """Normalized response. `actual_model` is MANDATORY — it resolves the
-    double-routing problem (who chose the model: us or the gateway?)."""
+    double-routing problem (who chose the model: us or the gateway?).
+
+    When the gateway routes for us (Wave 6), `actual_provider` / `actual_model`
+    / `decision` come from authoritative gateway headers (e.g.
+    X-OmniRoute-Model / X-OmniRoute-Provider / X-OmniRoute-Decision) — the
+    gateway is the second source of truth for observability & eval.
+    """
 
     text: str
     trace_id: str = ""
-    provider: str = ""
-    model: str = ""                  # requested model
-    actual_model: str = ""           # model that actually answered
+    provider: str = ""            # requested provider/base_url
+    model: str = ""               # requested model
+    actual_provider: str = ""     # model that actually answered (gateway truth)
+    actual_model: str = ""        # model that actually answered (gateway truth)
+    decision: str = ""            # raw gateway routing decision, if any
     tokens: int = 0
+    tokens_in: int = 0
+    tokens_out: int = 0
     latency_ms: float = 0.0
-    cost: float = 0.0                # 0.0 for keyless providers
+    cost: float = 0.0             # 0.0 for keyless providers
     error: Optional[str] = None
 
     def ok(self) -> bool:
