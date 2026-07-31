@@ -25,7 +25,7 @@ def test_high_confidence_approved() -> None:
     g = SimpleGuardrail().validate(_rec(0.95), [])
     assert g.stage == GUARD_APPROVED
     assert g.allowed is True
-    assert g.risk_score == 0.05
+    assert abs(g.risk_score - 0.05) < 1e-9
 
 
 def test_mid_confidence_canary() -> None:

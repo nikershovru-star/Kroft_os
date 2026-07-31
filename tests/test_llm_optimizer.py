@@ -9,17 +9,24 @@ import json
 
 from contracts.i_learning import Pattern
 from services.llm_optimizer import LlmOptimizer
+from services.pattern_based_optimizer import PatternBasedOptimizer
 
 
 BASE_CFG = {"policy": {"ProviderSelectionPolicy": {"weights": {"reasoning": 0.5}}}}
 
 
 def test_fallback_when_no_llm_fn() -> None:
-    opt = LlmOptimizer(llm_fn=None)  # fallback = PatternBasedOptimizer
+    opt = LlmOptimizer(llm_fn=None, fallback=PatternBasedOptimizer())
     pats = [Pattern("phi4 beats gpt", 0.92, ("reasoning", "phi4"), "Prefer phi4 for reasoning tasks")]
     recs = opt.recommend(pats, BASE_CFG)
     assert len(recs) == 1
     assert recs[0].confidence == 0.92
+
+
+def test_no_fallback_no_llm_returns_empty() -> None:
+    opt = LlmOptimizer(llm_fn=None, fallback=None)
+    pats = [Pattern("phi4 beats gpt", 0.92, ("reasoning", "phi4"), "Prefer phi4")]
+    assert opt.recommend(pats, BASE_CFG) == []
 
 
 def test_llm_fn_used_when_supplied() -> None:
