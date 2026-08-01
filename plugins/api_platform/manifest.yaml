@@ -1,0 +1,5 @@
+name: api
+entrypoint: cli.api:APIServer
+capabilities: [api.serve]
+dependencies: [agent]
+lifecycle: true

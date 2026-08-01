@@ -1,0 +1,5 @@
+name: agent
+entrypoint: services.agent_platform:AgentPlatform
+capabilities: [event.publish, event.subscribe, config.read]
+dependencies: [router, policy_engine, memory, knowledge]
+lifecycle: true

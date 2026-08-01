@@ -1,0 +1,5 @@
+name: snapshot
+entrypoint: runtime.services.snapshot_service:SnapshotService
+capabilities: [snapshot.dump]
+dependencies: [registry]
+lifecycle: true

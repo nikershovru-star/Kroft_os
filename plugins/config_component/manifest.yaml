@@ -1,0 +1,5 @@
+name: config
+entrypoint: runtime.services.config_service:ConfigService
+capabilities: [config.read]
+dependencies: []
+lifecycle: true

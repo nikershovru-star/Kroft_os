@@ -1,0 +1,5 @@
+name: supervisor
+entrypoint: runtime.supervisor:SupervisorService
+capabilities: [supervisor.restart]
+dependencies: [registry]
+lifecycle: true

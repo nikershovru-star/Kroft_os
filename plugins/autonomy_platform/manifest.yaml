@@ -1,0 +1,5 @@
+name: autonomy
+entrypoint: services.threshold_autonomy_controller:ThresholdAutonomyController
+capabilities: [event.subscribe, autonomy.retrospect]
+dependencies: []
+lifecycle: true
