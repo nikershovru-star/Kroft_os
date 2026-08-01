@@ -1,0 +1,13 @@
+# KROFT_OS pre-commit (pre-commit framework, optional).
+# Fast subset: lint (if ruff) + arch-gate + akb-lint.
+# Install: pip install pre-commit && pre-commit install
+# Fallback without framework: python scripts/precommit.py
+repos:
+  - repo: local
+    hooks:
+      - id: kroft-quick-ci
+        name: KROFT_OS quick CI (arch-gate + akb-lint)
+        entry: python scripts/ci.py --quick
+        language: system
+        pass_filenames: false
+        always_run: true

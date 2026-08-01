@@ -183,3 +183,10 @@ adrs:
     ports_added: [estimate_cost]
     laws_affected: [K6]
     note: "Phase C. V3 (adapters/router.py -> policies.budget_policy.estimate_cost) RESOLVED: estimate_cost ported to contracts/cost.py; adapters depend ONLY on contracts. PolicyRegistry (policies/registry.py) makes policies pluggable by name. PolicyEngine pipeline (veto->filter->rank->fallback) already implements C.3 (Wave 5). All major layers now depend ONLY on contracts."
+  - id: ADR-031
+    title: CI Pipeline & AKB Linter
+    status: proposed
+    evidence_level: III
+    relates_to: [ADR-022, ADR-028, ADR-029]
+    laws_affected: [K5, K7, K8]
+    note: "TZ-003 WP-05. Local CI (scripts/ci.py) + AKB linter (tools/akb_lint.py). Stages: import-check, lint(non-block), tests, arch-gate, akb-lint, coverage(non-block). Pre-commit hook + dormant GitHub Actions. evidence_level non-blocking WARN until WP-08 (TZ-002 Wave 2)."
