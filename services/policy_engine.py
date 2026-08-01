@@ -51,6 +51,11 @@ class PolicyEngine:
         self._policies.append(policy)
         self._policies.sort(key=lambda p: p.priority)
 
+    def register_all(self, policies: List[IPolicy]) -> None:
+        """Bulk-register from a PolicyRegistry (Phase C.2 pluggability)."""
+        for p in policies:
+            self.register(p)
+
     # --- Phase 1-4: decision ------------------------------------------------
     def decide(self, context: PolicyContext) -> PolicyDecision:
         catalog = list(self._registry.catalog())
