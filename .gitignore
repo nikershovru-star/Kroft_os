@@ -7,3 +7,10 @@ __pycache__/
 .sandbox/
 .e2e_sandbox/
 .coverage
+
+# KROFT_OS merge additions (Variant A)
+data/
+*.exe
+.hermes/
+/KnowledgeOS-v5/
+archive/KnowledgeOS-v5/
