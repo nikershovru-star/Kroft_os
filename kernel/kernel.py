@@ -67,6 +67,15 @@ class Kernel(IKernel):
     def state(self) -> LifecycleState:
         return self._state
 
+    @property
+    def event_bus(self) -> Optional[IEventBus]:
+        """Read-only access to the kernel's event bus (ADR-020 variant b).
+
+        Runtime services subscribe to kernel lifecycle/component events via this
+        port — they never import the concrete bus or reach into kernel internals.
+        """
+        return self._event_bus
+
     def initialize(self) -> None:
         """Resolve core capabilities from the container and wire them in."""
         if self._state != LifecycleState.UNINITIALIZED:

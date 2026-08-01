@@ -3,26 +3,49 @@
 Lives at the project root (OUTSIDE the arch-gate scanned packages), so it may
 import both `kernel` (concrete) and `services`/`runtime` (component layer). It
 wires the concrete `Kernel` (which implements contracts.IKernel) into the runtime
-host and supplies real platform instances where they can be built with available
-ports; otherwise returns None (declarative-only registration — LAW K3: platforms
-are NOT mutated to gain lifecycle; we adapt, not modify).
+host, injects the shared IEventBus, and supplies real platform instances where
+they can be built with available ports; otherwise returns None (declarative-only
+registration — LAW K3: platforms are NOT mutated to gain lifecycle; we adapt, not
+modify).
 
-Does NOT duplicate the kernel, does NOT create wrapper adapters.
+Does NOT duplicate the kernel, does NOT create wrapper adapters. The single
+InMemoryEventBus instance is shared by Kernel (via its container) and the Phase 3
+Runtime Services (via build_services) — so kernel.lifecycle events reach service
+subscribers.
 """
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, List, Optional
+
+from infrastructure import DependencyContainer
+from infrastructure.eventbus import InMemoryEventBus
+from infrastructure.metrics import PsutilMetricsCollector
 
 from kernel import Kernel  # concrete microkernel (implements contracts.IKernel)
 from runtime.kernel_runtime import run
 from runtime.manifest_schema import Manifest
+from runtime.services import (
+    ConfigService,
+    LoggingService,
+    MetricsService,
+    SnapshotService,
+)
+from contracts import IEventBus, IProcessRegistry
 
 
-def build_kernel() -> Kernel:
-    """Construct the concrete Kernel (implements IKernel)."""
-    return Kernel()
+def build_event_bus() -> InMemoryEventBus:
+    """Single shared event bus (Kernel + services both use this instance)."""
+    return InMemoryEventBus()
+
+
+def build_kernel(bus: Optional[IEventBus] = None) -> Kernel:
+    """Construct the concrete Kernel with the shared IEventBus wired in."""
+    container = DependencyContainer()
+    if bus is not None:
+        container.register_instance("IEventBus", bus)
+    return Kernel(container=container)
 
 
 def build_instance_builder() -> Callable[[str, Manifest], Optional[Any]]:
@@ -51,6 +74,31 @@ def build_instance_builder() -> Callable[[str, Manifest], Optional[Any]]:
     return builder
 
 
+def build_services(kernel: Any, bus: IEventBus) -> List[Any]:
+    """Construct the Phase 3 Runtime Services, injected with the shared bus.
+
+    Services observe via IEventBus; they never import domain platforms (LAW K3).
+    The bus is the single shared instance wired into Kernel (via its container)
+    and into the services, so kernel.lifecycle events reach the service subscribers.
+    (We pass `bus` explicitly rather than reading kernel.event_bus, because the
+    latter is only populated after Kernel.initialize().)
+    """
+    if bus is None:
+        return []
+    logger = LoggingService()
+    collector = PsutilMetricsCollector()
+    # A ProcessRegistry view over the kernel's wired components is not available
+    # at this layer; MetricsService tolerates registry=None (counts only).
+    registry: Optional[IProcessRegistry] = None
+    services: List[Any] = [
+        logger,
+        MetricsService(bus=bus, collector=collector, registry=registry, logger=logger),
+        ConfigService(bus=bus, logger=logger),
+        SnapshotService(bus=bus, registry=registry, logger=logger),
+    ]
+    return services
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="bootstrap_v2", description="KROFT_OS Composition Root v2")
     parser.add_argument("--mode", default="kernel-only",
@@ -62,8 +110,10 @@ def main() -> int:
     args = parser.parse_args()
 
     plugins_dir = Path(args.plugins_dir) if args.plugins_dir else (Path.cwd() / "plugins")
-    kernel = build_kernel()
+    bus = build_event_bus()
+    kernel = build_kernel(bus=bus)
     builder = build_instance_builder()
+    services_factory = lambda k: build_services(k, bus)
     return run(
         kernel,
         mode=args.mode,
@@ -71,6 +121,7 @@ def main() -> int:
         port=args.port,
         plugins_dir=plugins_dir if plugins_dir.exists() else None,
         instance_builder=builder,
+        services_factory=services_factory,
     )
 
 

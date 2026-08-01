@@ -11,6 +11,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Optional, Protocol, runtime_checkable
 
+from contracts.i_event_bus import IEventBus
+
 
 class LifecycleState(Enum):
     UNINITIALIZED = "UNINITIALIZED"
@@ -25,6 +27,11 @@ class IKernel(Protocol):
 
     @property
     def state(self) -> LifecycleState: ...
+
+    @property
+    def event_bus(self) -> Optional[IEventBus]:
+        """The kernel's event bus (read-only). Runtime services subscribe via this."""
+        ...
 
     def initialize(self) -> None: ...
 

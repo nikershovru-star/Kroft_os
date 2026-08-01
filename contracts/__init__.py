@@ -75,6 +75,7 @@ from .i_agent_platform import (
 )
 from .i_kernel import IKernel, LifecycleState
 from .i_process import IProcess, IProcessRegistry, ProcessStatus
+from .i_metrics import IMetricsCollector
 
 __all__ = [
     "IService",
@@ -154,4 +155,5 @@ __all__ = [
     "IProcess",
     "IProcessRegistry",
     "ProcessStatus",
+    "IMetricsCollector",
 ]
