@@ -103,6 +103,53 @@ class AgentService:
             r"cleanup\s+orphans?",
             [("cleanup_orphans", lambda m: {"dry_run": False})],
         ),
+        # Stage 64: collaborative editing intents (EN + RU)
+        (
+            r"edit\s+(.+?)\s+with\s+base\s+(\d+)\s+content\s+(.+)",
+            [
+                (
+                    "add_node",
+                    lambda m: {
+                        "node_id": m.group(1).strip(),
+                        "content": m.group(3).strip(),
+                        "base_revision": int(m.group(2)),
+                        "actor": "user",
+                        "strategy": "content_merge",
+                    },
+                )
+            ],
+        ),
+        (
+            r"fork\s+branch\s+(.+?)\s+from\s+rev\s+(\d+)",
+            [
+                (
+                    "fork_branch",
+                    lambda m: {
+                        "user_id": "user",
+                        "branch_name": m.group(1).strip(),
+                        "from_revision": int(m.group(2)),
+                    },
+                )
+            ],
+        ),
+        (
+            r"merge\s+branch\s+(.+?)\s+into\s+(.+?)\s+with\s+strategy\s+(\w+)",
+            [
+                (
+                    "merge_branch",
+                    lambda m: {
+                        "user_id": "user",
+                        "branch_name": m.group(1).strip(),
+                        "target_resource": m.group(2).strip(),
+                        "strategy": m.group(3).strip(),
+                    },
+                )
+            ],
+        ),
+        (
+            r"синхронизируй\s+мои\s+изменения",
+            [("sync_queue", lambda m: {})],
+        ),
         (
             r"merge\s+(.+?)\s+into\s+(.+)",
             [("merge_nodes", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "dry_run": False})],
@@ -122,6 +169,11 @@ class AgentService:
         (
             r"объедини\s+(.+?)\s+в\s+(.+)",
             [("merge_nodes", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "dry_run": False})],
+        ),
+        # Stage 57: graph hidden-connections intent MUST precede generic `find ...`
+        (
+            r"find\s+hidden\s+connections",
+            [("find_hidden_connections", lambda m: {"threshold": 0.15, "limit": 20})],
         ),
         (
             r"find\s+(.+?)(?:\s+and\s+open)?$",
@@ -185,6 +237,18 @@ class AgentService:
         (
             r"заметки\s+не\s+связанные\s+с\s+(.+)$",
             [("compound_query", lambda m: {"not_linked_to": m.group(1).strip()})],
+        ),
+        (
+            r"show\s+my\s+notifications?\b",
+            [("list_notifications", lambda m: {"acknowledged": False})],
+        ),
+        (
+            r"(?i)acknowledge\s+notification\s+(\S+)",
+            [("acknowledge_notification", lambda m: {"notification_id": m.group(1).strip()})],
+        ),
+        (
+            r"dismiss\s+all\s+notifications?",
+            [("dismiss_all_notifications", lambda m: {})],
         ),
         (
             r"show\s+(?:me\s+)?(.+)$",
@@ -593,6 +657,167 @@ class AgentService:
             r"cursor\s+position",
             [("cursor_position", lambda m: {})],
         ),
+        # Stage 57–60 + 62: graph/multi-user NL intents (must precede generic desktop patterns)
+        (
+            r"apply\s+suggested\s+link\s+from\s+(\S+)\s+to\s+(\S+)",
+            [("apply_suggested_link", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "relation": "links"})],
+        ),
+        (
+            r"query\s+graph:\s*(.+)$",
+            [("query_dsl", lambda m: {"query_string": m.group(1).strip()})],
+        ),
+        (
+            r"graph:\s*MATCH\s+(.+)\s+RETURN\s+(.+)$",
+            [("query_dsl", lambda m: {"query_string": f"MATCH {m.group(1).strip()} RETURN {m.group(2).strip()}"})],
+        ),
+        (
+            r"rebuild\s+semantic\s+index",
+            [("rebuild_semantic_index", lambda m: {})],
+        ),
+        (
+            r"semantic\s+search\s+(.+)$",
+            [("semantic_search", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
+        ),
+        (
+            r"поиск\s+по\s+смыслу\s+(.+)$",
+            [("semantic_search", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
+        ),
+        (
+            r"rebuild\s+semantic\s+index",
+            [("rebuild_semantic_index", lambda m: {})],
+        ),
+        (
+            r"перестрой\s+семантический\s+индекс",
+            [("rebuild_semantic_index", lambda m: {})],
+        ),
+        (
+            r"how\s+similar\s+are\s+(\S+)\s+and\s+(\S+)",
+            [("semantic_similarity", lambda m: {"node_a": m.group(1).strip(), "node_b": m.group(2).strip()})],
+        ),
+        (
+            r"run\s+maintenance\s+cycle",
+            [("run_maintenance_cycle", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"preview\s+maintenance",
+            [("run_maintenance_cycle", lambda m: {"dry_run": True})],
+        ),
+        (
+            r"maintenance\s+history",
+            [("get_maintenance_history", lambda m: {})],
+        ),
+        (
+            r"configure\s+maintenance",
+            [("configure_maintenance", lambda m: {"config": {}})],
+        ),
+        (
+            r"check\s+notifications?\b",
+            [("check_and_notify", lambda m: {})],
+        ),
+        (
+            r"show\s+my\s+notifications?\b",
+            [("list_notifications", lambda m: {"acknowledged": False})],
+        ),
+        (
+            r"export\s+graph",
+            [("export_graph", lambda m: {"format": "json"})],
+        ),
+        (
+            r"backup\s+graph",
+            [("backup_graph", lambda m: {})],
+        ),
+        (
+            r"restore\s+graph\s+from\s+(.+)$",
+            [("restore_graph", lambda m: {"path": m.group(1).strip()})],
+        ),
+        (
+            r"switch\s+to\s+user\s+(\S+)",
+            [("set_user_context", lambda m: {"user_id": m.group(1).strip()})],
+        ),
+        (
+            r"context\s+for\s+user\s+(\S+)",
+            [("get_user_context", lambda m: {"user_id": m.group(1).strip()})],
+        ),
+        (
+            r"share\s+session\s+(\S+)\s+with\s+user\s+(\S+)",
+            [("share_session", lambda m: {"session_id": m.group(1).strip(), "to_user": m.group(2).strip()})],
+        ),
+        (
+            r"revoke\s+session\s+(\S+)",
+            [("revoke_session", lambda m: {"session_id": m.group(1).strip()})],
+        ),
+        (
+            r"примени\s+связь\s+от\s+(\S+)\s+к\s+(\S+)",
+            [("apply_suggested_link", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "relation": "links"})],
+        ),
+        (
+            r"граф\s+запрос:\s*(.+)$",
+            [("query_dsl", lambda m: {"query_string": m.group(1).strip()})],
+        ),
+        (
+            r"запусти\s+обслуживание\s+графа",
+            [("run_maintenance_cycle", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"предпросмотр\s+обслуживания",
+            [("run_maintenance_cycle", lambda m: {"dry_run": True})],
+        ),
+        (
+            r"настрой\s+обслуживание",
+            [("configure_maintenance", lambda m: {"config": {}})],
+        ),
+        (
+            r"история\s+обслуживания",
+            [("get_maintenance_history", lambda m: {})],
+        ),
+        (
+            r"проверь\s+уведомления",
+            [("check_and_notify", lambda m: {})],
+        ),
+        (
+            r"покажи\s+уведомления",
+            [("list_notifications", lambda m: {"acknowledged": False})],
+        ),
+        (
+            r"(?i)подтверди\s+уведомление\s+(\S+)",
+            [("acknowledge_notification", lambda m: {"notification_id": m.group(1).strip()})],
+        ),
+        (
+            r"очисти\s+все\s+уведомления",
+            [("dismiss_all_notifications", lambda m: {})],
+        ),
+        (
+            r"экспорт\s+графа",
+            [("export_graph", lambda m: {"format": "json"})],
+        ),
+        (
+            r"создай\s+бэкап\s+графа",
+            [("backup_graph", lambda m: {})],
+        ),
+        (
+            r"восстанови\s+граф\s+из\s+(.+)$",
+            [("restore_graph", lambda m: {"path": m.group(1).strip()})],
+        ),
+        (
+            r"переключись\s+на\s+пользователя\s+(\S+)",
+            [("set_user_context", lambda m: {"user_id": m.group(1).strip()})],
+        ),
+        (
+            r"контекст\s+пользователя\s+(\S+)",
+            [("get_user_context", lambda m: {"user_id": m.group(1).strip()})],
+        ),
+        (
+            r"поделись\s+сессией\s+(\S+)\s+с\s+пользователем\s+(\S+)",
+            [("share_session", lambda m: {"session_id": m.group(1).strip(), "to_user": m.group(2).strip()})],
+        ),
+        (
+            r"забери\s+доступ\s+к\s+сессии\s+(\S+)",
+            [("revoke_session", lambda m: {"session_id": m.group(1).strip()})],
+        ),
+        (
+            r"синхронизируй\s+мои\s+изменения",
+            [("sync_queue", lambda m: {})],
+        ),
         # Stage 37: NL desktop intents (spec v5.0)
         (
             r"click\s+(\d+)\s+(\d+)$",
@@ -616,6 +841,11 @@ class AgentService:
             [("list_orphans", lambda m: {})],
         ),
         # --- Cyrillic single-step ---
+        # Stage 57: RU graph hidden-connections intent MUST precede generic `найди ...`
+        (
+            r"найди\s+скрытые\s+связи",
+            [("find_hidden_connections", lambda m: {"threshold": 0.15, "limit": 20})],
+        ),
         (
             r"найди\s+(.+)$",
             [("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
