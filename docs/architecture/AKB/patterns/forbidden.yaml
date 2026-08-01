@@ -9,7 +9,7 @@ forbidden:
     name: blocking-sleep-in-recovery
     rule: "Recovery/Reconcile MUST NOT use a single blocking time.sleep() to wait for subsystem readiness."
     reason: "Blocks Kernel event loop; violates async supervision model (ADR-020 Phase 4)."
-    enforcement: "NOT AUTOMATED — test_architecture.py не сканирует time.sleep. Manual review / future AST rule."
+    enforcement: "AUTOMATED (WP-02): tests/test_architecture.py::test_no_blocking_sleep_in_recovery scans runtime/recovery + runtime/supervisor for time.sleep(."
     severity: block
 
   - id: F2
@@ -23,26 +23,26 @@ forbidden:
     name: hardcoded-dependency-in-kernel
     rule: "Kernel MUST NOT hardcode concrete service/components; use ports + Composition Root."
     reason: "Violates LAW K3 (kernel does not know services)."
-    enforcement: arch-gate import scan in kernel/
+    enforcement: arch-gate import scan in kernel/ (K1) + K3 wiring detector (DependencyContainer/SnapshotStore instantiation)
     severity: block
 
   - id: F4
     name: meta-layer-in-runtime
     rule: "runtime/ MUST NOT import akb/, research/, or LLM/reasoning modules."
     reason: "Violates LAW K8 (architecture intelligence outside runtime)."
-    enforcement: "PARTIAL — import-axis gate forbids runtime->code packages, but does NOT scan runtime for akb/research/llm (docs/, not a package). Manual review."
+    enforcement: "AUTOMATED (WP-02): tests/test_architecture.py::test_kernel_runtime_no_ai_imports forbids kernel/runtime -> akb/research/llm/omni_route."
     severity: block
 
   - id: F5
     name: untraceable-agent-result
     rule: "Agent/process output MUST be frozen + traceable (AgentResult frozen dataclass)."
     reason: "Violates LAW K4 (artifacts traceable, reproducibility)."
-    enforcement: "NOT AUTOMATED — no type-level check in gate. Manual review / requires dedicated test."
+    enforcement: "PARTIAL (WP-02): tests/test_architecture.py::test_agent_result_frozen checks AgentResult is frozen dataclass IF present. Non-frozen classes fail."
     severity: warn
 
   - id: F6
     name: adr-without-evidence
     rule: "ADR in adrs.yaml MUST carry evidence_level >= III and consensus >= 2 (KEH §3 gate)."
     reason: "Violates KP-002 (Evidence > Opinion); prevents opinion-based decisions."
-    enforcement: "NOT AUTOMATED — gate does not parse adrs.yaml. Manual review against evidence_levels.yaml gate (min III + consensus 2)."
+    enforcement: "PARTIAL (WP-02): tests/test_architecture.py::test_all_adrs_have_evidence reports missing levels (non-blocking, warn). Full closure = WP-08."
     severity: warn
