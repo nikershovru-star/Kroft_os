@@ -1,0 +1,30 @@
+# KROFT OS — Import Dependency Matrix (AKB data, read by arch-gate)
+# Источник истины для tests/test_architecture.py (WP-02, TZ-001).
+# Матрица разрешённых cross-layer-импортов. Правило: слой может импортировать
+# ТОЛЬКО перечисленные здесь project-пакеты (плюс stdlib, плюс самого себя).
+#
+# Обоснование (LAW K1/K3/K6/K8):
+#   - kernel:  imports contracts + runtime (НЕ infra/services/adapters/policies)
+#   - runtime: imports contracts ONLY
+#   - services/adapters/infrastructure/policies/plugins: imports contracts ONLY
+#   - composition: единственный слой сборки -> импортирует ВСЁ
+#   - cli: тонкий entrypoint -> composition + contracts (+ legacy kernel/service)
+#
+# Порядок: version -> matrix<pkg: [allowed_pkgs]>.
+version: 1
+matrix:
+  contracts: []
+  infrastructure: [contracts]
+  kernel: [contracts, runtime]
+  runtime: [contracts]
+  services: [contracts]
+  adapters: [contracts]
+  infrastructure_extra: []   # placeholder (infrastructure already above)
+  policies: [contracts]
+  plugins: [contracts]
+  composition: [contracts, infrastructure, kernel, runtime, services, adapters, policies, plugins, cli]
+  cli: [composition, contracts, infrastructure, kernel, services]
+# Пакеты, которые гейт сканирует на нарушения (PROJECT_PKGS).
+scanned_packages: [contracts, infrastructure, kernel, runtime, services, adapters, policies, plugins, cli, composition]
+# STDlib bases, разрешённые всегда (не project-packages).
+stdlib_bases: [os, sys, pathlib, typing, abc, enum, functools, dataclasses, collections, json, time, re, contextlib, threading, asyncio, hashlib, secrets, itertools, copy, math, uuid, datetime, warnings, logging]
