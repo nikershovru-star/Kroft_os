@@ -94,6 +94,4 @@ build_system()`) оркестрирует последовательность. 
 
 ## Approval (K5)
 
-**Status: accepted** as of 2026-08-02 (TZ-003 WP-08, human-approved scope).
-Implemented and verified in Phase B (ADR-026/027/028) and Phase C (ADR-029).
-Evidence Level: III (implemented + architecture-gate green + 768 tests passing).
+Accepted per TZ-003 WP-08. Evidence sufficient (implemented + verified).

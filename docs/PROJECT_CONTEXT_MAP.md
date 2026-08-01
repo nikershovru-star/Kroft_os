@@ -154,10 +154,10 @@ KROFT_OS/                    ← единый git-репозиторий (Varian
 | ADR-023 | Agent Hierarchy & Research Mesh | accepted | K1, K3, K4, K5, K8 |
 | ADR-024 | Meta Engine & EIP | accepted | K3, K8 |
 | ADR-025 | Multimodal Knowledge Engine (PHASE 6) | proposed | K8, K4, K3 |
-| ADR-026 | Composition Root | proposed → accepted (реализован) | K3 |
-| ADR-027 | Dependency Inversion | proposed → accepted (реализован) | K1, K3, K6 |
-| ADR-028 | Kernel Purity | proposed → accepted (реализован) | K1, K3 |
-| ADR-029 | Bootstrap Lifecycle | proposed → accepted (реализован) | K3 |
+| ADR-026 | Plugin Registry & Marketplace | accepted | III | TZ-001 WP-09 |
+| ADR-027 | Dependency Injection via Constructor | accepted | III | TZ-001 WP-10 |
+| ADR-028 | Kernel Purity (no infra imports) | accepted | III | TZ-001 WP-11 |
+| ADR-029 | Composition Root Pattern | accepted | III | TZ-001 WP-12 |
 | ADR-030 | Policy Boundary (Phase C) | proposed | K6 |
 
 > Примечание: ADR-007 существует в двух редакциях (`ADR-007 Policy Platform — Design (superseded draft).md` и `ADR-007 Policy Platform — Superseded by ADR-009.md`). Обе помечены superseded; итоговый — ADR-009. ADR-008 (Knowledge Platform) переименован в ADR-011 (см. AKB/adrs.yaml). Индекс ADR-001..030 — **без пропусков** (ADR-007 двойной, ADR-008 → ADR-011).
@@ -195,9 +195,10 @@ ADR-027 Dependency Inversion
 ADR-028 Kernel Purity
 ADR-029 Bootstrap Lifecycle
 ADR-030 Policy Boundary
+ADR-031 CI Pipeline & AKB Linter
 ```
 
----
+> Примечание: ADR-007 существует в двух редакциях (`ADR-007 Policy Platform — Design (superseded draft).md` и `ADR-007 Policy Platform — Superseded by ADR-009.md`). Обе помечены superseded; итоговый — ADR-009. ADR-008 (Knowledge Platform) переименован в ADR-011 (см. AKB/adrs.yaml). Индекс ADR-001..031 — **без пропусков** (ADR-007 двойной, ADR-008 → ADR-011).
 
 ## 5. Убиквитарный язык (KL) — ключевые термины
 
@@ -311,7 +312,7 @@ ADR-030 Policy Boundary
 | Файл | Назначение |
 |------|-----------|
 | `laws.yaml` | LAW K1–K8 |
-| `adrs.yaml` | ADR-001..030 (decision, status, evidence_level) |
+| `adrs.yaml` | ADR-001..031 (decision, status, evidence_level) |
 | `patterns/forbidden.yaml` | F1–F6 (enforcement статусы) |
 | `patterns/allowed.yaml` | разрешённые паттерны |
 | `import_matrix.yaml` | **матрица разрешённых импортов (WP-02, single source для гейта)** |
