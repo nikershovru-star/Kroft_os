@@ -28,6 +28,7 @@ class LifecycleState(Enum):
     UNINITIALIZED = auto()
     INITIALIZED = auto()
     RUNNING = auto()
+    FAILED = auto()
     STOPPED = auto()
 
 
@@ -254,6 +255,30 @@ class Kernel(IKernel):
         self._services.clear()
         if self._event_bus is not None:
             self._event_bus.stop()
+        self._state = LifecycleState.STOPPED
+
+    def panic(self, reason: Optional[str] = None) -> None:
+        """Level 3 emergency (Phase 4): snapshot, mark FAILED, emit panic, then stop.
+
+        Idempotent and safe: never raises. Mirrors stop()'s teardown (autosave
+        cancel + graph snapshot) but records a FAILED state and publishes a
+        `kernel.panic` event so the Supervisor/Recovery layer can react.
+        """
+        if self._state == LifecycleState.STOPPED:
+            return
+        try:
+            self._stop_autosave()
+            self._try_snapshot_graph()
+        except Exception:
+            pass
+        self._state = LifecycleState.FAILED
+        self.emit("kernel.panic", {"reason": reason or "unknown"})
+        try:
+            self._services.clear()
+            if self._event_bus is not None:
+                self._event_bus.stop()
+        except Exception:
+            pass
         self._state = LifecycleState.STOPPED
 
     # ----- Stage 14: periodic autosave watchdog -----

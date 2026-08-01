@@ -32,7 +32,14 @@ from runtime.services import (
     MetricsService,
     SnapshotService,
 )
-from contracts import IEventBus, IProcessRegistry
+from contracts import IEventBus, IProcessRegistry, IComponentController
+from runtime.component_registry import ComponentRegistry
+from runtime.supervisor import (
+    HealthMonitor,
+    RecoveryPolicyRegistry,
+    SupervisorService,
+)
+from runtime.recovery import RecoveryJournal, RecoveryState
 
 
 def build_event_bus() -> InMemoryEventBus:
@@ -75,13 +82,18 @@ def build_instance_builder() -> Callable[[str, Manifest], Optional[Any]]:
 
 
 def build_services(kernel: Any, bus: IEventBus) -> List[Any]:
-    """Construct the Phase 3 Runtime Services, injected with the shared bus.
+    """Construct the Phase 3 + Phase 4 runtime services, injected with the shared bus.
 
     Services observe via IEventBus; they never import domain platforms (LAW K3).
     The bus is the single shared instance wired into Kernel (via its container)
     and into the services, so kernel.lifecycle events reach the service subscribers.
     (We pass `bus` explicitly rather than reading kernel.event_bus, because the
     latter is only populated after Kernel.initialize().)
+
+    Phase 4 adds the SupervisorService (autonomous recovery) wired through an
+    IComponentController that delegates restart to the ComponentRegistry +
+    InstanceBuilder — so the Supervisor stays ignorant of how/where/which platform
+    is built (LAW K8 preserved).
     """
     if bus is None:
         return []
@@ -90,13 +102,56 @@ def build_services(kernel: Any, bus: IEventBus) -> List[Any]:
     # A ProcessRegistry view over the kernel's wired components is not available
     # at this layer; MetricsService tolerates registry=None (counts only).
     registry: Optional[IProcessRegistry] = None
+
+    # Phase 4: autonomous recovery wiring.
+    comp_registry = ComponentRegistry(plugins_dir=None)
+    comp_registry.set_instance_builder(build_instance_builder())
+    controller = ComponentController(comp_registry)
+    policies = RecoveryPolicyRegistry.from_dict({
+        # Different components, different policies (per Phase 4 spec examples).
+        "database": {"restart": True, "max_attempts": 10},
+        "llm_worker": {"restart": True, "max_attempts": 3},
+        "human_approval": {"restart": False},
+    })
+    journal = RecoveryJournal()
+    recovery_state = RecoveryState(policies._policies)
+    supervisor = SupervisorService(
+        bus=bus, registry=comp_registry, controller=controller,
+        policies=policies, journal=journal, state=recovery_state, logger=logger,
+    )
+    health = HealthMonitor(bus=bus, registry=comp_registry, logger=logger)
+
     services: List[Any] = [
         logger,
         MetricsService(bus=bus, collector=collector, registry=registry, logger=logger),
         ConfigService(bus=bus, logger=logger),
         SnapshotService(bus=bus, registry=registry, logger=logger),
+        supervisor,
+        health,
     ]
     return services
+
+
+class ComponentController(IComponentController):
+    """Concrete IComponentController (composition root only).
+
+    Restart delegates to ComponentRegistry.reactivate, which uses the injected
+    InstanceBuilder to rebuild the platform instance. The Supervisor sees ONLY
+    this port — it never learns how/where/which platform is built (LAW K8).
+    """
+
+    def __init__(self, registry: ComponentRegistry) -> None:
+        self._registry = registry
+
+    def restart(self, component_name: str) -> bool:
+        manifest = self._registry.get_manifest(component_name)
+        instance = None
+        if manifest is not None and self._registry._instance_builder is not None:
+            try:
+                instance = self._registry._instance_builder(component_name, manifest)
+            except Exception:
+                instance = None
+        return self._registry.reactivate(component_name, instance)
 
 
 def main() -> int:

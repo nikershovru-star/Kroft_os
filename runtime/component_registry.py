@@ -8,13 +8,19 @@ ports) — never imports the concrete kernel or platforms (arch-gate LAW K8).
 Platforms 11–14 integrate as components (manifest), NOT as process-libraries.
 No separate wrapper files. The composition root supplies real platform instances;
 activate_platform wraps them as IProcess by duck-typing.
+
+Phase 4: lifecycle is modelled with ProcessState (REGISTERED -> STARTING -> RUNNING).
+`reactivate(name, instance)` is the restart hook — but the registry NEVER builds an
+instance itself (LAW K8). The `instance` is produced by the IComponentController
+(concrete impl in the composition root, wiring InstanceBuilder), so the Supervisor
+stays ignorant of how/where/which platform is built.
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
-from contracts import IKernel, IProcess, ProcessStatus
+from contracts import IKernel, IProcess, ProcessState
 
 from runtime.manifest_schema import Manifest
 from runtime.i_process_impl import Process
@@ -29,10 +35,16 @@ class ComponentRegistry:
         self._processes: Dict[str, IProcess] = {}
         self._kernel: IKernel | None = None
         self._plugins_dir = plugins_dir
+        # InstanceBuilder: name + manifest -> rebuilt instance (set by composition root).
+        self._instance_builder: Optional[Callable[[str, Manifest], Any]] = None
 
     def bind(self, kernel: IKernel) -> None:
         """Bind to an injected IKernel implementation (do NOT import kernel)."""
         self._kernel = kernel
+
+    def set_instance_builder(self, builder: Callable[[str, Manifest], Any]) -> None:
+        """Composition root injects the builder; registry never builds itself (LAW K8)."""
+        self._instance_builder = builder
 
     # --- Phase 2: platform integration core ---------------------------------
     def load_manifests(self) -> List[Manifest]:
@@ -51,8 +63,8 @@ class ComponentRegistry:
         """Register a platform as an IProcess (duck-typed, no platform mutation).
 
         `instance` is supplied by the composition root (platforms need injected
-        ports, so they cannot be built from a bare manifest). If None, the
-        component is registered declaratively (status RUNNING on activate).
+        ports, so they cannot be built from a bare manifest). The process starts
+        in REGISTERED -> STARTING -> RUNNING.
         """
         proc = Process(
             name=name,
@@ -61,13 +73,35 @@ class ComponentRegistry:
             dependencies=manifest.dependencies,
         )
         self._processes[name] = proc
-        self._components[name] = {"status": "RUNNING", "bound": instance is not None,
+        self._components[name] = {"status": "REGISTERED", "bound": instance is not None,
                                    "manifest": manifest.to_dict()}
-        proc.start()
+        proc.start()  # REGISTERED -> STARTING -> RUNNING
+        self._components[name]["status"] = proc.state.value
         return proc
 
     def get_process(self, name: str) -> Optional[IProcess]:
         return self._processes.get(name)
+
+    def get_manifest(self, name: str) -> Optional[Manifest]:
+        comp = self._components.get(name)
+        if comp is None:
+            return None
+        data = comp.get("manifest")
+        return Manifest.from_dict(data) if data else None
+
+    def reactivate(self, name: str, instance: Any = None) -> bool:
+        """Restart hook used by IComponentController (composition root).
+
+        The registry does NOT build the instance — `instance` is provided by the
+        controller (which used InstanceBuilder). If None, the existing instance is
+        reused. Returns True if the component came back RUNNING.
+        """
+        proc = self._processes.get(name)
+        if proc is None:
+            return False
+        if instance is not None:
+            proc.bind_instance(instance)
+        return proc.restart()  # RECOVERING -> RUNNING (or QUARANTINED -> False)
 
     # --- legacy discovery (non-manifest) retained for smoke parity -----------
     def discover(self) -> List[str]:

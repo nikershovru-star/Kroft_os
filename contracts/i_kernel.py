@@ -18,6 +18,7 @@ class LifecycleState(Enum):
     UNINITIALIZED = "UNINITIALIZED"
     INITIALIZED = "INITIALIZED"
     RUNNING = "RUNNING"
+    FAILED = "FAILED"
     STOPPED = "STOPPED"
 
 
@@ -38,6 +39,10 @@ class IKernel(Protocol):
     def start(self) -> None: ...
 
     def stop(self) -> None: ...
+
+    def panic(self, reason: Optional[str] = None) -> None:
+        """Level 3 emergency: snapshot + transition to FAILED + stop. Read-only port."""
+        ...
 
     def emit(self, event_type: str, payload: Optional[dict] = None) -> None: ...
 

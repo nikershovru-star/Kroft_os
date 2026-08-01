@@ -8,8 +8,15 @@ CRITICAL (arch-gate LAW): `runtime.*` may import ONLY `contracts.*`. It must NOT
 import the `kernel` package. The concrete `Kernel` is injected from the composition
 root (bootstrap_v2.py, outside the scanned packages) — never imported here. This
 package depends solely on `contracts.IKernel`, never on the concrete kernel.
+
+Phase 4 adds the `supervisor` and `recovery` subpackages (autonomous recovery);
+both depend ONLY on contracts + local runtime modules (LAW K8 preserved).
 """
 from .context import RuntimeContext
 from .capability_registry import CapabilityRegistry
 
-__all__ = ["RuntimeContext", "CapabilityRegistry"]
+# Subpackages (self-contained, LAW K8: import only contracts + local runtime).
+from . import supervisor
+from . import recovery
+
+__all__ = ["RuntimeContext", "CapabilityRegistry", "supervisor", "recovery"]
