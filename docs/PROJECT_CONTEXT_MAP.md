@@ -256,6 +256,20 @@ ADR-030 Policy Boundary
 
 ---
 
+<!-- AUTO-GENERATED-START -->
+## 6.1 Auto-Generated Metrics (CI, do not edit by hand)
+
+> Этот блок генерируется `tools/context_map_sync.py` из фактических прогонов.
+> Ручное изменение чисел здесь → CI падает (drift detection).
+
+- **Tests:** 768 passed (run `python scripts/ci.py`)
+- **Arch-gate:** 14 passed (8 positive + 6 negative)
+- **ADR:** 31 (ADR-001..031)
+- **Open violations:** 0
+<!-- AUTO-GENERATED-END -->
+
+---
+
 ## 7. Architecture Gate (D6, WP-02)
 
 Источник: `tests/test_architecture.py` + `tests/test_architecture_negative.py`.
