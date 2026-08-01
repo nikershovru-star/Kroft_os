@@ -18,5 +18,6 @@ from .capability_registry import CapabilityRegistry
 # Subpackages (self-contained, LAW K8: import only contracts + local runtime).
 from . import supervisor
 from . import recovery
+from . import hot_reload
 
-__all__ = ["RuntimeContext", "CapabilityRegistry", "supervisor", "recovery"]
+__all__ = ["RuntimeContext", "CapabilityRegistry", "supervisor", "recovery", "hot_reload"]

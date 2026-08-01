@@ -83,12 +83,20 @@ class IHealthCheck(Protocol):
 
 @runtime_checkable
 class IComponentController(Protocol):
-    """Restart abstraction — Supervisor calls this, knows nothing about building.
+    """Restart/swap abstraction — Supervisor calls this, knows nothing about building.
 
     The concrete implementation (composition root) wires ComponentRegistry +
     InstanceBuilder. The Supervisor only sees this port (LAW K8 preserved).
+
+    Phase 5 (Hot Reload): `swap()` replaces a component's instance in place
+    (e.g. a degraded component upgraded to a new version) WITHOUT stopping the
+    Kernel — unlike `restart()`, which rebuilds the existing instance.
     """
 
     def restart(self, component_name: str) -> bool:
         """Attempt to restart a component. Returns True if it came back RUNNING."""
+        ...
+
+    def swap(self, component_name: str, new_instance: Any) -> bool:
+        """Replace a component's instance in place (hot swap). Returns True on success."""
         ...

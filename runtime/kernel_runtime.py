@@ -60,7 +60,7 @@ def run(
 
         # Phase 3: Runtime Services observe via the event bus.
         if mode == "services" and services_factory is not None:
-            services = services_factory(kernel)
+            services = services_factory(kernel, plugins_dir)
             for svc in services:
                 if hasattr(svc, "start"):
                     svc.start()
@@ -114,7 +114,7 @@ def main() -> int:
     bus = build_event_bus()
     kernel = build_kernel(bus=bus)
     builder = build_instance_builder()
-    services_factory = (lambda k: build_services(k, bus)) if args.mode == "services" else None
+    services_factory = (lambda k, pd=None: build_services(k, bus, pd)) if args.mode == "services" else None
     return run(
         kernel,
         mode=args.mode,

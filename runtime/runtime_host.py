@@ -57,5 +57,5 @@ class RuntimeHost:
                 except Exception:
                     instance = None
             proc = self.registry.activate_platform(m.name, m, instance=instance)
-            activated[m.name] = proc.status.value
+            activated[m.name] = proc.state.value
         return activated

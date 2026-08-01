@@ -42,7 +42,7 @@ class SnapshotService:
             procs.append({
                 "name": name,
                 "pid": getattr(proc, "pid", None),
-                "status": getattr(proc, "status", ProcessStatus.UNBOUND).value
+                "status": getattr(proc, "state", ProcessStatus.UNBOUND).value
                 if proc is not None else "UNBOUND",
             })
         payload = {"generated_at": ts, "processes": procs}

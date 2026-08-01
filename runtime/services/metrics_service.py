@@ -85,7 +85,7 @@ class MetricsService:
             snap["components_running"] = sum(
                 1 for n in self._registry.list()
                 if (self._registry.get(n) is not None
-                    and getattr(self._registry.get(n), "status", None) == ProcessStatus.RUNNING)
+                    and getattr(self._registry.get(n), "state", None) == ProcessStatus.RUNNING)
             )
         self._bus.publish_sync("metric:snapshot", snap)
         # Backward-compatible single metric topics (used by smoke test).

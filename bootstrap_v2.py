@@ -34,6 +34,7 @@ from runtime.services import (
 )
 from contracts import IEventBus, IProcessRegistry, IComponentController
 from runtime.component_registry import ComponentRegistry
+from runtime.hot_reload import HotReloadService
 from runtime.supervisor import (
     HealthMonitor,
     RecoveryPolicyRegistry,
@@ -81,8 +82,8 @@ def build_instance_builder() -> Callable[[str, Manifest], Optional[Any]]:
     return builder
 
 
-def build_services(kernel: Any, bus: IEventBus) -> List[Any]:
-    """Construct the Phase 3 + Phase 4 runtime services, injected with the shared bus.
+def build_services(kernel: Any, bus: IEventBus, plugins_dir: Optional[Path] = None) -> List[Any]:
+    """Construct the Phase 3 + Phase 4 + Phase 5 runtime services, shared bus.
 
     Services observe via IEventBus; they never import domain platforms (LAW K3).
     The bus is the single shared instance wired into Kernel (via its container)
@@ -94,6 +95,10 @@ def build_services(kernel: Any, bus: IEventBus) -> List[Any]:
     IComponentController that delegates restart to the ComponentRegistry +
     InstanceBuilder — so the Supervisor stays ignorant of how/where/which platform
     is built (LAW K8 preserved).
+
+    Phase 5 adds Hot Reload: ConfigService watches config.json and the HotReloadService
+    watches config.json + plugins/ (stdlib os.stat polling, no third-party watchdog),
+    applying changes without a Kernel restart.
     """
     if bus is None:
         return []
@@ -104,7 +109,7 @@ def build_services(kernel: Any, bus: IEventBus) -> List[Any]:
     registry: Optional[IProcessRegistry] = None
 
     # Phase 4: autonomous recovery wiring.
-    comp_registry = ComponentRegistry(plugins_dir=None)
+    comp_registry = ComponentRegistry(plugins_dir=plugins_dir)
     comp_registry.set_instance_builder(build_instance_builder())
     controller = ComponentController(comp_registry)
     policies = RecoveryPolicyRegistry.from_dict({
@@ -121,14 +126,29 @@ def build_services(kernel: Any, bus: IEventBus) -> List[Any]:
     )
     health = HealthMonitor(bus=bus, registry=comp_registry, logger=logger)
 
+    # Phase 5: Hot Reload.
+    config_service = ConfigService(bus=bus, logger=logger)
+    hot_reload = HotReloadService(
+        bus=bus, config_service=config_service, registry=comp_registry,
+        config_path=Path.cwd() / "config.json", plugins_dir=plugins_dir,
+        logger=logger,
+    )
+
     services: List[Any] = [
         logger,
         MetricsService(bus=bus, collector=collector, registry=registry, logger=logger),
-        ConfigService(bus=bus, logger=logger),
+        config_service,
         SnapshotService(bus=bus, registry=registry, logger=logger),
         supervisor,
         health,
+        hot_reload,
     ]
+    # Start watching (Phase 5): config.json + plugins/ polled via os.stat.
+    try:
+        config_service.start_watching()
+        hot_reload.start()
+    except Exception:
+        pass
     return services
 
 
@@ -136,8 +156,9 @@ class ComponentController(IComponentController):
     """Concrete IComponentController (composition root only).
 
     Restart delegates to ComponentRegistry.reactivate, which uses the injected
-    InstanceBuilder to rebuild the platform instance. The Supervisor sees ONLY
-    this port — it never learns how/where/which platform is built (LAW K8).
+    InstanceBuilder to rebuild the platform instance. `swap()` replaces the
+    instance in place (Phase 5) without stopping the Kernel. The Supervisor sees
+    ONLY this port — it never learns how/where/which platform is built (LAW K8).
     """
 
     def __init__(self, registry: ComponentRegistry) -> None:
@@ -152,6 +173,10 @@ class ComponentController(IComponentController):
             except Exception:
                 instance = None
         return self._registry.reactivate(component_name, instance)
+
+    def swap(self, component_name: str, new_instance: Any) -> bool:
+        """Hot-swap a component's instance in place (Phase 5), no Kernel.stop()."""
+        return self._registry.swap(component_name, new_instance)
 
 
 def main() -> int:

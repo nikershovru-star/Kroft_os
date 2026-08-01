@@ -139,5 +139,43 @@ class ComponentRegistry:
         for comp in self._components.values():
             comp["status"] = "STOPPED"
 
+    def swap(self, name: str, instance: Any) -> bool:
+        """Hot-swap a component's instance in place (Phase 5), no Kernel.stop().
+
+        Replaces the underlying instance and drives the process back to RUNNING
+        via the RECOVERING->RUNNING transition. The Kernel is NOT stopped — the
+        component is swapped live. Returns True if it came back RUNNING.
+        """
+        proc = self._processes.get(name)
+        if proc is None:
+            return False
+        proc.bind_instance(instance)
+        return proc.restart()  # RECOVERING -> RUNNING (or QUARANTINED -> False)
+
+    def reload_manifests(self) -> List[str]:
+        """Re-read plugins/*/manifest.yaml and activate any NEW components (Phase 5).
+
+        Existing components are left untouched (no restart). Returns the list of
+        newly activated component names. Manifest changes to existing components are
+        ignored (live swap is a separate, explicit action via swap()).
+        """
+        if self._plugins_dir is None:
+            return []
+        current = set(self._processes.keys())
+        manifests = self.load_manifests()
+        activated: List[str] = []
+        for m in manifests:
+            if m.name in current:
+                continue  # already running; not restarted on reload
+            instance = None
+            if self._instance_builder is not None:
+                try:
+                    instance = self._instance_builder(m.name, m)
+                except Exception:
+                    instance = None
+            self.activate_platform(m.name, m, instance=instance)
+            activated.append(m.name)
+        return activated
+
     def register(self, name: str, component: Dict[str, Any]) -> None:
         self._components[name] = component
