@@ -176,3 +176,10 @@ adrs:
     ports_added: []
     laws_affected: [K1, K3, K8]
     note: "Phase B. Канонический жизненный цикл загрузки: configuration -> DI -> runtime -> kernel -> plugins -> services -> ready (и reverse). Вся сборка в composition/ (Composition Root), ядро не создаёт зависимостей. Фундамент для Supervisor/Recovery, Multi-Agent, Plugin Marketplace, Cluster, Self-Healing без изменения kernel."
+  - id: ADR-030
+    title: Policy & Domain Boundary (Phase C)
+    status: proposed
+    relates_to: [ADR-009, ADR-026, ADR-027, ADR-028, LAW-K6]
+    ports_added: [estimate_cost]
+    laws_affected: [K6]
+    note: "Phase C. V3 (adapters/router.py -> policies.budget_policy.estimate_cost) RESOLVED: estimate_cost ported to contracts/cost.py; adapters depend ONLY on contracts. PolicyRegistry (policies/registry.py) makes policies pluggable by name. PolicyEngine pipeline (veto->filter->rank->fallback) already implements C.3 (Wave 5). All major layers now depend ONLY on contracts."
