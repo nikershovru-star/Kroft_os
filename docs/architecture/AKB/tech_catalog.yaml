@@ -1,0 +1,31 @@
+# KROFT OS — Technology Catalog (machine-readable)
+# Восстановлено 2026-08-01 по memory. Читается Hermes + tests/, НЕ runtime (LAW K8).
+tech_catalog:
+  language:
+    primary: python
+    version: "3.11"
+    reason: "Стабильность, экосистема ИИ-библиотек, типизация."
+  testing:
+    framework: pytest
+    reason: "Стандарт индустрии; golden/compat тесты контрактов."
+  runtime_constraints:
+    rule: "runtime/ + kernel/ используют ТОЛЬКО stdlib + contracts/ (LAW K1/K8)."
+    forbidden_third_party_in_runtime: true
+  external_model:
+    name: OmniRoute
+    type: keyless-free-model-gateway
+    location: "localhost:20128 (вне domain-слоя, только base_url)"
+    reason: "Model Platform (ADR-006) НЕ зависит от конкретного провайдера; OmniRoute — внешний adapter."
+  knowledge_store:
+    type: markdown + yaml (AKB)
+    reason: "Machine-readable + человекочитаемо; парсится arch-gate."
+  event_bus:
+    type: in-process pub/sub (ADR-003)
+    reason: "Минимальная связность; signals как факты изменения."
+  media_stack:
+    youtube_metadata: "yt-dlp (pip install yt-dlp) — extract_info(download=False)"
+    youtube_transcript: "youtube-transcript-api (pip install) — get_transcript(video_id)"
+    local_vision: "Ollama qwen2.5-vl (ollama pull qwen2.5-vl, ~4GB, RTX 3060 12GB OK)"
+    local_asr: "Ollama whisper / faster-whisper"
+    note: "Все внешние вызовы через adapters/ (LAW K6). Ollama — внешний адаптер (как OmniRoute), base_url только (LAW K8)."
+    status: "ADR-025 proposed; требует установки перед использованием"

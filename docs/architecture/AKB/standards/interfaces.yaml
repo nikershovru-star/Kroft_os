@@ -1,0 +1,8 @@
+# KROFT OS — Engineering Standards: Interfaces
+# Восстановлено 2026-08-01 по memory. Читается arch-gate/tests.
+interfaces:
+  rule: "Every interface lives in contracts/ as Protocol/abstract. No interface in services/ or runtime/."
+  stability: "Contracts are stable; implementations may change (ADR-002)."
+  versioning: "Breaking change to a contract REQUIRES ADR + RFC."
+  forbidden: ["concrete class imported across Boundary instead of port", "interface defined outside contracts/"]
+  examples: [IKernel, IComponentController, IEventBus, IAgentPlatform, IProcess, IManifest]

@@ -1,0 +1,48 @@
+# KROFT OS — Evidence Levels (machine-readable, KES#1 / KEH §3)
+# Hierarchy of evidence для инженерных утверждений. Источник: Evidence-Based SE
+# (Kitchenham SLR guidelines). Чем выше уровень — тем ниже систематический bias.
+# Используется: ResearchArtifact.evidence_level, ADR.evidence-гейт (KEH §3/§5).
+
+evidence_levels:
+  - level: I
+    name: systematic-review
+    description: "Systematic review / meta-analysis независимых источников (consensus>=2)."
+    min_consensus: 2
+    admissible_for: [law, pattern, fundamental-decision]
+    example: "7 независимых источников согласны по Supervisor pattern"
+
+  - level: II
+    name: empirical
+    description: "Эмпирическое исследование (RCT / воспроизводимый benchmark с статистикой)."
+    min_consensus: 1
+    admissible_for: [implementation-choice, benchmark]
+    example: "A/B benchmark Scheduler A vs B со статистикой (p<0.05)"
+
+  - level: III
+    name: comparative
+    description: "Сравнительное исследование (2+ подхода в контролируемом окружении)."
+    min_consensus: 1
+    admissible_for: [local-decision, adr]
+    example: "Сравнение 2 подходов recovery в KROFT runtime"
+
+  - level: IV
+    name: case-study
+    description: "Case study / опыт проекта / post-mortem."
+    min_consensus: 1
+    admissible_for: [post-mortem, experience]
+    example: "Phase 4 recovery analysis (post-mortem)"
+
+  - level: V
+    name: expert-opinion
+    description: "Expert opinion / один blog post / undocumented. ТОЛЬКО hypothesis."
+    min_consensus: 0
+    admissible_for: [hypothesis]
+    example: "Один engineering blog post про new pattern"
+
+# Gate (KEH §3): ADR требует минимум Level III + consensus>=2.
+gate:
+  min_level_for_adr: III
+  min_consensus_for_adr: 2
+  below_gate_status: "proposed-low-confidence"
+  revisit_if_low_confidence_months: 3
+  revisit_if_normal_months: 24

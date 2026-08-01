@@ -1,0 +1,66 @@
+# KROFT OS — Pattern Library (machine-readable)
+# Уровень 4 (Pattern Library). Каждый удачный компонент = шаблон.
+# Hermes предлагает готовую архитектуру при создании нового модуля.
+# source = ADR или KROFT-native. Читается arch-gate (allowlist), НЕ runtime (LAW K8).
+
+pattern_library:
+  - id: PL1
+    name: Supervisor
+    when: "Компонент может упасть; нужен restart/escalation без остановки Kernel."
+    ports: [IComponentController]
+    laws: [K1, K3, K8]
+    source: ADR-020/021
+  - id: PL2
+    name: Plugin
+    when: "Расширить систему без модификации ядра (manifest-driven activation)."
+    ports: [IPlugin, IManifest]
+    laws: [K3, K8]
+    source: ADR-020
+  - id: PL3
+    name: Repository
+    when: "Абстрагировать персистентность за интерфейсом."
+    ports: [IRepository]
+    laws: [K1, K2]
+    source: ADR-011/012
+  - id: PL4
+    name: Actor
+    when: "Изолированная конкурентная единица работы (virtual actor, Orleans)."
+    ports: [IActor]
+    laws: [K1, K8]
+    source: ADR-021 (Orleans)
+  - id: PL5
+    name: Pipeline
+    when: "Последовательная обработка стадиями."
+    ports: [IPipeline, IStage]
+    laws: [K3]
+    source: ADR-013
+  - id: PL6
+    name: Recovery
+    when: "Автоматическое исцеление после сбоя (policy-driven backoff)."
+    ports: [IRecoveryPolicy, IReconciler]
+    laws: [K1, K8]
+    source: ADR-020 Phase 4
+  - id: PL7
+    name: Scheduler
+    when: "Периодическое/таймовое выполнение."
+    ports: [IScheduler]
+    laws: [K1, K3]
+    source: KROFT-native
+  - id: PL8
+    name: Workflow
+    when: "Многошаговая оркестрация (plan-execute-reflect-retry)."
+    ports: [IPlanner, IExecutor, IReflection]
+    laws: [K3, K4]
+    source: ADR-013
+  - id: PL9
+    name: Memory
+    when: "Состояние/recall (semantic + procedural)."
+    ports: [IMemoryStore, ISemanticMemory]
+    laws: [K1, K2]
+    source: ADR-012
+  - id: PL10
+    name: Research Mesh
+    when: "Распределённый research/synthesis через специализированных агентов."
+    ports: [IAgentPlatform]
+    laws: [K4, K5, K8]
+    source: ADR-023

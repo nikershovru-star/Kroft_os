@@ -1,0 +1,42 @@
+# KROFT OS — Organizational Memory (machine-readable, Уровень 17)
+# ADR-E pattern: храним НЕ только итог, но аргументацию.
+# Через 5 лет можно спросить "почему Supervisor именно такой?" → вся история.
+
+org_memory:
+  - adr: ADR-020
+    why: "Runtime должен быть минимален и не зависеть от бизнес-логики волн."
+    who_proposed: "Hermes (Architecture Intelligence Protocol) + пользователь (вариант б утверждён)"
+    alternatives:
+      - "variant-a: Runtime внутри Kernel (отвергнут: раздувает ядро, нарушает LAW K1/K3)"
+      - "wrapper-adapters вокруг kernel (отвергнут: неявные зависимости)"
+      - "external orchestrator (отвергнут: дублирует Supervisor, нарушает LAW K8 reuse)"
+    mistakes:
+      - "Phase 4 recover — single sync time.sleep без yield между попытками (known-limitation, задокументировано; F1 forbidden)"
+    review_trigger: "Когда появится ICoordinator (Phase 8) ИЛИ async Reconciler"
+
+  - adr: ADR-022
+    why: "Архитектурные знания должны быть machine-readable, чтобы Hermes и тесты читали их, не парся markdown."
+    who_proposed: "Hermes (Architecture Intelligence Protocol v2.0)"
+    alternatives:
+      - "markdown-only ADR (отвергнут: не парсится arch-gate)"
+      - "runtime-embedded governance (отвергнут: нарушает LAW K8)"
+    mistakes: []
+    review_trigger: "Когда AKB перестанет парситься ИЛИ появится новый вид знания"
+
+  - adr: ADR-023
+    why: "Research Mesh должен быть KROFT-native (через IAgentPlatform), а не внешний оркестратор — reuse substrate."
+    who_proposed: "Hermes (Architecture Intelligence Protocol v2.0)"
+    alternatives:
+      - "внешний multi-agent фреймворк (отвергнут: distributed-systems problem, дублирует KROFT)"
+    mistakes: []
+    review_trigger: "Когда добавится новый специализированный агент (расширение RM)"
+
+  - adr: ADR-024
+    why: "Meta-engine и EIP живут ВНЕ runtime (LAW K8), используя KROFT как substrate, не раздувая ядро."
+    who_proposed: "Hermes (Architecture Intelligence Protocol v2.0)"
+    alternatives:
+      - "EIP в runtime (отвергнут: нарушает LAW K8, раздувает ядро)"
+      - "ML-forecast сразу (отвергнут: Sculley TD warning, нет данных)"
+      - "autonomous self-improve без approve (отвергнут: Gödel runaway, нарушает LAW K5)"
+    mistakes: []
+    review_trigger: "EIP-агент импортирует runtime/ ИЛИ self-improvement без approve"

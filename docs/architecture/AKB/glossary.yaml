@@ -1,0 +1,116 @@
+# KROFT OS — Glossary (machine-readable, KL v1.0)
+# Ubiquitous Language. Проверяется doc-lint при каждом PR (устаревший термин → warning).
+# aliases = ЗАПРЕЩЁННЫЕ синонимы (исторические дубликаты). used_in = где применяется.
+
+glossary:
+  - term: Agent
+    definition: "Автономный KROFT-компонент, реализующий IAgentPlatform; выполняет goal -> AgentResult."
+    aliases: [Worker, Executor, Assistant, Bot]
+    deprecated: false
+    introduced: "ADR-014"
+    used_in: [KERA, KEH, KES, Research Platform, Marketplace Platform]
+
+  - term: Platform
+    definition: "Крупная подсистема экосистемы (Research/Runtime/Knowledge/...)."
+    aliases: [Subsystem, Service-layer]
+    deprecated: false
+    introduced: "KERA v1.0"
+    used_in: [KERA, Engineering Intelligence Platform]
+
+  - term: Kernel
+    definition: "Минимальное ядро (kernel/ + runtime/), импортирует только contracts."
+    aliases: [Core, Engine]
+    deprecated: false
+    introduced: "ADR-020"
+    used_in: [KERA, ADR-020, LAW K1, LAW K8]
+
+  - term: Capability
+    definition: "Атомарная функция, предоставляемая компонентом через порт."
+    aliases: [Feature, Function]
+    deprecated: false
+    introduced: "KERA v1.0"
+    used_in: [KERA, Runtime Platform]
+
+  - term: Research
+    definition: "Сбор и синтез инженерных знаний (Research Mesh)."
+    aliases: [Investigation, Study]
+    deprecated: false
+    introduced: "ADR-023"
+    used_in: [KES, Research Platform, EIP]
+
+  - term: Evidence
+    definition: "Доказательство утверждения с Evidence Level (I-V, KES#1)."
+    aliases: [Proof, Source]
+    deprecated: false
+    introduced: "KES v1.0"
+    used_in: [KES, KEH, ADR]
+
+  - term: Artifact
+    definition: "Persist-вывод агента/процесса (читаемый другими)."
+    aliases: [Output, Result]
+    deprecated: false
+    introduced: "ADR-023"
+    used_in: [KES, Research Mesh, EIP]
+
+  - term: Knowledge
+    definition: "Накопленные инженерные знания (AKB + Knowledge Platform)."
+    aliases: [Data, Info]
+    deprecated: false
+    introduced: "ADR-022"
+    used_in: [AKB, Knowledge Platform, EIP]
+
+  - term: Loop
+    definition: "Замкнутый feedback-контур EIP (Research/Architecture/Implementation/Learning)."
+    aliases: [Cycle, Pipeline]
+    deprecated: false
+    introduced: "KERA v1.0"
+    used_in: [EIP, KES]
+
+  - term: Composition Root
+    definition: "Точка сборки компонентов (bootstrap_v2); единственное место wiring."
+    aliases: [Wiring, Bootstrap]
+    deprecated: false
+    introduced: "Master Development Plan v3.0"
+    used_in: [KERA, Runtime Platform, Development Platform]
+
+  - term: Experiment
+    definition: "Контролируемое изменение (Hypothesis -> Metrics -> Result)."
+    aliases: [Test, Trial]
+    deprecated: false
+    introduced: "KES v1.0"
+    used_in: [KES, Experiment Science]
+
+  - term: Contract
+    definition: "Порт (Protocol/abstract) в contracts/; граница между слоями."
+    aliases: [Interface, API]
+    deprecated: false
+    introduced: "ADR-002"
+    used_in: [KERA, contracts/, Platforms]
+
+  - term: Boundary
+    definition: "Граница слоя (Core/Services/Meta) с правилами импортов (LAW K1/K8)."
+    aliases: [Layer, Edge]
+    deprecated: false
+    introduced: "KERA v1.0"
+    used_in: [KERA, LAW K1, LAW K8]
+
+  - term: Projection
+    definition: "Взгляд на систему (View в KERA: Logical/Runtime/Deployment/Knowledge/Security/Evolution)."
+    aliases: [View, Perspective]
+    deprecated: false
+    introduced: "KERA v1.0 (Views)"
+    used_in: [KERA, Views]
+
+  - term: Decision
+    definition: "Зафиксированное решение (ADR) с score/confidence/risk."
+    aliases: [Choice, Vote]
+    deprecated: false
+    introduced: "KES v1.0"
+    used_in: [KES, ADR, Decision Science]
+
+  - term: Signal
+    definition: "Событие в EventBus (ADR-003), несущее факт изменения состояния."
+    aliases: [Event, Message]
+    deprecated: false
+    introduced: "ADR-003"
+    used_in: [KERA, EventBus, Runtime Platform]

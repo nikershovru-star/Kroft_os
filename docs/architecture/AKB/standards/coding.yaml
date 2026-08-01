@@ -1,0 +1,9 @@
+# KROFT OS — Engineering Standards: Coding
+# Восстановлено 2026-08-01 по memory. Читается arch-gate/tests.
+coding:
+  style: "PEP8 + explicit types. No wildcard imports."
+  contracts: "All cross-boundary calls via contracts/ Protocol (Interface Standard I1)."
+  testing: "Every port has a golden test; every contract a compat test (ADR-002)."
+  forbidden: ["from services import X", "monkey-patching kernel", "blocking sleep in recovery (F1)"]
+  naming: "KL terms only (see glossary.yaml); aliases forbidden."
+  commits: "Atomic per phase; named files; never git add -A (LAW K7)."

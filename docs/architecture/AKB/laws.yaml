@@ -1,0 +1,76 @@
+# KROFT OS — Architecture Laws (LAW K1-K8)
+# Source of truth для Architecture Gate. Читается arch-gate (tests/), НЕ runtime.
+# Восстановлено 2026-08-01 после случайного удаления; семантика сохранена по memory.
+laws:
+  - id: K1
+    name: kernel-imports-only-contracts
+    statement: "Kernel (kernel/) and runtime/ import ONLY contracts/. Never services/, adapters/, or other layers."
+    source: kernel/*, runtime/*
+    forbidden: [services/*, adapters/*, infrastructure/*]
+    rationale: "Isolate core from business logic; minimal dependency surface (KP-004 Small Kernel)."
+    introduced: "ADR-002"
+    severity: block
+    note: "AUDIT 2026-08-01: laws.yaml forbids kernel->infrastructure, BUT tests/test_architecture.py ALLOWED['kernel']={contracts,infrastructure,runtime} and the gate is GREEN on real code. The executable gate currently PERMITS kernel->infrastructure. Either tighten the gate (disallow infra in kernel) or relax this law — PENDING ARCHITECT DECISION. Law kept strict here; gap documented, not enshrined."
+
+  - id: K2
+    name: services-dont-modify-kernel
+    statement: "Services MUST NOT modify or subclass Kernel internals. Extend via ports only."
+    source: services/*
+    forbidden: ["kernel/* (mutation)", "monkey-patch kernel"]
+    rationale: "Protect core invariants (KP-003 Architecture > Features)."
+    introduced: "ADR-002"
+    severity: block
+
+  - id: K3
+    name: kernel-does-not-know-services
+    statement: "Kernel has no reference to concrete services. Wiring happens ONLY in Composition Root (bootstrap_v2)."
+    source: kernel/*
+    forbidden: ["import services", "hardcoded service refs"]
+    rationale: "Dependency inversion; Kernel stays minimal (KP-004)."
+    introduced: "Master Development Plan v3.0"
+    severity: block
+
+  - id: K4
+    name: artifacts-traceable
+    statement: "Every agent/process output (AgentResult, ResearchArtifact) is frozen and traceable (who, when, why)."
+    source: services/* (agents)
+    forbidden: ["mutable/untracked results"]
+    rationale: "Reproducibility, debugging, org memory (KP-002 Evidence > Opinion)."
+    introduced: "ADR-014"
+    severity: warn
+
+  - id: K5
+    name: human-approve-required
+    statement: "Apply/approve (deployment, ADR acceptance, self-improvement) REQUIRES human."
+    source: meta-layer, governance
+    forbidden: ["autonomous apply without approve"]
+    rationale: "Humans approve (KP-006); Gödel-boundary against runaway (ADR-024)."
+    introduced: "ADR-024"
+    severity: block
+
+  - id: K6
+    name: explicit-boundaries
+    statement: "Cross-layer communication ONLY via contracts/ ports or EventBus signals. No direct calls across Boundary."
+    source: all
+    forbidden: ["direct cross-boundary imports bypassing contract"]
+    rationale: "Boundary isolation (KERA View — Security)."
+    introduced: "KERA v1.0"
+    severity: block
+
+  - id: K7
+    name: atomic-commits
+    statement: "Changes committed atomically per phase/wave; never git add -A; named files only."
+    source: workflow
+    forbidden: ["git add -A", "mixed-phase commits"]
+    rationale: "Traceable history (user rule); reviewability."
+    introduced: "User convention"
+    severity: warn
+
+  - id: K8
+    name: architecture-intelligence-outside-runtime
+    statement: "Architecture intelligence (AKB, Research Mesh, LLM reasoning, EIP) lives in docs/ + services/, NEVER in runtime/ kernel/."
+    source: runtime/* (MUST NOT import)
+    forbidden: ["runtime/ imports akb", "kernel/ imports research/llm"]
+    rationale: "Runtime minimal + stable; intelligence is meta-layer (ADR-022/024)."
+    introduced: "ADR-022"
+    severity: block

@@ -1,0 +1,76 @@
+# KROFT OS — Architecture History (machine-readable, Knowledge Base Update log)
+# Каждое значимое изменение архитектуры фиксируется здесь (traceability).
+# Восстановлено 2026-08-01 (history пересоздана; ранние записи — по memory).
+
+history:
+  - date: "2026-07-31"
+    commit: "kroft-rebrand"
+    adr: "-"
+    law_changes: [rename]
+    note: "KnowledgeOS-v5 переименован в KROFT_OS (in-code rebrand закоммичен). Физический rename папки заблокирован OS."
+
+  - date: "2026-08-01"
+    commit: "adr021"
+    adr: ADR-021
+    law_changes: [K1, K8]
+    note: "Runtime Evolution — Architecture Intelligence Synthesis (OTP/K8s/Temporal/Dapr/Akka/Orleans/NATS/FDB/OTel/seL4 → supervision trees, declarative recovery, durable bus, virtual actors, chaos harness)."
+
+  - date: "2026-08-01"
+    commit: "adr022"
+    adr: ADR-022
+    law_changes: [K8]
+    note: "Architecture Knowledge Base (AKB) — machine-readable governance layer. Proposed."
+
+  - date: "2026-08-01"
+    commit: "adr023"
+    adr: ADR-023
+    law_changes: [K1, K3, K4, K5, K8]
+    note: "Architecture Agent Hierarchy (10 levels) & Research Mesh. KROFT-native agents via IAgentPlatform+Supervisor+EventBus."
+
+  - date: "2026-08-01"
+    commit: "adr024"
+    adr: ADR-024
+    law_changes: [K3, K8]
+    note: "Meta Architecture Engine (L11-L18) & Engineering Intelligence Platform (EIP). EIP = meta-layer OVER KROFT, NOT runtime (LAW K8). ADR-E Org Memory; heuristic>ML; human-in-loop self-improve."
+
+  - date: "2026-08-01"
+    commit: "kera-v1.0"
+    adr: KERA
+    law_changes: []
+    note: "KROFT Engineering Reference Architecture v1.0 — CONSTITUTION. Consolidates ADR-021..024 into single system-of-coordinates."
+
+  - date: "2026-08-01"
+    commit: "kes-keh-v1.0"
+    adr: KES
+    law_changes: []
+    note: "KROFT Engineering Science (KES) v1.0 + KROFT Engineering Handbook (KEH) v1.0. KES=10 science directions; KEH=methodology. MOC reorganized into hierarchy."
+
+  - date: "2026-08-01"
+    commit: "principal-restructure"
+    adr: KERA
+    law_changes: []
+    note: "PRINCIPAL REVIEW: добавлены KP (Philosophy, выше Vision, рождает LAW), KL (Language/ubiquitous), Glossary (glossary.yaml), RFC-слой (rfcs.yaml), KERA Views (адаптированный 4+1). KES/KEH реструктурированы в MOC-навигацию. P/L-нумерация → внутренние коды; primary names = смысловые."
+
+  - date: "2026-08-01"
+    commit: "krm-v1.0"
+    adr: KRM
+    law_changes: []
+    note: "KROFT Reference Model (KRM) v1.0 — метамодель: 16 entity-types (Knowledge/Artifact/Decision/Capability/Contract/Platform/Agent/Component/Signal/Boundary/State/Projection/Policy/Resource/Workflow/Evidence) + allowed relationships (Knowledge Graph 2.0 backbone)."
+
+  - date: "2026-08-01"
+    commit: "docs-reorg-subdirs"
+    adr: "-"
+    law_changes: []
+    note: "Доки architecture/ перенесены в подпапки KP/ KRM/ KERA/ KEH/ KES/ KL/ RFC/ AKB/ (структура из PROJECT_CONTEXT_MAP)."
+
+  - date: "2026-08-01"
+    commit: "akb-recovery"
+    adr: AKB
+    law_changes: [K1, K8]
+    note: "AKB YAML восстановлены после случайного удаления (rm -rf). laws.yaml (K1-K8), patterns/forbidden (F1-F6), patterns/allowed (PL1-PL10), standards/*, evidence_levels, glossary, rfcs, org_memory, pattern_library, tech_catalog, adrs, history."
+
+  - date: "2026-08-01"
+    commit: "akb-audit-v1.1.1"
+    adr: AKB
+    law_changes: [K1]
+    note: "AKB AUDIT v1.1.1: adrs.yaml синхронизирован с диском (ADR-001..025, ADR-007 теперь как два файла с одним ID -> переименован design-файл в 'ADR-007 Policy Platform — Design (superseded draft).md'). laws.yaml K1 + patterns/forbidden.yaml F1/F4/F5/F6 enforcement-поля СИНХРОНИЗИРОВАНЫ с реальностью (гейт выполняет только import-axis проверки; автоматически ловится только F2). K1-vs-gate КОНФЛИКТ задокументирован: laws.yaml запрещает kernel->infrastructure, но tests/test_architecture.py ALLOWED['kernel']={contracts,infrastructure,runtime} и зелёный. Решение: подтянуть гейт (убрать infrastructure), НЕ ослаблять закон (см. Variant A Задача 4)."

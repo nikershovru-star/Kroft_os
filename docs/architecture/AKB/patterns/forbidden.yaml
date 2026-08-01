@@ -1,0 +1,48 @@
+# KROFT OS — Forbidden Patterns (F1-F6)
+# Читается arch-gate (tests/), НЕ runtime. Восстановлено 2026-08-01 по memory (семантика).
+# AUDIT 2026-08-01: enforcement-поля СИНХРОНИЗИРОВАНЫ с реальностью. Реальный
+# tests/test_architecture.py выполняет ТОЛЬКО import-axis проверки
+# (test_no_forbidden_cross_layer_imports + test_services_do_not_cross_import).
+# Из F1-F6 автоматически ловится ТОЛЬКО F2 (и частично F3).
+forbidden:
+  - id: F1
+    name: blocking-sleep-in-recovery
+    rule: "Recovery/Reconcile MUST NOT use a single blocking time.sleep() to wait for subsystem readiness."
+    reason: "Blocks Kernel event loop; violates async supervision model (ADR-020 Phase 4)."
+    enforcement: "NOT AUTOMATED — test_architecture.py не сканирует time.sleep. Manual review / future AST rule."
+    severity: block
+
+  - id: F2
+    name: runtime-imports-services
+    rule: "runtime/ and kernel/ MUST NOT import services/, adapters/, or infrastructure/."
+    reason: "Violates LAW K1/K8 (boundary + minimal kernel)."
+    enforcement: arch-gate import graph check
+    severity: block
+
+  - id: F3
+    name: hardcoded-dependency-in-kernel
+    rule: "Kernel MUST NOT hardcode concrete service/components; use ports + Composition Root."
+    reason: "Violates LAW K3 (kernel does not know services)."
+    enforcement: arch-gate import scan in kernel/
+    severity: block
+
+  - id: F4
+    name: meta-layer-in-runtime
+    rule: "runtime/ MUST NOT import akb/, research/, or LLM/reasoning modules."
+    reason: "Violates LAW K8 (architecture intelligence outside runtime)."
+    enforcement: "PARTIAL — import-axis gate forbids runtime->code packages, but does NOT scan runtime for akb/research/llm (docs/, not a package). Manual review."
+    severity: block
+
+  - id: F5
+    name: untraceable-agent-result
+    rule: "Agent/process output MUST be frozen + traceable (AgentResult frozen dataclass)."
+    reason: "Violates LAW K4 (artifacts traceable, reproducibility)."
+    enforcement: "NOT AUTOMATED — no type-level check in gate. Manual review / requires dedicated test."
+    severity: warn
+
+  - id: F6
+    name: adr-without-evidence
+    rule: "ADR in adrs.yaml MUST carry evidence_level >= III and consensus >= 2 (KEH §3 gate)."
+    reason: "Violates KP-002 (Evidence > Opinion); prevents opinion-based decisions."
+    enforcement: "NOT AUTOMATED — gate does not parse adrs.yaml. Manual review against evidence_levels.yaml gate (min III + consensus 2)."
+    severity: warn
