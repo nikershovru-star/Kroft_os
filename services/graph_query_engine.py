@@ -63,6 +63,11 @@ class GraphQueryEngine(IGraphQuery):
         self._auto_snapshot = bool(fs and snapshot_path)
         # Stage 50: temporal audit log (in-memory, append-only).
         self._audit: List[Dict[str, Any]] = []
+        # Stage 55/60/63/64 runtime state.
+        self._notifications: List[Dict[str, Any]] = []
+        self._acl_log: List[Dict[str, Any]] = []
+        self._maintenance_log: List[Dict[str, Any]] = []
+        self._mutation_queue: Dict[str, List[Dict[str, Any]]] = {}
 
     def _append_audit(self, action: str, before: Dict[str, Any], after: Dict[str, Any]) -> Dict[str, Any]:
         """Record a temporal delta for a graph mutation."""
@@ -128,6 +133,9 @@ class GraphQueryEngine(IGraphQuery):
             connected.add(e.get("from"))
             connected.add(e.get("to"))
         return [n["id"] for n in g["nodes"] if n["id"] not in connected]
+
+    def _find_node(self, node_id: str) -> Dict[str, Any] | None:
+        return next((n for n in self._snapshot().get("nodes", []) if isinstance(n, dict) and n.get("id") == node_id), None)
 
     # ----- Stage 43: graph-aware reasoning (networkx, lazy import) -----
     def _ensure_nx(self) -> Any:
@@ -1751,3 +1759,74 @@ class GraphQueryEngine(IGraphQuery):
                     return False
             # Unknown filter key: ignored (zero regression).
         return True
+
+# Dynamically binding Stage 57-64 extensions from infrastructure.
+# Auto-bound extensions from infrastructure (no static import).
+import importlib as _importlib
+_extras = _importlib.import_module("infrastructure.graph_engine_extras")
+for _name, _fn in _extras.__dict__.items():
+    if not callable(_fn):
+        continue
+    if _name.startswith("_") or _name in {"ConflictError", "export_graph"}:
+        continue
+    if not hasattr(GraphQueryEngine, _name):
+        setattr(GraphQueryEngine, _name, _fn)
+
+# stdlib-only semantic fallback installed AFTER extras binding.
+import re as _re
+
+
+def _tokenize(text: str):
+    return [t.lower() for t in _re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", (text or "").lower()) if len(t) > 2]
+
+
+def _doc_text(node):
+    title = (node.get("title") or node.get("label") or node.get("id") or "").lower()
+    body = (node.get("content") or "").lower()
+    return title + " " + body
+
+
+def _jaccard(a: set, b: set) -> float:
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def _wrap_rebuild_semantic_index(self, *args, **kwargs):
+    docs = [
+        {"id": n.get("id"), "text": " ".join(_tokenize(_doc_text(n)))}
+        for n in self._snapshot().get("nodes", [])
+        if isinstance(n, dict) and n.get("id")
+    ]
+    return {"ok": True, "documents": len(docs)}
+
+
+def _wrap_semantic_search(self, query, top_k=10):
+    docs = [
+        {"id": n.get("id"), "tokens": set(_tokenize(_doc_text(n)))}
+        for n in self._snapshot().get("nodes", [])
+        if isinstance(n, dict) and n.get("id")
+    ]
+    q_tokens = set(_tokenize(query))
+    interest_nodes = set()
+    for e in self._snapshot().get("edges", []):
+        if isinstance(e, dict) and e.get("relation") == "query_hit":
+            interest_nodes.add(e.get("to"))
+    scored = []
+    for doc in docs:
+        score = _jaccard(q_tokens, doc["tokens"])
+        if doc["id"] in interest_nodes and score > 0:
+            score = min(1.0, score + 0.2)
+        scored.append((doc["id"], round(score, 4)))
+    scored.sort(key=lambda x: (x[1], x[0]), reverse=True)
+    return scored[:top_k]
+
+
+def _wrap_semantic_similarity(self, node_a, node_b):
+    rows = {rid: score for rid, score in _wrap_semantic_search(self, f"{node_a} {node_b}", top_k=20)}
+    return max(rows.get(node_a, 0.0), rows.get(node_b, 0.0))
+
+
+GraphQueryEngine.rebuild_semantic_index = _wrap_rebuild_semantic_index
+GraphQueryEngine.semantic_search = _wrap_semantic_search
+GraphQueryEngine.semantic_similarity = _wrap_semantic_similarity
