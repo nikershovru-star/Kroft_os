@@ -80,3 +80,9 @@ history:
     adr: "-"
     law_changes: [K1 enforcement aligned with gate]
     note: "Variant A executed: KROFT_OS absorbs KnowledgeOS-v5. Unified repo: docs + code + full git history (merge commit 84417b9, --allow-unrelated-histories). 757 tests + arch-gate preserved. KnowledgeOS-v5 moved to archive/ (OS blocked mv -> cp -r + gitignore). K1 vs gate conflict RESOLVED by tightening the gate (commit d299d0e): kernel may NOT import infrastructure. KNOWN REMAINING VIOLATION: kernel/kernel.py imports infrastructure.DependencyContainer + SnapshotStore (lines 21-22) -> test_no_forbidden_cross_layer_imports FAILS. Requires separate code-fix (extract to composition root / contracts) with human approval (LAW K5). PROJECT_CONTEXT_MAP.md on disk is v1.1 (not v1.1.1); audit-record here is authoritative."
+
+  - date: "2026-08-01"
+    commit: "phase-b-dependency-report"
+    adr: "ADR-026/027/028 (proposed)"
+    law_changes: [K1, K3, K6]
+    note: "PHASE B (Architecture Stabilization) — Step 1-6 analysis COMPLETE, NO CODE CHANGES. Created docs/architecture/Dependency Report — Phase B.md (full 7-layer audit). Findings: kernel->infrastructure violations V1 (DependencyContainer) + V2 (SnapshotStore) [K1]; NEW violation V3 adapters/router.py->policies.budget_policy [K6]; V4 services/policy_engine->contracts.model_registry.ModelRegistry [K6 minor]; V5 cli/+bootstrap_v2 split wiring [K3 org]. Created ADR-026 Composition Root, ADR-027 Dependency Inversion, ADR-028 Kernel Purity (all proposed). composition/ skeleton created (empty, documented). REFACTORING (Step 7, kernel decoupling) PENDING human approval (LAW K5) — NOT executed."

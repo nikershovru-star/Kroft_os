@@ -148,4 +148,24 @@ adrs:
     decision_score: 90
     confidence: 0.80
     risk: "med (YouTube 403/rate-limit; requires pip/ollama install; code after Variant G)"
-    evidence: ["VideoRAG learnopencv", "arxiv 2510.01513 (DataWindow Pipes)", "Multimodal LLM pipelines (Medium/tutai)", "yt-dlp/youtube-transcript-api docs", "Ollama Qwen2.5-VL local"]
+  - id: ADR-026
+    title: Composition Root
+    status: proposed
+    relates_to: [ADR-020, ADR-002, ADR-003, LAW-K1, LAW-K3]
+    ports_added: []
+    laws_affected: [K1, K3]
+    note: "Phase B. Выделенный слой composition/ — единственная точка создания/связывания (DependencyContainer, SnapshotRepository, EventBus, Services, Adapters, Plugins). Kernel получает зависимости готовыми через ports."
+  - id: ADR-027
+    title: Dependency Inversion
+    status: proposed
+    relates_to: [ADR-026, ADR-002, LAW-K1, LAW-K6]
+    ports_added: [ISnapshotRepository, IModelRegistry]
+    laws_affected: [K1, K6]
+    note: "Phase B. DIP ко всем слоям: kernel/runtime/services зависят от ports, не реализаций. Устранение cross-импортов (adapters->policies, services->concrete ModelRegistry)."
+  - id: ADR-028
+    title: Kernel Purity
+    status: proposed
+    relates_to: [ADR-026, ADR-027, ADR-020, LAW-K1, LAW-K3]
+    ports_added: []
+    laws_affected: [K1, K3]
+    note: "Phase B. Kernel imports ONLY {contracts, runtime, stdlib}. Не знает о DI/FS/store/network/loggers/config/persistence. Verification: arch-gate green + grep kernel/ empty of infrastructure/services/adapters."
