@@ -14,6 +14,7 @@ from typing import Any, Callable, List, Optional
 from infrastructure import DependencyContainer, InMemoryEventBus
 from infrastructure.metrics import PsutilMetricsCollector
 from kernel import Kernel
+from runtime import RuntimeContext
 from runtime.kernel_runtime import run
 from runtime.manifest_schema import Manifest
 from runtime.services import ConfigService, LoggingService, MetricsService, SnapshotService
@@ -29,12 +30,34 @@ def build_event_bus() -> InMemoryEventBus:
     return InMemoryEventBus()
 
 
-def build_kernel(bus: Optional[IEventBus] = None) -> Kernel:
-    """Construct the concrete Kernel with the shared IEventBus wired in."""
-    container = DependencyContainer()
+def build_kernel(bus: Optional[IEventBus] = None, container: Optional[DependencyContainer] = None) -> Kernel:
+    """Construct the concrete Kernel with constructor injection (Phase B.2).
+
+    Kernel receives runtime_context, event_bus, state_repository, registry
+    already-built — it creates NOTHING (ADR-028 Kernel Purity). The container
+    is passed only for legacy resolution of optional snapshotables (deprecated).
+    """
+    if container is None:
+        container = DependencyContainer()
     if bus is not None:
         container.register_instance("IEventBus", bus)
-    return Kernel(container=container)
+    # Resolve the capabilities the Kernel needs, build them if missing.
+    runtime_context = RuntimeContext()
+    registry = container.resolve("ICapabilityRegistry") if container.has("ICapabilityRegistry") else None
+    fs = container.resolve("IFileSystem") if container.has("IFileSystem") else None
+    # Phase B.3: state repository wired from container (StateRepository impl).
+    state_repo = container.try_resolve("IStateRepository")
+    if state_repo is None and fs is not None:
+        from infrastructure.state_repository import StateRepository
+        state_repo = StateRepository(fs, "data/state.json")
+        container.register_instance("IStateRepository", state_repo)
+    return Kernel(
+        runtime_context=runtime_context,
+        event_bus=bus,
+        state_repository=state_repo,
+        registry=registry,
+        container=container,  # deprecated legacy path for snapshotable resolution
+    )
 
 
 def build_instance_builder() -> Callable[[str, Manifest], Optional[Any]]:

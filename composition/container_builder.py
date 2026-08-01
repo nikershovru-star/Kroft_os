@@ -40,6 +40,10 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
     c.register_instance("IEventBus", InMemoryEventBus())
     c.register_instance("IGraphBuilder", InMemoryGraphBuilder())
     c.register_instance("ICapabilityRegistry", CapabilityRegistry())
+    # Phase B.3: state repository (IStateRepository impl) wired here.
+    from infrastructure.state_repository import StateRepository
+    c.register_instance("IStateRepository", StateRepository(c.resolve("IFileSystem"),
+                                                            "data/state.json"))
     c.register_instance("ContentIndex", ContentIndex())
     c.register_instance("SemanticIndex", SemanticIndex())
     data_dir = _os.path.join(vault_path, ".kos")

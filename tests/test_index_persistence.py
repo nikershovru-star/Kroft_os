@@ -16,6 +16,7 @@ import pytest
 
 from adapters import LocalFileSystemAdapter
 from infrastructure import InMemoryGraphBuilder, InMemoryEventBus, SnapshotStore
+from infrastructure.state_repository import StateRepository
 from services import ContentIndex, GraphQueryEngine, VaultStreamCrawler, CrawlStateTracker
 from contracts import ISnapshotable
 from kernel import Kernel
@@ -97,7 +98,7 @@ def test_kernel_restores_index_from_v2_snapshot(tmp_path):
     c2 = build_container(vault)
     k2 = Kernel(c2)
     k2.initialize()
-    assert isinstance(k2._snapshot_store, SnapshotStore)
+    assert isinstance(k2._state_repository, StateRepository)
 
     engine = c2.resolve("GraphQueryEngine")
     # Index restored from snapshot — no re-crawl.
@@ -119,7 +120,7 @@ def test_kernel_saves_v2_snapshot(tmp_path):
     asyncio.run(c.resolve("VaultStreamCrawler").crawl())
     k.save()  # persists index while still RUNNING
 
-    raw = c.resolve("IFileSystem").read_content("data/index_snapshot.json")
+    raw = c.resolve("IFileSystem").read_content("data/state.json")
     data = json.loads(raw)
     assert data.get("version") == 2
     assert "index" in data

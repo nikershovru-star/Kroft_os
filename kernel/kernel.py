@@ -1,15 +1,17 @@
-"""KROFT_OS v5 Kernel — lifecycle orchestrator.
+"""KROFT_OS v5 Kernel — lifecycle orchestrator (Phase B.2/B.3/B.4 refactored).
 
-The kernel owns a single DependencyContainer (the composition root) and
-drives a strict lifecycle state machine. It does NOT import concrete
-adapters; everything is resolved through the container (including the
-event bus, referenced only via contracts.IEventBus).
+Kernel is PURE (ADR-028): it imports ONLY contracts + runtime + stdlib.
+It NO LONGER imports `infrastructure` (DependencyContainer, SnapshotStore).
 
-Stage 14: a background autosave watchdog can be enabled via
-`autosave_interval_sec`. While RUNNING, a dedicated daemon thread drives its
-own asyncio event loop running `_autosave_loop()`, which snapshots the graph
-every interval and emits `GraphAutosaved`. The timer is injectable (sleep_fn /
-clock) so tests can drive ticks without real wall-clock waiting.
+Dependency injection (constructor):
+  Kernel(runtime_context, event_bus, state_repository, registry, services=None)
+Kernel creates NOTHING — every dependency arrives fully-built via the
+Composition Root (composition/). Legacy compatibility: `Kernel(container=...)`
+is still accepted (resolves from the container) so existing tests keep passing;
+the container path is deprecated and will be removed once all call sites use
+constructor injection.
+
+Stage 14: background autosave watchdog (injectable sleep_fn/clock).
 """
 from __future__ import annotations
 import asyncio
@@ -18,9 +20,10 @@ from datetime import datetime, timezone
 from enum import Enum, auto
 from typing import Any, Callable, Dict, Optional
 
-from infrastructure import DependencyContainer
-from infrastructure.snapshot_store import SnapshotStore
-from contracts import ISnapshotable, ICapabilityRegistry, IEventBus, IFileSystem, IGraphBuilder, IKernel
+from contracts import (
+    ISnapshotable, ICapabilityRegistry, IEventBus, IFileSystem, IGraphBuilder,
+    IKernel, IStateRepository,
+)
 from runtime import RuntimeContext
 
 
@@ -33,30 +36,39 @@ class LifecycleState(Enum):
 
 
 class Kernel(IKernel):
-    """Microkernel: composition root + lifecycle state machine.
+    """Microkernel: lifecycle state machine + orchestration ONLY through ports.
 
     Implements contracts.IKernel (ADR-020 variant b): the Runtime Host depends
-    only on the IKernel port, never on this concrete class. No second kernel.
+    only on the IKernel port. No second kernel. No infrastructure import (K1).
     """
 
     def __init__(
         self,
-        container: Optional[DependencyContainer] = None,
+        # ---- legacy / deprecated positional: DI container (backward-compat) ----
+        container: Optional[Any] = None,
+        # ---- Phase B.2: explicit constructor injection (preferred) ----
+        runtime_context: Optional[RuntimeContext] = None,
+        event_bus: Optional[IEventBus] = None,
+        state_repository: Optional[IStateRepository] = None,
+        registry: Optional[ICapabilityRegistry] = None,
+        services: Optional[Dict[str, Any]] = None,
         autosave_interval_sec: Optional[float] = None,
         sleep_fn: Optional[Callable[[float], Any]] = None,
         clock: Optional[Callable[[], Any]] = None,
     ) -> None:
-        self.container = container if container is not None else DependencyContainer()
+        self.container = container  # deprecated; kept for backward-compat tests
         self._state = LifecycleState.UNINITIALIZED
-        self._services: Dict[str, Any] = {}
-        self.runtime_context: Optional[RuntimeContext] = None
-        # Core capabilities resolved from the container during initialize().
+        self._services: Dict[str, Any] = dict(services) if services else {}
+        self.runtime_context: Optional[RuntimeContext] = runtime_context
+        # Core capabilities — injected, NOT resolved from container by default.
         self.wired: Dict[str, Any] = {}
-        self._event_bus: Optional[IEventBus] = None
-        # Stage 19: composite snapshot store (graph restored in-place via
-        # IGraphBuilder.restore; ContentIndex restores through ISnapshotable).
-        self._snapshot_store: Optional["SnapshotStore"] = None
-        # Stage 14: periodic autosave watchdog configuration.
+        if registry is not None:
+            self.wired["ICapabilityRegistry"] = registry
+        if event_bus is not None:
+            self.wired["IEventBus"] = event_bus
+        self._event_bus: Optional[IEventBus] = event_bus
+        # Phase B.3: state persistence via IStateRepository port (no SnapshotStore).
+        self._state_repository: Optional[IStateRepository] = state_repository
         self._autosave_interval_sec = autosave_interval_sec
         self._sleep = sleep_fn if sleep_fn is not None else asyncio.sleep
         self._clock = clock if clock is not None else (lambda: datetime.now(timezone.utc))
@@ -70,56 +82,42 @@ class Kernel(IKernel):
 
     @property
     def event_bus(self) -> Optional[IEventBus]:
-        """Read-only access to the kernel's event bus (ADR-020 variant b).
-
-        Runtime services subscribe to kernel lifecycle/component events via this
-        port — they never import the concrete bus or reach into kernel internals.
-        """
         return self._event_bus
 
     def initialize(self) -> None:
-        """Resolve core capabilities from the container and wire them in."""
+        """Wire injected capabilities and recover persisted state."""
         if self._state != LifecycleState.UNINITIALIZED:
             raise RuntimeError(f"initialize() called in {self._state.name}")
-        self.runtime_context = RuntimeContext()
-        # Resolve optional core capabilities if registered in the container.
-        for cap_name in ("ICapabilityRegistry", "IFileSystem", "IEventBus", "IGraphBuilder"):
-            if self.container.has(cap_name):
-                self.wired[cap_name] = self.container.resolve(cap_name)
+        if self.runtime_context is None:
+            self.runtime_context = RuntimeContext()
+        # Legacy path: resolve optional caps from container if no explicit ones.
+        if self.container is not None:
+            for cap_name in ("ICapabilityRegistry", "IFileSystem", "IEventBus", "IGraphBuilder", "IStateRepository"):
+                if cap_name not in self.wired and self.container.has(cap_name):
+                    self.wired[cap_name] = self.container.resolve(cap_name)
+        if "IStateRepository" in self.wired and self._state_repository is None:
+            self._state_repository = self.wired["IStateRepository"]
         if "ICapabilityRegistry" in self.wired:
             self.runtime_context.capabilities = self.wired["ICapabilityRegistry"]
-        self._event_bus = self.wired.get("IEventBus")
+        if self._event_bus is None:
+            self._event_bus = self.wired.get("IEventBus")
         if self._event_bus is not None:
             self._event_bus.start()
-        # Stage 19: composite snapshot store for ContentIndex (graph is
-        # persisted separately by IGraphBuilder — see _try_snapshot_graph).
-        fs = self.wired.get("IFileSystem")
-        if fs is not None:
-            self._snapshot_store = SnapshotStore(fs, self._index_snapshot_path())
-        # Stage 12: attempt to recover the knowledge graph from persistent
-        # storage so a kernel restart resumes where it stopped.
+        # Phase B.3: recover graph + index via IStateRepository (no SnapshotStore).
         self._try_restore_graph()
-        # Stage 19: restore the in-memory ContentIndex from its own snapshot
-        # so a fresh CLI/REPL process starts with a warm index (no re-crawl).
         self._try_restore_index()
         self._state = LifecycleState.INITIALIZED
 
-    # ----- Stage 19: index persistence helpers -----
+    # ----- Stage 19: index persistence helpers (via IStateRepository) -----
     def _index_snapshot_path(self) -> str:
         return "data/index_snapshot.json"
 
     def _try_restore_index(self) -> None:
-        """Best-effort ContentIndex + SemanticIndex recovery on initialize().
-
-        Both snapshotables live in ONE composite file (data/index_snapshot.json,
-        {"version":2, "index":..., "semantic":...}) so a single atomic write
-        (Stage 19) persists them together — a second save() would otherwise
-        clobber the first. No-op if no store / no services / missing / corrupt.
-        """
-        store = self._snapshot_store
-        if store is None:
+        """Best-effort ContentIndex + SemanticIndex recovery on initialize()."""
+        repo = self._state_repository
+        if repo is None:
             return
-        data = store.load()
+        data = repo.load_snapshot()
         if data is None or "index" not in data:
             return
         index = self._resolve_snapshotable("ContentIndex")
@@ -129,7 +127,6 @@ class Kernel(IKernel):
                 self.emit("IndexRestored", {"path": self._index_snapshot_path()})
             except Exception:
                 pass
-        # Stage 29: semantic embeddings share the same composite file.
         sem = self._resolve_snapshotable("SemanticIndex")
         if sem is not None and "semantic" in data:
             try:
@@ -139,29 +136,17 @@ class Kernel(IKernel):
                 pass
 
     def _resolve_snapshotable(self, key: str):
-        """Return a registered service that implements ISnapshotable, else None.
-
-        Uses runtime_checkable typing.Protocol so we never import the concrete
-        ContentIndex at the kernel layer (axis-clean: kernel depends only on
-        contracts.ISnapshotable, not on services).
-        """
-        if not self.container.has(key):
-            return None
-        svc = self.container.resolve(key)
-        if isinstance(svc, ISnapshotable):
-            return svc
-        return None
+        """Return a registered service that implements ISnapshotable, else None."""
+        if self.container is not None and self.container.has(key):
+            svc = self.container.resolve(key)
+            if isinstance(svc, ISnapshotable):
+                return svc
+        return self._services.get(key) if isinstance(self._services.get(key), ISnapshotable) else None
 
     def _try_snapshot_index(self) -> None:
-        """Best-effort Index + SemanticIndex persistence (composite snapshot).
-
-        Stage 19 persists the ContentIndex; Stage 29 adds the SemanticIndex to
-        the SAME atomic file ({"version":2, "index":..., "semantic":...}) so a
-        single SnapshotStore.save() writes both. Emits IndexSnapshotted /
-        SemanticSnapshotted. No-op if unwired; silent on write failure.
-        """
-        store = self._snapshot_store
-        if store is None:
+        """Best-effort Index + SemanticIndex persistence (composite snapshot)."""
+        repo = self._state_repository
+        if repo is None:
             return
         index = self._resolve_snapshotable("ContentIndex")
         if index is None:
@@ -171,24 +156,19 @@ class Kernel(IKernel):
         if sem is not None:
             payload["semantic"] = sem.snapshot()
         try:
-            store.save(payload)
+            repo.save_snapshot(payload)
             self.emit("IndexSnapshotted", {"path": self._index_snapshot_path()})
             if sem is not None:
                 self.emit("SemanticSnapshotted", {"path": self._index_snapshot_path()})
         except Exception:
             pass
 
-    # ----- Stage 12: graph persistence helpers -----
+    # ----- Stage 12: graph persistence helpers (via IGraphBuilder + repo) -----
     def _graph_snapshot_path(self) -> str:
         return "data/graph_snapshot.json"
 
     def _try_restore_graph(self) -> None:
-        """Best-effort graph recovery on initialize().
-
-        Only runs if both IGraphBuilder and IFileSystem are wired. Emits a
-        GraphRestored event (via IEventBus) when the restore succeeded; emits
-        nothing on a fresh/no-prior-snapshot start (silent no-op).
-        """
+        """Best-effort graph recovery on initialize()."""
         graph = self.wired.get("IGraphBuilder")
         fs = self.wired.get("IFileSystem")
         if graph is None or fs is None:
@@ -201,11 +181,7 @@ class Kernel(IKernel):
             self.emit("GraphRestored", {"path": self._graph_snapshot_path()})
 
     def _try_snapshot_graph(self) -> None:
-        """Best-effort graph persistence on stop()/autosave.
-
-        Emits GraphSnapshotted via IEventBus. No-op if graph/fs unwired.
-        On write failure the snapshot is silently skipped (no backoff, no retry).
-        """
+        """Best-effort graph persistence on stop()/autosave."""
         graph = self.wired.get("IGraphBuilder")
         fs = self.wired.get("IFileSystem")
         if graph is None or fs is None:
@@ -215,41 +191,24 @@ class Kernel(IKernel):
             self.emit("GraphSnapshotted", {"path": self._graph_snapshot_path()})
         except Exception:
             pass
-        # Stage 19: persist the ContentIndex alongside the graph.
         self._try_snapshot_index()
 
     def start(self) -> None:
         """Bring the kernel to RUNNING, initializing registered services."""
         if self._state != LifecycleState.INITIALIZED:
             raise RuntimeError(f"start() requires INITIALIZED, got {self._state.name}")
-        for name in self.container.names():
-            svc = self.container.resolve(name)
-            if hasattr(svc, "initialize"):
-                svc.initialize()
-            self._services[name] = svc
         self.emit("kernel.lifecycle", {"type": "kernel.started"})
         self._state = LifecycleState.RUNNING
-        # Stage 14: launch the background autosave watchdog (no-op unless configured).
         self._start_autosave()
 
     def stop(self) -> None:
-        """Halt the kernel.
-
-        Idempotent: calling stop() again (e.g. an atexit hook firing after an
-        explicit stop(), or on an UNINITIALIZED kernel) is a safe no-op. This
-        is required for the Stage 14 atexit guarantee — a graceful exit must
-        not raise if the command already tore the kernel down.
-        """
+        """Halt the kernel. Idempotent."""
         if self._state == LifecycleState.STOPPED:
             return
         if self._state != LifecycleState.RUNNING:
-            # UNINITIALIZED/INITIALIZED: nothing was started; nothing to stop.
             self._state = LifecycleState.STOPPED
             return
-        # Stage 14: cancel the autosave watchdog first so it does not race with
-        # (or outlive) the final shutdown snapshot.
         self._stop_autosave()
-        # Stage 12: persist the knowledge graph before halting.
         self._try_snapshot_graph()
         self.emit("kernel.lifecycle", {"type": "kernel.stopped"})
         self._services.clear()
@@ -258,12 +217,7 @@ class Kernel(IKernel):
         self._state = LifecycleState.STOPPED
 
     def panic(self, reason: Optional[str] = None) -> None:
-        """Level 3 emergency (Phase 4): snapshot, mark FAILED, emit panic, then stop.
-
-        Idempotent and safe: never raises. Mirrors stop()'s teardown (autosave
-        cancel + graph snapshot) but records a FAILED state and publishes a
-        `kernel.panic` event so the Supervisor/Recovery layer can react.
-        """
+        """Level 3 emergency: snapshot, mark FAILED, emit panic, then stop."""
         if self._state == LifecycleState.STOPPED:
             return
         try:
@@ -283,13 +237,6 @@ class Kernel(IKernel):
 
     # ----- Stage 14: periodic autosave watchdog -----
     def _start_autosave(self) -> None:
-        """Launch the background autosave timer (no-op unless configured).
-
-        Only runs when autosave_interval_sec > 0 AND both IGraphBuilder and
-        IFileSystem are wired (persistence requires both). Runs a dedicated
-        asyncio event loop on a daemon thread so the watchdog keeps ticking
-        while the synchronous CLI command continues.
-        """
         if self._autosave_interval_sec is None or self._autosave_interval_sec <= 0:
             return
         if self.wired.get("IGraphBuilder") is None or self.wired.get("IFileSystem") is None:
@@ -298,13 +245,10 @@ class Kernel(IKernel):
             return
         self._autosave_event_loop = asyncio.new_event_loop()
         self._autosave_task = self._autosave_event_loop.create_task(self._autosave_loop())
-        self._autosave_thread = threading.Thread(
-            target=self._run_autosave_loop, daemon=True
-        )
+        self._autosave_thread = threading.Thread(target=self._run_autosave_loop, daemon=True)
         self._autosave_thread.start()
 
     def _run_autosave_loop(self) -> None:
-        """Target for the watchdog daemon thread: drive its own event loop."""
         loop = self._autosave_event_loop
         if loop is None:
             return
@@ -314,12 +258,6 @@ class Kernel(IKernel):
             loop.close()
 
     async def _autosave_loop(self) -> None:
-        """Background coroutine: snapshot the graph every interval while RUNNING.
-
-        Uses an injectable sleep (self._sleep) so tests can drive ticks without
-        real wall-clock waiting, and an injectable clock (self._clock) for the
-        GraphAutosaved timestamp. Cancellation at shutdown breaks the loop.
-        """
         interval = self._autosave_interval_sec
         while self._state == LifecycleState.RUNNING:
             try:
@@ -332,7 +270,6 @@ class Kernel(IKernel):
             self.emit("GraphAutosaved", {"timestamp": self._clock().isoformat()})
 
     def _stop_autosave(self) -> None:
-        """Cancel the watchdog task and stop its thread/loop (best effort)."""
         task = self._autosave_task
         loop = self._autosave_event_loop
         self._autosave_task = None
@@ -344,20 +281,12 @@ class Kernel(IKernel):
             self._autosave_thread = None
 
     def emit(self, topic: str, event: dict) -> None:
-        """Proxy to the wired event bus. No-op if no bus registered."""
         if self._event_bus is None:
             return
         self._event_bus.publish_sync(topic, event)
 
     def save(self) -> None:
-        """Force a graph snapshot while the kernel keeps running (Stage 16).
-
-        Public, side-effect-light wrapper around the existing best-effort
-        persist helper used by ``stop()``. Emits ``GraphSnapshotted`` on
-        success, silent no-op when graph/fs are not wired or on write failure.
-        Safe to call repeatedly; does NOT change the lifecycle state, so the
-        REPL can keep serving commands after a save.
-        """
+        """Force a graph snapshot while the kernel keeps running (Stage 16)."""
         self._try_snapshot_graph()
 
     def service(self, name: str) -> Any:
