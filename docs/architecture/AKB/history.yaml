@@ -86,3 +86,9 @@ history:
     adr: "ADR-026/027/028 (proposed)"
     law_changes: [K1, K3, K6]
     note: "PHASE B (Architecture Stabilization) — Step 1-6 analysis COMPLETE, NO CODE CHANGES. Created docs/architecture/Dependency Report — Phase B.md (full 7-layer audit). Findings: kernel->infrastructure violations V1 (DependencyContainer) + V2 (SnapshotStore) [K1]; NEW violation V3 adapters/router.py->policies.budget_policy [K6]; V4 services/policy_engine->contracts.model_registry.ModelRegistry [K6 minor]; V5 cli/+bootstrap_v2 split wiring [K3 org]. Created ADR-026 Composition Root, ADR-027 Dependency Inversion, ADR-028 Kernel Purity (all proposed). composition/ skeleton created (empty, documented). REFACTORING (Step 7, kernel decoupling) PENDING human approval (LAW K5) — NOT executed."
+
+  - date: "2026-08-01"
+    commit: "phase-b-refactor"
+    adr: "ADR-029 (proposed)"
+    law_changes: [K1, K3, K8]
+    note: "PHASE B REFACTOR EXECUTED (human approved). Commits: a65eb30 (IStateRepository port + impl), 4362a62 (composition/ 7 modules, main.py+bootstrap_v2 delegate), 1bd9140 (kernel constructor injection, DROP infrastructure import). K1 VIOLATION RESOLVED: kernel no longer imports infrastructure (DependencyContainer/SnapshotStore) -> arch-gate GREEN (3 passed). Kernel Purity (ADR-028) achieved: kernel imports only {contracts, runtime, stdlib}. IStateRepository port (save/load_state + save/load_snapshot + checkpoint/rollback) replaces SnapshotStore. composition/bootstrap.build_system() implements ADR-029 lifecycle. 757 passed, 19 skipped, arch-gate 3 passed. V3 (adapters->policies) DEFERRED to Phase C (per user). Legacy Kernel(container=...) retained (deprecated). NOTE: UI 'verification_evidence expired' flagged stale FAIL from pre-refactor run; this session's fresh ad-hoc confirmed GREEN."
