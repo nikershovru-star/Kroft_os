@@ -21,7 +21,7 @@ PROJECT_PKGS = {"contracts", "infrastructure", "kernel", "runtime", "adapters", 
 ALLOWED = {
     "contracts": set(),
     "infrastructure": {"contracts"},
-    "kernel": {"contracts", "infrastructure", "runtime"},
+    "kernel": {"contracts", "runtime"},  # K1: kernel may NOT import infrastructure
     "runtime": {"contracts"},
     "adapters": {"contracts"},
     "services": {"contracts"},
@@ -103,7 +103,7 @@ def test_each_layer_respects_its_axis():
     expectations = {
         "contracts": set(),
         "infrastructure": {"contracts"},
-        "kernel": {"contracts", "infrastructure", "runtime"},
+        "kernel": {"contracts", "runtime"},  # K1: kernel may NOT import infrastructure
         "runtime": {"contracts"},
         "adapters": {"contracts"},
         "services": {"contracts"},
