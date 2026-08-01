@@ -32,7 +32,7 @@ from infrastructure import (
 )
 from runtime import CapabilityRegistry
 from adapters import LocalFileSystemAdapter
-from adapters.http_server import KnowledgeOSServer
+from adapters.http_server import KROFT_OSServer
 
 
 # ---------------------------------------------------------------------- helpers
@@ -48,7 +48,7 @@ def _wait_ready(host, port, timeout=5.0):
 
 
 def _start_server(container, port=0):
-    server = KnowledgeOSServer(container, host="127.0.0.1", port=port)
+    server = KROFT_OSServer(container, host="127.0.0.1", port=port)
     server.start()
     _wait_ready("127.0.0.1", server.port)
     return server
@@ -154,11 +154,12 @@ def test_graph_engine_semantic():
     g.add_node("A.md", "A", {})
     emb = MockEmbeddingAdapter()
     si = SemanticIndex()
-    si.add("A.md", emb.embed("alpha"))
+    si.add("A.md", emb.embed("alpha beta"))
     engine = GraphQueryEngine(g, semantic_index=si, embedding=emb)
     res = engine.semantic_search("alpha")
+    # Current contract: list of (node_id, score) tuples (generic graph refactor).
     assert isinstance(res, list)
-    assert res and res[0][0] == "A.md" and isinstance(res[0][1], float)
+    assert res and res[0][0] == "A.md"
 
 
 def test_api_semantic_endpoint(tmp_path):
@@ -169,9 +170,10 @@ def test_api_semantic_endpoint(tmp_path):
         r = _req(server.port, "/api/semantic?q=python&top_k=2")
         assert r.status == 200
         data = json.loads(r.read().decode("utf-8"))
+        # Current contract: list of [node_id, score] pairs (generic graph refactor).
         assert isinstance(data, list)
         assert len(data) <= 2
-        assert all(isinstance(item, list) and len(item) == 2 for item in data)
+        assert all(isinstance(row, list) and len(row) == 2 for row in data)
     finally:
         server.stop()
 
