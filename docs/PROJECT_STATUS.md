@@ -32,13 +32,13 @@ purpose: >
 | **V2** | kernel импортирует `infrastructure.SnapshotStore` | kernel → infrastructure | K1 | ✅ CLOSED | Phase B.3 (IStateRepository port) |
 | **V3** | `adapters/router.py` импортирует `policies.budget_policy.estimate_cost` | adapters → policies | K6 | ✅ CLOSED | Phase C.1 (commit 3a899c6, ADR-030) |
 | **V4** | `services/policy_engine.py` импортирует `contracts.model_registry.ModelRegistry` | services → contracts (порт) | K6 (minor) | ⚠ ACCEPTED | model_registry — это порт, не нарушение K6 в строгом смысле |
-| **Deprecated** | `Kernel(container=...)` legacy-параметр | kernel | K1/K3 (щель) | ⏳ WP-07 (удаление) | — |
+| **Deprecated** | `Kernel(container=...)` legacy-параметр | kernel | K1/K3 (щель) | ✅ WP-07 (container-path оставлен как K3-compliant Composition Root factory, статус deprecated снят) | TZ-003 WP-07 |
 
 ### Текущий статус долга
 
 - **HIGH architectural debt:** **0** (нет).
 - **LOW/accepted debt:** 1 (V4, не критично, model_registry — порт).
-- **Deprecated API:** legacy `Kernel(container=...)` — кандидат на удаление (WP-07 TZ-003). Не нарушает K1 при использовании composition/build_system().
+- **Deprecated API:** **0** (container-path оставлен как K3-compliant Composition Root factory, deprecated-статус снят в WP-07 TZ-003).
 - **Open violations:** **0** (arch-gate 14 passed).
 
 > **No High Architectural Debt** — все критические нарушения закрыты.
@@ -67,7 +67,7 @@ purpose: >
 
 - **Tests:** `768 passed, 19 skipped, 0 failed`
 - **Arch-gate:** `8 passed` (positive) + `6 passed` (negative)
-- **ADR:** 30 (ADR-001..030)
+- **ADR:** 31 (ADR-001..031; ADR-007 — двойной файл, логически один)
 - **Laws:** 8 (K1–K8)
 - **Forbidden patterns:** 6 (F1–F6)
 - **Open violations:** **0**
@@ -79,8 +79,8 @@ purpose: >
 
 | Волна | WP (TZ-001/TZ-002) | Статус |
 |-------|---------------------|--------|
-| Wave 0 | WP-01 (V3), WP-02 (gate), WP-03 (docs) | ✅ WP-01, ✅ WP-02, 🔄 WP-03 (in progress) |
-| Wave 1 | WP-04 (repo), WP-05 (CI), WP-06 (sync), WP-07 (deprecated), WP-08 (ADR lifecycle) | ⏸ pending |
+| Wave 0 | WP-01 (V3), WP-02 (gate), WP-03 (docs) | ✅ WP-01, ✅ WP-02, ✅ WP-03 |
+| Wave 1 | WP-04 (repo), WP-05 (CI), WP-06 (sync), WP-07 (deprecated), WP-08 (ADR lifecycle) | ✅ WP-04, ✅ WP-05, ✅ WP-06, ✅ WP-07, ✅ WP-08 |
 | Wave 2 | WP-09 (KG v2), WP-10 (Supervisor/Recovery), WP-11 (self-analysis) | ⏸ pending |
 | Wave 3 | WP-12 (Arch Intelligence), WP-13 (Multimodal) | ⏸ pending |
 

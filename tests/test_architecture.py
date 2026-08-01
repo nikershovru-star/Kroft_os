@@ -248,6 +248,27 @@ def test_agent_result_frozen():
         assert "frozen=True" in deco, f"{py.relative_to(ROOT)}: AgentResult dataclass not frozen (F5)"
 
 
+def test_agent_result_frozen():
+    """F5: if AgentResult exists, it MUST be a frozen dataclass (traceable)."""
+    candidates = []
+    for pkg in ("contracts", "services", "runtime"):
+        d = ROOT / pkg
+        if not d.exists():
+            continue
+        for py in d.rglob("*.py"):
+            text = py.read_text(encoding="utf-8")
+            if re.search(r"class\s+AgentResult\b", text):
+                candidates.append(py)
+    if not candidates:
+        pytest.skip("AgentResult not found in codebase (F5 N/A)")
+    for py in candidates:
+        text = py.read_text(encoding="utf-8")
+        m = re.search(r"@dataclass.*?\nclass AgentResult", text, re.DOTALL)
+        assert m is not None, f"{py.relative_to(ROOT)}: AgentResult not a dataclass (F5)"
+        deco = m.group(0)
+        assert "frozen=True" in deco, f"{py.relative_to(ROOT)}: AgentResult dataclass not frozen (F5)"
+
+
 # --- F6: every ADR in adrs.yaml carries evidence_level -------------------
 def test_all_adrs_have_evidence():
     """F6 (warn): every ADR entry in AKB/adrs.yaml must carry evidence_level.

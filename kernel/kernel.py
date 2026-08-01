@@ -1,14 +1,18 @@
 """KROFT_OS v5 Kernel — lifecycle orchestrator (Phase B.2/B.3/B.4 refactored).
 
 Kernel is PURE (ADR-028): it imports ONLY contracts + runtime + stdlib.
-It NO LONGER imports `infrastructure` (DependencyContainer, SnapshotStore).
+It NO LONGER imports infrastructure (DependencyContainer / SnapshotStore).
 
 Dependency injection (constructor):
   Kernel(runtime_context, event_bus, state_repository, registry, services=None)
+Container-aware factory (Composition Root only):
+  Kernel(container)  -- accepts a fully-built DependencyContainer, resolves
+  capabilities from it. K3-compliant: kernel never instantiates the container
+  class (composition/ does); the container arrives already-wired. Kept as the
+  canonical assembly path used by composition/build_kernel and the test-suite seam.
 Kernel creates NOTHING — every dependency arrives fully-built via the
-Composition Root (composition/). Legacy compatibility: `Kernel(container=...)`
-is still accepted (resolves from the container) so existing tests keep passing;
-the container path is deprecated and will be removed once all call sites use
+Composition Root (composition/).
+
 constructor injection.
 
 Stage 14: background autosave watchdog (injectable sleep_fn/clock).
