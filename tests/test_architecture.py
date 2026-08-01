@@ -3,10 +3,11 @@
 Enforces the hexagonal dependency contract:
   contracts.*       -> stdlib only
   infrastructure.*  -> contracts + stdlib
-  kernel.*          -> contracts, infrastructure, runtime + stdlib (NEVER adapters)
+  kernel.*          -> contracts, runtime + stdlib (NEVER adapters/infra/policies)
   runtime.*         -> contracts + stdlib
-  adapters.*        -> contracts + stdlib
-  services.*        -> contracts + stdlib  (application layer, NEVER adapters/infra)
+  adapters.*        -> contracts + stdlib  (NEVER policies/services/infra)  [K6, V3]
+  services.*        -> contracts + stdlib  (application layer; may use policies)
+  policies.*        -> contracts + stdlib  (NEVER adapters/services/infra)  [K6]
 """
 import ast
 import sys
@@ -16,16 +17,17 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 
-PROJECT_PKGS = {"contracts", "infrastructure", "kernel", "runtime", "adapters", "services", "cli"}
+PROJECT_PKGS = {"contracts", "infrastructure", "kernel", "runtime", "adapters", "services", "cli", "policies"}
 
 ALLOWED = {
     "contracts": set(),
     "infrastructure": {"contracts"},
     "kernel": {"contracts", "runtime"},  # K1: kernel may NOT import infrastructure
     "runtime": {"contracts"},
-    "adapters": {"contracts"},
-    "services": {"contracts"},
+    "adapters": {"contracts"},  # K6: adapters may NOT import policies/services/infra
+    "services": {"contracts", "policies"},  # K6: domain may use policies via contracts port
     "cli": {"contracts", "infrastructure", "kernel", "services"},
+    "policies": {"contracts"},  # policies depend ONLY on contracts (never adapters/services)
 }
 
 STDLIB_BASES = {
@@ -105,9 +107,10 @@ def test_each_layer_respects_its_axis():
         "infrastructure": {"contracts"},
         "kernel": {"contracts", "runtime"},  # K1: kernel may NOT import infrastructure
         "runtime": {"contracts"},
-        "adapters": {"contracts"},
-        "services": {"contracts"},
+        "adapters": {"contracts"},  # K6: adapters may NOT import policies/services/infra (V3)
+        "services": {"contracts", "policies"},  # K6: domain may use policies
         "cli": {"contracts", "infrastructure", "kernel", "services"},
+        "policies": {"contracts"},  # policies depend ONLY on contracts (K6)
     }
     for pkg, expected in expectations.items():
         assert ALLOWED[pkg] == expected

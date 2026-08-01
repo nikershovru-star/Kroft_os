@@ -16,6 +16,7 @@ from .agent import IAgent, Tool
 from .i_llm import ILlm, IModelMetadata, IHealth, ModelQuery, LlmResponse, ModelInfo
 from .model_registry import ModelRegistry
 from .i_policy import IPolicy, PolicyContext, PolicyDecision, CallRecord
+from .cost import estimate_cost
 from .i_eval import IEvaluator, IBenchmark, IScorecard, Task, Metric, Scorecard, TaskCategory
 from .i_knowledge import (
     IKnowledgeGraph,
@@ -109,6 +110,7 @@ __all__ = [
     "PolicyContext",
     "PolicyDecision",
     "CallRecord",
+    "estimate_cost",
     "IEvaluator",
     "IBenchmark",
     "IScorecard",

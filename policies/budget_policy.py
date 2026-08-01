@@ -10,19 +10,7 @@ from typing import Dict, List
 
 from contracts.i_llm import ModelInfo
 from contracts.i_policy import IPolicy, PolicyContext, PolicyDecision, CallRecord
-
-
-def estimate_cost(query, model: ModelInfo) -> float:
-    """Heuristic pre-call cost (ADR-009 §10).
-
-    cost = prompt_tokens / 4 * price_per_1k; free models cost 0.
-    prompt_tokens approximated as len(prompt) / 4 (4 chars ~= 1 token).
-    """
-    if model.free or model.cost_per_1k == 0.0:
-        return 0.0
-    prompt = getattr(query, "prompt", "") or ""
-    approx_tokens = max(1, len(prompt) // 4)
-    return approx_tokens / 1000.0 * model.cost_per_1k
+from contracts.cost import estimate_cost
 
 
 class BudgetPolicy(IPolicy):

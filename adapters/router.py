@@ -12,7 +12,7 @@ from typing import Dict
 
 from contracts.i_llm import ILlm, LlmResponse, ModelQuery
 from contracts.i_policy import PolicyContext
-from policies.budget_policy import estimate_cost
+from contracts.cost import estimate_cost
 
 
 class Router:
