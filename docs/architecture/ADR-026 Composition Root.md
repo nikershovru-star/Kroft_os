@@ -2,7 +2,8 @@
 tags: [kroft, adr, adr-026, composition-root, architecture, phase-b]
 created: 2026-08-01
 author: Hermes (Architecture Intelligence Protocol)
-status: proposed
+status: accepted
+evidence_level: III
 relates_to: [ADR-020, ADR-002, ADR-003, LAW-K1, LAW-K3, Dependency-Report-Phase-B]
 laws_affected: [K1, K3]
 summary: >
@@ -85,3 +86,11 @@ injection) — только через порты `contracts.*`. Kernel НЕ и�
 - `tests/test_architecture.py` ALLOWED: kernel={contracts, runtime} (tightened в Variant A).
 - `laws.yaml` K1: «Kernel imports ONLY contracts/. Never services/, adapters/, infrastructure/».
 - Dependency Report Phase B, секции V1/V2.
+
+---
+
+## Approval (K5)
+
+**Status: accepted** as of 2026-08-02 (TZ-003 WP-08, human-approved scope).
+Implemented and verified in Phase B (ADR-026/027/028) and Phase C (ADR-029).
+Evidence Level: III (implemented + architecture-gate green + 768 tests passing).

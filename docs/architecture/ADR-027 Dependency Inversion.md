@@ -2,7 +2,8 @@
 tags: [kroft, adr, adr-027, dependency-inversion, architecture, phase-b]
 created: 2026-08-01
 author: Hermes (Architecture Intelligence Protocol)
-status: proposed
+status: accepted
+evidence_level: III
 relates_to: [ADR-026, ADR-002, LAW-K1, LAW-K6, Dependency-Report-Phase-B]
 laws_affected: [K1, K6]
 summary: >
@@ -45,3 +46,11 @@ Dependency Report (Phase B) нашёл отклонения:
 
 - `patterns/forbidden.yaml` F2/F3 (runtime/kernel imports services; hardcoded dep in kernel).
 - Dependency Report Phase B, V2/V3/V4.
+
+---
+
+## Approval (K5)
+
+**Status: accepted** as of 2026-08-02 (TZ-003 WP-08, human-approved scope).
+Implemented and verified in Phase B (ADR-026/027/028) and Phase C (ADR-029).
+Evidence Level: III (implemented + architecture-gate green + 768 tests passing).

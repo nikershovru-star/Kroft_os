@@ -2,7 +2,8 @@
 tags: [kroft, adr, adr-028, kernel-purity, architecture, phase-b]
 created: 2026-08-01
 author: Hermes (Architecture Intelligence Protocol)
-status: proposed
+status: accepted
+evidence_level: III
 relates_to: [ADR-026, ADR-027, ADR-020, LAW-K1, LAW-K3, Dependency-Report-Phase-B]
 laws_affected: [K1, K3]
 summary: >
@@ -55,3 +56,11 @@ Kernel MUST NOT import / instantiate / know about:
 - `laws.yaml` K1, K3.
 - Dependency Report Phase B, V1/V2.
 - `PROJECT_CONTEXT_MAP.md` §3 (LAW K1–K8).
+
+---
+
+## Approval (K5)
+
+**Status: accepted** as of 2026-08-02 (TZ-003 WP-08, human-approved scope).
+Implemented and verified in Phase B (ADR-026/027/028) and Phase C (ADR-029).
+Evidence Level: III (implemented + architecture-gate green + 768 tests passing).

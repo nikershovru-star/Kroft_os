@@ -241,7 +241,7 @@ ADR-030 Policy Boundary
 ### 🔢 Метрики (реальный прогон 2026-08-02)
 - **Tests:** `768 passed, 19 skipped, 0 failed`
 - **Arch-gate:** `8 passed` (positive) + `6 passed` (negative, proof-of-fire)
-- **ADR:** 30 (ADR-001..030), из них ADR-025 — proposed, ADR-026..030 — proposed/accepted
+- **ADR:** 31 (ADR-001..031), из них ADR-025 — proposed (PHASE 6), ADR-026..029 — **accepted** (WP-08 TZ-003), ADR-030 — proposed, ADR-031 — proposed (CI, WP-05); ADR-007 — двойной файл (superseded, логически один)
 - **Import matrix:** `AKB/import_matrix.yaml` (single source)
 - **Gate coverage:** `AKB/gate_coverage.md`
 - **Открытые нарушения:** **0** (V1/V2 закрыты в Phase B; V3 закрыт в Phase C)
