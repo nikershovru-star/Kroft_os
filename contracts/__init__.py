@@ -73,6 +73,7 @@ from .i_agent_platform import (
     AgentResult,
     AgentStatus,
 )
+from .i_kernel import IKernel, LifecycleState
 
 __all__ = [
     "IService",
@@ -147,4 +148,6 @@ __all__ = [
     "IAgentPlatform",
     "AgentResult",
     "AgentStatus",
+    "IKernel",
+    "LifecycleState",
 ]

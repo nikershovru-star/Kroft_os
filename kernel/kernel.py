@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, Optional
 
 from infrastructure import DependencyContainer
 from infrastructure.snapshot_store import SnapshotStore
-from contracts import ISnapshotable, ICapabilityRegistry, IEventBus, IFileSystem, IGraphBuilder
+from contracts import ISnapshotable, ICapabilityRegistry, IEventBus, IFileSystem, IGraphBuilder, IKernel
 from runtime import RuntimeContext
 
 
@@ -31,8 +31,12 @@ class LifecycleState(Enum):
     STOPPED = auto()
 
 
-class Kernel:
-    """Microkernel: composition root + lifecycle state machine."""
+class Kernel(IKernel):
+    """Microkernel: composition root + lifecycle state machine.
+
+    Implements contracts.IKernel (ADR-020 variant b): the Runtime Host depends
+    only on the IKernel port, never on this concrete class. No second kernel.
+    """
 
     def __init__(
         self,
