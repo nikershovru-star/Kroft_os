@@ -1,5 +1,72 @@
 # KROFT_OS v5
 
+> **Точка входа для AI-агентов и архитектурного обзора:** читай
+> [`docs/PROJECT_CONTEXT_MAP.md`](docs/PROJECT_CONTEXT_MAP.md) — архитектурный
+> паспорт (слои KP/KRM/KERA/KEH/KES/KL/RFC/AKB, законы LAW K1–K8 + F1–F6,
+> ADR-001..030, правила для AI-моделей). Этот README — технический мануал по
+> stage-by-stage реализации ядра.
+
+---
+
+## Architecture Overview
+
+KROFT_OS — Clean/Hexagonal (порты и адаптеры). Зависимости текут СНИЗУ ВВЕРХ (к контрактам):
+
+```
+CLI (main.py / commands / repl)
+        ↓ собирает
+Composition Root (composition/)   ← единственный слой сборки (LAW K3)
+        ↓ инстанцирует + связывает
+┌──────────────────────────────────────────────────────┐
+│  Kernel ──→ Runtime ──→ Contracts (порты)               │
+│    ↑            ↑                                       │
+│  Services ──→ Adapters ──→ Infrastructure               │
+│    ↑            ↑        (реализации портов)            │
+│  Policies ─────┘                                        │
+└──────────────────────────────────────────────────────┘
+        ↑ всех связывает Composition Root
+```
+
+- **Contracts** — порты (Protocol-интерфейсы), stdlib only. Никаких реализаций.
+- **Kernel** — микроядро (lifecycle FSM). Импортирует ТОЛЬКО `contracts` + `runtime` (LAW K1).
+- **Runtime** — контекст, реестр, supervisor, recovery. `contracts` + stdlib (LAW K1/K8).
+- **Services** — прикладной слой. `contracts` + stdlib ONLY (никогда adapters/infrastructure).
+- **Adapters** — конкретные реализации портов. `contracts` + stdlib ONLY (НЕТ импорта `policies`, LAW K6).
+- **Infrastructure** — реализации портов (InMemoryEventBus, SnapshotStore, DependencyContainer). `contracts` + stdlib.
+- **Policies** — политики (BudgetPolicy, PolicyRegistry). `contracts` + stdlib ONLY.
+- **Composition Root** (`composition/`) — единственный слой, создающий и связывающий объекты (LAW K3). `build_system()` собирает всё.
+- **CLI** — entrypoint. `composition` + `contracts`.
+
+> **Запрет:** `bootstrap_v2.py` — НЕ Composition Root. Это thin entrypoint, делегирующий в `composition.build_system()`. Реальный Composition Root = `composition/`.
+
+## Architecture Laws (LAW K1–K8)
+
+| ID | Закон | Суть |
+|----|-------|------|
+| K1 | Kernel imports only contracts+runtime | Ядро НЕ импортирует services/adapters/infrastructure/policies |
+| K2 | Services don't modify kernel | Расширение только через порты |
+| K3 | Wiring only in composition | Создание/связывание объектов — ТОЛЬКО в `composition/` |
+| K4 | Artifacts traceable | Каждый вывод агента — frozen + traceable (who/when/why) |
+| K5 | Human approve required | Критические изменения — только с подтверждением человека |
+| K6 | Explicit boundaries | Межслойное общение ТОЛЬКО через `contracts/` или EventBus |
+| K7 | Atomic commits | Коммиты атомарны; `git add -A` запрещён |
+| K8 | Architecture intelligence outside runtime | AKB/Research/LLM живут в `docs/`+`services/`, НЕ в `runtime/`/`kernel/` |
+
+Полные определения: `docs/architecture/AKB/laws.yaml`. Проверяются Architecture Gate (`tests/test_architecture.py` + `tests/test_architecture_negative.py`, 8 positive + 6 negative).
+
+## Forbidden Patterns (F1–F6)
+
+См. `docs/architecture/AKB/patterns/forbidden.yaml`. Автоматически ловятся arch-гейтом:
+
+- **F1** `blocking-sleep-in-recovery` — блокирующий sleep в recovery/supervisor (AUTOMATED)
+- **F2** `runtime-imports-services` — runtime импортирует services (K1/K3)
+- **F3** `hardcoded-dependency-in-kernel` — хардкод зависимости в kernel
+- **F4** `meta-layer-in-runtime` — мета-слой (AKB/LLM) в runtime (K8) (AUTOMATED)
+- **F5** `untraceable-agent-result` — AgentResult без trace (K4) (PARTIAL)
+- **F6** `adr-without-evidence` — ADR без уровня доказательства (KES#1) (PARTIAL/warn)
+
+---
+
 Autonomous Knowledge Operating System — hexagonal-core bootstrap.
 
 ## Architecture (Clean / Hexagonal)
@@ -7,23 +74,32 @@ Autonomous Knowledge Operating System — hexagonal-core bootstrap.
 ```
 contracts/        Ports (abstract interfaces): IService, IFileSystem,
                   IEventBus, ICapabilityRegistry, IGraphBuilder. stdlib only.
-infrastructure/   Composition Root: DependencyContainer. Implements ports:
-                  InMemoryEventBus, InMemoryGraphBuilder. -> contracts + stdlib.
+infrastructure/   Implements ports: InMemoryEventBus, InMemoryGraphBuilder,
+                  SnapshotStore, DependencyContainer. -> contracts + stdlib.
+composition/      Composition Root: build_system() creates + wires ALL objects.
+                  The ONLY layer allowed to instantiate DependencyContainer/
+                  SnapshotStore (LAW K3). -> imports everything.
 kernel/           Microkernel: lifecycle FSM (UNINITIALIZED -> INITIALIZED
-                  -> RUNNING -> STOPPED). Depends on contracts, infrastructure,
-                  runtime. NEVER on adapters.
-runtime/          RuntimeContext (state) + CapabilityRegistry.
+                  -> RUNNING -> STOPPED). Depends on contracts, runtime.
+                  NEVER on adapters/infrastructure/services/policies.
+runtime/          RuntimeContext (state) + CapabilityRegistry + Supervisor.
+                  -> contracts + stdlib.
 adapters/         Concrete port implementations (LocalFileSystemAdapter).
+                  -> contracts + stdlib ONLY (NEVER policies, LAW K6).
 services/         Application layer: VaultStreamCrawler (first IService).
                   -> contracts + stdlib ONLY. NEVER adapters/infrastructure.
+policies/         PolicyRegistry, PolicyEngine, BudgetPolicy.
+                  -> contracts + stdlib ONLY.
 tests/            TDD suite (pytest) + architecture gate.
 ```
 
-Dependency axis (enforced by tests/test_architecture.py):
+Dependency axis (enforced by tests/test_architecture.py + import_matrix.yaml):
 `contracts -> stdlib`; `infrastructure -> contracts`;
 `adapters -> contracts`; `runtime -> contracts`;
-`kernel -> contracts,infrastructure,runtime` (NEVER adapters);
-`services -> contracts` (NEVER adapters/infrastructure).
+`kernel -> contracts, runtime` (NEVER infrastructure/adapters/services/policies);
+`services -> contracts` (NEVER adapters/infrastructure/policies);
+`policies -> contracts` (NEVER adapters/services/infrastructure);
+`composition -> everything` (only assembly layer, LAW K3).
 
 ## Lifecycle
 
