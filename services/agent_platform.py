@@ -142,6 +142,28 @@ class AgentPlatform(IAgentPlatform):
 
         return self._finalize(result, wf)
 
+    # --- chat-style convenience ------------------------------------------
+    def ask(self, goal: str, context: Optional[PolicyContext] = None) -> str:
+        """Run `goal` and return only the textual answer (bootstrap S2).
+
+        Extracts the output of the last successfully-executed step (the actual
+        model reply when the router reaches an LLM). Falls back to the most
+        recent tool result, then to a status string — never raises for a failed
+        run (the platform is resilient by design).
+        """
+        result = self.run(goal, context)
+        # 1. last step output (the model's reply through the router)
+        steps = [s for s in result.workflow.plan if getattr(s, "output", None)]
+        if steps:
+            return steps[-1].output
+        # 2. last tool result
+        if result.tool_results:
+            return result.tool_results[-1]
+        # 3. status / error summary
+        if result.error:
+            return f"[agent failed] {result.error}"
+        return f"[agent done] {result.status}"
+
     # --- subsystem integrations ------------------------------------------
     def _consult_knowledge(self, result: AgentResult, goal: str) -> AgentResult:
         try:

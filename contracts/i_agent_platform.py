@@ -98,3 +98,13 @@ class IAgentPlatform(abc.ABC):
     def run(self, goal: str, context: Optional[PolicyContext] = None) -> AgentResult:
         """Plan and execute `goal`, returning a traceable, frozen result."""
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def ask(self, goal: str, context: Optional[PolicyContext] = None) -> str:
+        """Convenience one-shot: run `goal` and return the textual answer only.
+
+        Thin wrapper over `run()` — extracts the last executed step's output
+        (or tool result) as a string. Lets callers treat the platform like a
+        chat agent: `agent.ask("Hello") -> "..."`.
+        """
+        raise NotImplementedError
