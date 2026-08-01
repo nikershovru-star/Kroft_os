@@ -1,0 +1,5 @@
+name: scheduler
+entrypoint: runtime.services.scheduler:SchedulerService
+capabilities: [scheduler.tick]
+dependencies: [event_bus]
+lifecycle: true

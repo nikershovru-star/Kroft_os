@@ -1,0 +1,5 @@
+name: metrics
+entrypoint: runtime.services.metrics_service:MetricsService
+capabilities: [metrics.publish]
+dependencies: [event_bus]
+lifecycle: true

@@ -1,0 +1,5 @@
+name: learning
+entrypoint: services.learning_platform:LearningPlatform
+capabilities: [event.subscribe, learning.store]
+dependencies: [learning_store]
+lifecycle: true

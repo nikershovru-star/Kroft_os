@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>KROFT_OS</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+    #search { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+    #suggestions { margin: 8px 0; color: #666; }
+    #suggestions span { cursor: pointer; margin-right: 12px; text-decoration: underline; }
+    .result { padding: 12px; border-bottom: 1px solid #eee; }
+    .result b { display: block; margin-bottom: 4px; }
+    #graph { width: 100%; height: 500px; border: 1px solid #ddd; margin-top: 20px; border-radius: 4px; }
+    button { padding: 10px 20px; margin-top: 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>KROFT_OS</h1>
+  <select id="searchMode">
+    <option value="lexical">Lexical</option>
+    <option value="semantic">Semantic</option>
+    <option value="hybrid">Hybrid</option>
+  </select>
+  <input id="search" type="text" placeholder="Search..." autocomplete="off">
+  <div id="suggestions"></div>
+  <div id="results"></div>
+  <h2>Desktop</h2>
+  <button onclick="desktopClick()">Click (100,100)</button>
+  <button onclick="desktopScreenshot()">Screenshot</button>
+  <button onclick="desktopCursor()">Cursor Position</button>
+  <div id="desktopResult"></div>
+  <input id="openNoteQuery" type="text" placeholder="Open note about..." autocomplete="off">
+  <button onclick="desktopOpenNote()">Open Note</button>
+  <button onclick="desktopListNotes()">List Notes</button>
+  <div id="openNoteResult"></div>
+  <h2>Hermes Agent</h2>
+  <input id="agentCommand" type="text" placeholder="find python notes and open the best" autocomplete="off">
+  <button onclick="agentExecute()">Execute</button>
+  <button onclick="agentDryRun()">Dry Run</button>
+  <div id="agentResult"></div>
+  <button onclick="loadGraph()">Show Graph</button>
+  <button onclick="loadAnalytics()">Analytics</button>
+  <button onclick="fetch('/api/logout').then(()=>location.href='/login.html')">Logout</button>
+  <div id="graph"></div>
+  <div id="analytics"></div>
+
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script>
+    const API = "/api";
+    const searchBox = document.getElementById("search");
+    const suggestions = document.getElementById("suggestions");
+
+    async function doSearch(q) {
+      const mode = document.getElementById("searchMode").value;
+      const url = mode === "semantic"
+        ? `${API}/semantic?q=${encodeURIComponent(q)}&top_k=10`
+        : mode === "hybrid"
+        ? `${API}/hybrid?q=${encodeURIComponent(q)}&top_k=10`
+        : `${API}/search?q=${encodeURIComponent(q)}`;
+      const [searchRes, suggestRes] = await Promise.all([
+        fetch(url).then(r => r.json()),
+        fetch(`${API}/suggest?prefix=${encodeURIComponent(q)}`).then(r => r.json()),
+      ]);
+      document.getElementById("results").innerHTML = searchRes.map(item => {
+        const [id, score] = Array.isArray(item) ? item : [item, null];
+        const scoreStr = score !== null ? ` <span style="color:#666">${score.toFixed(3)}</span>` : "";
+        return `<div class="result"><b>${escapeHtml(id)}</b>${scoreStr}</div>`;
+      }).join("");
+      suggestions.innerHTML = suggestRes.map(s =>
+        `<span onclick="searchBox.value=${JSON.stringify(s).replace(/"/g, '&quot;')};doSearch(${JSON.stringify(s)});">${escapeHtml(s)}</span>`
+      ).join("");
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => (
+        {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]
+      ));
+    }
+
+    searchBox.addEventListener("input", (e) => doSearch(e.target.value));
+
+    async function desktopClick() {
+      const r = await fetch(`${API}/desktop/click`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({x: 100, y: 100})
+      });
+      const j = await r.json();
+      document.getElementById("desktopResult").innerText = JSON.stringify(j);
+    }
+    async function desktopScreenshot() {
+      const r = await fetch(`${API}/desktop/screenshot`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const img = document.createElement("img");
+      img.src = url;
+      img.style.maxWidth = "400px";
+      document.getElementById("desktopResult").innerHTML = "";
+      document.getElementById("desktopResult").appendChild(img);
+    }
+    async function desktopCursor() {
+      const r = await fetch(`${API}/desktop/cursor`);
+      const j = await r.json();
+      document.getElementById("desktopResult").innerText = `Cursor: ${j.x}, ${j.y}`;
+    }
+    async function desktopOpenNote() {
+      const q = document.getElementById("openNoteQuery").value;
+      const r = await fetch(`${API}/desktop/open_note`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({query: q, top_k: 1})
+      });
+      const j = await r.json();
+      document.getElementById("openNoteResult").innerText = JSON.stringify(j, null, 2);
+    }
+    async function desktopListNotes() {
+      const q = document.getElementById("openNoteQuery").value;
+      const r = await fetch(`${API}/desktop/list_notes`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({query: q, top_k: 5})
+      });
+      const j = await r.json();
+      document.getElementById("openNoteResult").innerHTML = "<pre>" + JSON.stringify(j, null, 2) + "</pre>";
+    }
+    async function agentExecute() {
+      const cmd = document.getElementById("agentCommand").value;
+      const r = await fetch(`${API}/agent/execute`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({command: cmd})
+      });
+      const j = await r.json();
+      document.getElementById("agentResult").innerHTML = "<pre>" + JSON.stringify(j, null, 2) + "</pre>";
+    }
+    async function agentDryRun() {
+      const cmd = document.getElementById("agentCommand").value;
+      const r = await fetch(`${API}/agent/execute`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({command: cmd, dry_run: true})
+      });
+      const j = await r.json();
+      document.getElementById("agentResult").innerHTML = "<pre>DRY RUN\n" + JSON.stringify(j, null, 2) + "</pre>";
+    }
+
+    async function loadGraph() {
+      const data = await fetch(`${API}/graph`).then(r => r.json());
+      const nodes = new vis.DataSet(data.nodes.map(n => ({id: n.id, label: n.label || n.id})));
+      const edges = new vis.DataSet(data.edges.map(e => ({from: e.from, to: e.to, label: e.relation || ""})));
+      new vis.Network(document.getElementById("graph"), {nodes, edges}, {
+        physics: { stabilization: false },
+        interaction: { hover: true }
+      });
+    }
+    async function loadAnalytics() {
+      // Reset first — repeated clicks must not duplicate the tables.
+      const el = document.getElementById("analytics");
+      el.innerHTML = "Loading...";
+      const [cent, comps, pr] = await Promise.all([
+        fetch(`${API}/stats/centrality`).then(r => r.json()),
+        fetch(`${API}/stats/components`).then(r => r.json()),
+        fetch(`${API}/stats/pagerank`).then(r => r.json()),
+      ]);
+
+      let html = "<h2>Degree Centrality</h2><table border='1'><tr><th>Node</th><th>In</th><th>Out</th><th>Total</th></tr>";
+      for (const [nid, d] of Object.entries(cent).sort((a, b) => b[1].total - a[1].total)) {
+        html += `<tr><td>${escapeHtml(nid)}</td><td>${d.in}</td><td>${d.out}</td><td>${d.total}</td></tr>`;
+      }
+      html += "</table>";
+
+      html += `<h2>Connected Components (${comps.length})</h2>`;
+      for (const comp of comps) {
+        html += `<div class="result">${comp.length} nodes: ${comp.map(escapeHtml).join(", ")}</div>`;
+      }
+
+      html += "<h2>PageRank (top 10)</h2><table border='1'><tr><th>Node</th><th>Score</th></tr>";
+      const sortedPr = Object.entries(pr).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      for (const [nid, score] of sortedPr) {
+        html += `<tr><td>${escapeHtml(nid)}</td><td>${score.toFixed(4)}</td></tr>`;
+      }
+      html += "</table>";
+
+      el.innerHTML = html;
+    }
+  </script>
+</body>
+</html>

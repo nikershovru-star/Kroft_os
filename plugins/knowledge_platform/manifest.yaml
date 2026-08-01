@@ -1,0 +1,5 @@
+name: knowledge
+entrypoint: services.knowledge_platform:KnowledgePlatform
+capabilities: [event.publish, knowledge.graph]
+dependencies: [extractor, validator, graph]
+lifecycle: true

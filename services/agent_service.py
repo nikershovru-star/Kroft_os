@@ -1,0 +1,1108 @@
+"""AgentService — rule-based intent router with multi-step plans (Stage 34)."""
+from __future__ import annotations
+
+import re
+from typing import Any, Callable, Dict, List, Tuple
+
+from .tool_registry import ToolRegistry
+
+
+class AgentService:
+    """Rule-based agent: matches natural language to multi-step tool plans."""
+
+    # Each pattern: (regex, [(tool_name, extract_fn), ...])
+    # extract_fn receives the match object and returns a kwargs dict.
+    # PATTERNS order MATTERS: multi-step patterns must precede the matching
+    # single-step ones so the more specific command is matched first.
+    PATTERNS: List[Tuple[str, List[Tuple[str, Callable[[Any], Dict[str, Any]]]]]] = [
+        # --- English multi-step ---
+        (
+            r"find\s+(.+?)\s+and\s+open\s+(?:the\s+)?best",
+            [
+                ("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5}),
+                ("open_note", lambda m: {"query": m.group(1).strip(), "top_k": 1}),
+            ],
+        ),
+        (
+            r"find\s+(.+?)\s+and\s+take\s+a\s+screenshot",
+            [
+                ("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5}),
+                ("screenshot", lambda m: {}),
+            ],
+        ),
+        (
+            r"open\s+(.+?)\s+and\s+take\s+a\s+screenshot",
+            [
+                ("open_note", lambda m: {"query": m.group(1).strip(), "top_k": 1}),
+                ("screenshot", lambda m: {}),
+            ],
+        ),
+        # --- English single-step (preserved from Stage 33) ---
+        # Stage 37: open_app must precede bare 'open' (else 'open_app x' is
+        # swallowed by the open_note pattern).
+        (
+            r"open_app\s+(.+)$",
+            [("desktop_open_app", lambda m: {"name": m.group(1).strip()})],
+        ),
+        # Stage 49: graph constraints/auto-fix; must precede generic `find ...`
+        (
+            r"validate\s+graph",
+            [("validate_graph", lambda m: {})],
+        ),
+        (
+            r"find\s+broken\s+links",
+            [("find_broken_links", lambda m: {})],
+        ),
+        (
+            r"fix\s+graph",
+            [("fix_graph", lambda m: {})],
+        ),
+        # Stage 50: graph temporal audit log (EN + RU)
+        (
+            r"show\s+audit\s+log",
+            [("audit_log", lambda m: {})],
+        ),
+        (
+            r"show\s+recent\s+changes",
+            [("recent_changes", lambda m: {})],
+        ),
+        (
+            r"mutations\s+since\s+([0-9]+(?:\.[0-9]+)?)",
+            [("mutations_since", lambda m: {"ts_min": float(m.group(1))})],
+        ),
+        (
+            r"audit\s+log",
+            [("audit_log", lambda m: {})],
+        ),
+        (
+            r"recent\s+changes",
+            [("recent_changes", lambda m: {})],
+        ),
+        (
+            r"мутации\s+с\s+([0-9]+(?:\.[0-9]+)?)",
+            [("mutations_since", lambda m: {"ts_min": float(m.group(1))})],
+        ),
+        (
+            r"недавние\s+изменения",
+            [("recent_changes", lambda m: {})],
+        ),
+        (
+            r"журнал\s+изменений",
+            [("audit_log", lambda m: {})],
+        ),
+        # Stage 54: graph health monitor (EN + RU) — must precede generic `find ...`
+        (
+            r"graph\s+health\s+report",
+            [("graph_health_report", lambda m: {})],
+        ),
+        (
+            r"find\s+duplicates?",
+            [("find_duplicate_candidates", lambda m: {})],
+        ),
+        (
+            r"cleanup\s+orphans?",
+            [("cleanup_orphans", lambda m: {"dry_run": False})],
+        ),
+        # Stage 64: collaborative editing intents (EN + RU)
+        (
+            r"edit\s+(.+?)\s+with\s+base\s+(\d+)\s+content\s+(.+)",
+            [
+                (
+                    "add_node",
+                    lambda m: {
+                        "node_id": m.group(1).strip(),
+                        "content": m.group(3).strip(),
+                        "base_revision": int(m.group(2)),
+                        "actor": "user",
+                        "strategy": "content_merge",
+                    },
+                )
+            ],
+        ),
+        (
+            r"fork\s+branch\s+(.+?)\s+from\s+rev\s+(\d+)",
+            [
+                (
+                    "fork_branch",
+                    lambda m: {
+                        "user_id": "user",
+                        "branch_name": m.group(1).strip(),
+                        "from_revision": int(m.group(2)),
+                    },
+                )
+            ],
+        ),
+        (
+            r"merge\s+branch\s+(.+?)\s+into\s+(.+?)\s+with\s+strategy\s+(\w+)",
+            [
+                (
+                    "merge_branch",
+                    lambda m: {
+                        "user_id": "user",
+                        "branch_name": m.group(1).strip(),
+                        "target_resource": m.group(2).strip(),
+                        "strategy": m.group(3).strip(),
+                    },
+                )
+            ],
+        ),
+        (
+            r"синхронизируй\s+мои\s+изменения",
+            [("sync_queue", lambda m: {})],
+        ),
+        (
+            r"merge\s+(.+?)\s+into\s+(.+)",
+            [("merge_nodes", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "dry_run": False})],
+        ),
+        (
+            r"полный\s+отчёт\s+о\s+графе",
+            [("graph_health_report", lambda m: {})],
+        ),
+        (
+            r"найди\s+дубликаты?",
+            [("find_duplicate_candidates", lambda m: {})],
+        ),
+        (
+            r"очисти\s+осиротевшие\s+узлы?",
+            [("cleanup_orphans", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"объедини\s+(.+?)\s+в\s+(.+)",
+            [("merge_nodes", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "dry_run": False})],
+        ),
+        # Stage 57: graph hidden-connections intent MUST precede generic `find ...`
+        (
+            r"find\s+hidden\s+connections",
+            [("find_hidden_connections", lambda m: {"threshold": 0.15, "limit": 20})],
+        ),
+        (
+            r"find\s+(.+?)(?:\s+and\s+open)?$",
+            [("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
+        ),
+        (
+            r"open\s+(.+)$",
+            [("open_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
+        ),
+        # Stage 51: review queue & compound filtering (EN + RU; must precede generic `show ...`)
+        (
+            r"review\s+queue(?:\s+top\s+(\d+))?$",
+            [("review_queue", lambda m: {"top_k": int(m.group(1) or 10)})],
+        ),
+        (
+            r"what\s+(?:to\s+)?review",
+            [("review_queue", lambda m: {"top_k": 10})],
+        ),
+        (
+            r"show\s+(?:me\s+)?orphans?",
+            [("compound_query", lambda m: {"orphan": True})],
+        ),
+        (
+            r"show\s+(?:me\s+)?untagged",
+            [("compound_query", lambda m: {"untagged": True})],
+        ),
+        (
+            r"notes\s+tagged\s+(.+?)(?:\s+with\s+degree\s+>\s+(\d+))?$",
+            [("compound_query", lambda m: {
+                "tags": [t.strip() for t in m.group(1).split(",")],
+                "min_degree": int(m.group(2) or 0),
+            })],
+        ),
+        (
+            r"notes\s+not\s+linked\s+to\s+(.+)$",
+            [("compound_query", lambda m: {"not_linked_to": m.group(1).strip()})],
+        ),
+        (
+            r"очередь\s+ревью(?:\s+топ\s+(\d+))?$",
+            [("review_queue", lambda m: {"top_k": int(m.group(1) or 10)})],
+        ),
+        (
+            r"что\s+почитать",
+            [("review_queue", lambda m: {"top_k": 10})],
+        ),
+        (
+            r"покажи\s+сирот",
+            [("compound_query", lambda m: {"orphan": True})],
+        ),
+        (
+            r"покажи\s+без\s+тегов",
+            [("compound_query", lambda m: {"untagged": True})],
+        ),
+        (
+            r"заметки\s+с\s+тегом\s+(.+?)(?:\s+и\s+степенью\s+>\s+(\d+))?$",
+            [("compound_query", lambda m: {
+                "tags": [t.strip() for t in m.group(1).split(",")],
+                "min_degree": int(m.group(2) or 0),
+            })],
+        ),
+        (
+            r"заметки\s+не\s+связанные\s+с\s+(.+)$",
+            [("compound_query", lambda m: {"not_linked_to": m.group(1).strip()})],
+        ),
+        (
+            r"show\s+my\s+notifications?\b",
+            [("list_notifications", lambda m: {"acknowledged": False})],
+        ),
+        (
+            r"(?i)acknowledge\s+notification\s+(\S+)",
+            [("acknowledge_notification", lambda m: {"notification_id": m.group(1).strip()})],
+        ),
+        (
+            r"dismiss\s+all\s+notifications?",
+            [("dismiss_all_notifications", lambda m: {})],
+        ),
+        (
+            r"show\s+(?:me\s+)?(.+)$",
+            [("show_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
+        ),
+        (
+            r"what\s+is\s+(?:the\s+)?most\s+central",
+            [("most_central", lambda m: {})],
+        ),
+        (
+            r"export\s+(?:graph|vault)\s+to\s+(\w+)",
+            [("export_graph", lambda m: {"fmt": m.group(1)})],
+        ),
+        # Stage 37: export <fmt> [query] (spec v5.0, without 'graph to')
+        (
+            r"export\s+(dot|json|gexf)\b(?:\s+(.+))?$",
+            [("export_format", lambda m: {"fmt": m.group(1)})],
+        ),
+        # Stage 43: graph reasoning (English)
+        (
+            r"neighbors\s+of\s+(.+?)(?:\s+(in|out|both))?(?:\s+depth\s+(\d+))?$",
+            [("graph_neighbors", lambda m: {
+                "query": m.group(1).strip(),
+                "direction": (m.group(2) or "both").lower(),
+                "depth": int(m.group(3) or 1),
+            })],
+        ),
+        (
+            r"path\s+from\s+(.+?)\s+to\s+(.+)$",
+            [("graph_path", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"cluster\s+around\s+(.+?)(?:\s+top\s+(\d+))?$",
+            [("graph_cluster", lambda m: {
+                "query": m.group(1).strip(),
+                "k": int(m.group(2) or 5),
+            })],
+        ),
+        # Stage 43: graph reasoning (Cyrillic)
+        (
+            r"соседи\s+(.+?)(?:\s+(вход|выход|оба))?(?:\s+глубина\s+(\d+))?$",
+            [("graph_neighbors", lambda m: {
+                "query": m.group(1).strip(),
+                "direction": {"вход": "in", "выход": "out", "оба": "both"}.get(
+                    (m.group(2) or "оба").lower(), "both"
+                ),
+                "depth": int(m.group(3) or 1),
+            })],
+        ),
+        (
+            r"путь\s+от\s+(.+?)\s+до\s+(.+)$",
+            [("graph_path", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"кластер\s+вокруг\s+(.+?)(?:\s+топ\s+(\d+))?$",
+            [("graph_cluster", lambda m: {
+                "query": m.group(1).strip(),
+                "k": int(m.group(2) or 5),
+            })],
+        ),
+        # Stage 44: graph mutation (English)
+        (
+            r"link\s+(.+?)\s+to\s+(.+?)(?:\s+as\s+(.+))?$",
+            [("graph_link", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+                "relation": (m.group(3) or "links").strip(),
+            })],
+        ),
+        (
+            r"unlink\s+(.+?)\s+from\s+(.+)$",
+            [("graph_unlink", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"untag\s+(.+?)\s+(.+)$",
+            [("graph_untag", lambda m: {
+                "query": m.group(1).strip(),
+                "tag": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"tag\s+(.+?)\s+as\s+(.+)$",
+            [("graph_tag", lambda m: {
+                "query": m.group(1).strip(),
+                "tag": m.group(2).strip(),
+            })],
+        ),
+        # Stage 44: graph mutation (Russian)
+        (
+            r"связать\s+(.+?)\s+с\s+(.+?)(?:\s+как\s+(.+))?$",
+            [("graph_link", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+                "relation": (m.group(3) or "links").strip(),
+            })],
+        ),
+        (
+            r"отвязать\s+(.+?)\s+от\s+(.+)$",
+            [("graph_unlink", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"убрать\s+тег\s+(.+?)\s+(.+)$",
+            [("graph_untag", lambda m: {
+                "query": m.group(1).strip(),
+                "tag": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"тег\s+(.+?)\s+(.+)$",
+            [("graph_tag", lambda m: {
+                "query": m.group(1).strip(),
+                "tag": m.group(2).strip(),
+            })],
+        ),
+        # Stage 45: graph link recommendations (English)
+        (
+            r"suggest\s+links\s+for\s+(.+?)(?:\s+top\s+(\d+))?$",
+            [("graph_suggest", lambda m: {
+                "query": m.group(1).strip(),
+                "top_k": int(m.group(2) or 5),
+            })],
+        ),
+        (
+            r"what\s+should\s+link\s+to\s+(.+?)(?:\s+top\s+(\d+))?$",
+            [("graph_suggest", lambda m: {
+                "query": m.group(1).strip(),
+                "top_k": int(m.group(2) or 5),
+            })],
+        ),
+        # Stage 45: graph link recommendations (Russian)
+        (
+            r"предложи\s+связи\s+для\s+(.+?)(?:\s+топ\s+(\d+))?$",
+            [("graph_suggest", lambda m: {
+                "query": m.group(1).strip(),
+                "top_k": int(m.group(2) or 5),
+            })],
+        ),
+        (
+            r"с\s+чем\s+связать\s+(.+?)(?:\s+топ\s+(\d+))?$",
+            [("graph_suggest", lambda m: {
+                "query": m.group(1).strip(),
+                "top_k": int(m.group(2) or 5),
+            })],
+        ),
+        # Stage 46: graph analytics & health (English)
+        (
+            r"graph\s+stats",
+            [("graph_stats", lambda m: {})],
+        ),
+        (
+            r"orphan\s+notes?",
+            [("graph_orphans", lambda m: {})],
+        ),
+        (
+            r"most\s+central(?:\s+top\s+(\d+))?",
+            [("graph_central", lambda m: {"k": int(m.group(1) or 5)})],
+        ),
+        (
+            r"graph\s+health",
+            [("graph_health_report", lambda m: {})],
+        ),
+        # Stage 46: graph analytics & health (Russian)
+        (
+            r"статистика\s+графа",
+            [("graph_stats", lambda m: {})],
+        ),
+        (
+            r"осиротевшие\s+заметки",
+            [("graph_orphans", lambda m: {})],
+        ),
+        (
+            r"самые\s+центральные(?:\s+топ\s+(\d+))?",
+            [("graph_central", lambda m: {"k": int(m.group(1) or 5)})],
+        ),
+        (
+            r"здоровье\s+графа",
+            [("graph_health_report", lambda m: {})],
+        ),
+        # Stage 47: graph snapshot persistence (English)
+        (
+            r"save\s+graph",
+            [("save_graph", lambda m: {})],
+        ),
+        (
+            r"auto\s+save\s+(on|off)",
+            [("auto_save", lambda m: {"enabled": m.group(1).lower() == "on"})],
+        ),
+        # Stage 47: graph snapshot persistence (Russian)
+        (
+            r"сохранить\s+граф",
+            [("save_graph", lambda m: {})],
+        ),
+        (
+            r"автосохранение\s+(вкл|выкл)",
+            [("auto_save", lambda m: {"enabled": m.group(1).lower() == "вкл"})],
+        ),
+        # Stage 48: graph-enhanced hybrid search
+        (
+            r"hybrid\s+search\s+(.+)$",
+            [("enhanced_search", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"гибридный\s+поиск\s+(.+)$",
+            [("enhanced_search", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"take\s+a\s+screenshot",
+            [("screenshot", lambda m: {})],
+        ),
+        # Stage 49: graph constraints & auto-fix (Russian)
+        (
+            r"проверить\s+граф",
+            [("validate_graph", lambda m: {})],
+        ),
+        (
+            r"найти\s+битые\s+ссылки",
+            [("find_broken_links", lambda m: {})],
+        ),
+        (
+            r"исправить\s+граф",
+            [("fix_graph", lambda m: {})],
+        ),
+        # Stage 51: review queue & compound filtering (EN + RU)
+        (
+            r"review\s+queue(?:\s+top\s+(\d+))?$",
+            [("review_queue", lambda m: {"top_k": int(m.group(1) or 10)})],
+        ),
+        (
+            r"what\s+(?:to\s+)?review",
+            [("review_queue", lambda m: {"top_k": 10})],
+        ),
+        (
+            r"show\s+(?:me\s+)?orphans?",
+            [("compound_query", lambda m: {"orphan": True})],
+        ),
+        (
+            r"show\s+(?:me\s+)?untagged",
+            [("compound_query", lambda m: {"untagged": True})],
+        ),
+        (
+            r"notes\s+tagged\s+(.+?)(?:\s+with\s+degree\s+>\s+(\d+))?$",
+            [("compound_query", lambda m: {
+                "tags": [t.strip() for t in m.group(1).split(",")],
+                "min_degree": int(m.group(2) or 0),
+            })],
+        ),
+        (
+            r"notes\s+not\s+linked\s+to\s+(.+)$",
+            [("compound_query", lambda m: {"not_linked_to": m.group(1).strip()})],
+        ),
+        (
+            r"очередь\s+ревью(?:\s+топ\s+(\d+))?$",
+            [("review_queue", lambda m: {"top_k": int(m.group(1) or 10)})],
+        ),
+        (
+            r"что\s+почитать",
+            [("review_queue", lambda m: {"top_k": 10})],
+        ),
+        (
+            r"покажи\s+сирот",
+            [("compound_query", lambda m: {"orphan": True})],
+        ),
+        (
+            r"покажи\s+без\s+тегов",
+            [("compound_query", lambda m: {"untagged": True})],
+        ),
+        (
+            r"заметки\s+с\s+тегом\s+(.+?)(?:\s+и\s+степенью\s+>\s+(\d+))?$",
+            [("compound_query", lambda m: {
+                "tags": [t.strip() for t in m.group(1).split(",")],
+                "min_degree": int(m.group(2) or 0),
+            })],
+        ),
+        (
+            r"notes not linked to (.+)$",
+            [("compound_query", lambda m: {"not_linked_to": m.group(1).strip()})],
+        ),
+        # Stage 52: graph-driven workflows (EN + RU)
+        (
+            r"research\s+(.+)$",
+            [("research_topic", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"bridge\s+(.+?)\s+and\s+(.+)$",
+            [("bridge_topics", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"expand\s+(.+)$",
+            [("expand_knowledge", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"connect\s+(.+?)\s+to\s+(.+)$",
+            [("bridge_topics", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"исследовать\s+(.+)$",
+            [("research_topic", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"соединить\s+(.+?)\s+и\s+(.+)$",
+            [("bridge_topics", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        (
+            r"расширить\s+(.+)$",
+            [("expand_knowledge", lambda m: {"query": m.group(1).strip()})],
+        ),
+        (
+            r"связать\s+(.+?)\s+с\s+(.+)$",
+            [("bridge_topics", lambda m: {
+                "from_query": m.group(1).strip(),
+                "to_query": m.group(2).strip(),
+            })],
+        ),
+        # Stage 53: graph-based agent context memory (EN + RU)
+        (
+            r"remember\s+(?:that\s+)?(.+)",
+            [("record_user_query", lambda m: {"query_text": m.group(1).strip(), "intent": "explicit_memory"})],
+        ),
+        (
+            r"what\s+do\s+you\s+know\s+about\s+my\s+(?:interests|context)",
+            [("get_session_context", lambda m: {})],
+        ),
+        (
+            r"suggest\s+(?:something|what\s+next)",
+            [("suggest_next", lambda m: {})],
+        ),
+        (
+            r"personalized\s+summary\s+(?:of\s+)?(.+)",
+            [("get_personalized_summary", lambda m: {"target_node": m.group(1).strip()})],
+        ),
+        (
+            r"запомни\s+(?:что\s+)?(.+)",
+            [("record_user_query", lambda m: {"query_text": m.group(1).strip(), "intent": "explicit_memory"})],
+        ),
+        (
+            r"что\s+ты\s+знаешь\s+об\s+моих\s+(?:интересах|запросах)",
+            [("get_session_context", lambda m: {})],
+        ),
+        (
+            r"что\s+посоветуешь|что\s+дальше",
+            [("suggest_next", lambda m: {})],
+        ),
+        (
+            r"персонализированный\s+обзор\s+(?:узла\s+)?(.+)",
+            [("get_personalized_summary", lambda m: {"target_node": m.group(1).strip()})],
+        ),
+        # Stage 54: graph health monitor (EN + RU)
+        (
+            r"graph\s+health\s+report",
+            [("graph_health_report", lambda m: {})],
+        ),
+        (
+            r"find\s+duplicates?",
+            [("find_duplicate_candidates", lambda m: {})],
+        ),
+        (
+            r"cleanup\s+orphans?",
+            [("cleanup_orphans", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"merge\s+(.+?)\s+into\s+(.+)",
+            [("merge_nodes", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "dry_run": False})],
+        ),
+        (
+            r"полный\s+отчёт\s+о\s+графе",
+            [("graph_health_report", lambda m: {})],
+        ),
+        (
+            r"здоровье\s+графа",
+            [("graph_health_report", lambda m: {})],
+        ),
+        (
+            r"найди\s+дубликаты?",
+            [("find_duplicate_candidates", lambda m: {})],
+        ),
+        (
+            r"очисти\s+осиротевшие\s+узлы?",
+            [("cleanup_orphans", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"объедини\s+(.+?)\s+в\s+(.+)",
+            [("merge_nodes", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "dry_run": False})],
+        ),
+        (
+            r"cursor\s+position",
+            [("cursor_position", lambda m: {})],
+        ),
+        # Stage 57–60 + 62: graph/multi-user NL intents (must precede generic desktop patterns)
+        (
+            r"apply\s+suggested\s+link\s+from\s+(\S+)\s+to\s+(\S+)",
+            [("apply_suggested_link", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "relation": "links"})],
+        ),
+        (
+            r"query\s+graph:\s*(.+)$",
+            [("query_dsl", lambda m: {"query_string": m.group(1).strip()})],
+        ),
+        (
+            r"graph:\s*MATCH\s+(.+)\s+RETURN\s+(.+)$",
+            [("query_dsl", lambda m: {"query_string": f"MATCH {m.group(1).strip()} RETURN {m.group(2).strip()}"})],
+        ),
+        (
+            r"rebuild\s+semantic\s+index",
+            [("rebuild_semantic_index", lambda m: {})],
+        ),
+        (
+            r"semantic\s+search\s+(.+)$",
+            [("semantic_search", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
+        ),
+        (
+            r"поиск\s+по\s+смыслу\s+(.+)$",
+            [("semantic_search", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
+        ),
+        (
+            r"rebuild\s+semantic\s+index",
+            [("rebuild_semantic_index", lambda m: {})],
+        ),
+        (
+            r"перестрой\s+семантический\s+индекс",
+            [("rebuild_semantic_index", lambda m: {})],
+        ),
+        (
+            r"how\s+similar\s+are\s+(\S+)\s+and\s+(\S+)",
+            [("semantic_similarity", lambda m: {"node_a": m.group(1).strip(), "node_b": m.group(2).strip()})],
+        ),
+        (
+            r"run\s+maintenance\s+cycle",
+            [("run_maintenance_cycle", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"preview\s+maintenance",
+            [("run_maintenance_cycle", lambda m: {"dry_run": True})],
+        ),
+        (
+            r"maintenance\s+history",
+            [("get_maintenance_history", lambda m: {})],
+        ),
+        (
+            r"configure\s+maintenance",
+            [("configure_maintenance", lambda m: {"config": {}})],
+        ),
+        (
+            r"check\s+notifications?\b",
+            [("check_and_notify", lambda m: {})],
+        ),
+        (
+            r"show\s+my\s+notifications?\b",
+            [("list_notifications", lambda m: {"acknowledged": False})],
+        ),
+        (
+            r"export\s+graph",
+            [("export_graph", lambda m: {"format": "json"})],
+        ),
+        (
+            r"backup\s+graph",
+            [("backup_graph", lambda m: {})],
+        ),
+        (
+            r"restore\s+graph\s+from\s+(.+)$",
+            [("restore_graph", lambda m: {"path": m.group(1).strip()})],
+        ),
+        (
+            r"switch\s+to\s+user\s+(\S+)",
+            [("set_user_context", lambda m: {"user_id": m.group(1).strip()})],
+        ),
+        (
+            r"context\s+for\s+user\s+(\S+)",
+            [("get_user_context", lambda m: {"user_id": m.group(1).strip()})],
+        ),
+        (
+            r"share\s+session\s+(\S+)\s+with\s+user\s+(\S+)",
+            [("share_session", lambda m: {"session_id": m.group(1).strip(), "to_user": m.group(2).strip()})],
+        ),
+        (
+            r"revoke\s+session\s+(\S+)",
+            [("revoke_session", lambda m: {"session_id": m.group(1).strip()})],
+        ),
+        (
+            r"примени\s+связь\s+от\s+(\S+)\s+к\s+(\S+)",
+            [("apply_suggested_link", lambda m: {"from_node": m.group(1).strip(), "to_node": m.group(2).strip(), "relation": "links"})],
+        ),
+        (
+            r"граф\s+запрос:\s*(.+)$",
+            [("query_dsl", lambda m: {"query_string": m.group(1).strip()})],
+        ),
+        (
+            r"запусти\s+обслуживание\s+графа",
+            [("run_maintenance_cycle", lambda m: {"dry_run": False})],
+        ),
+        (
+            r"предпросмотр\s+обслуживания",
+            [("run_maintenance_cycle", lambda m: {"dry_run": True})],
+        ),
+        (
+            r"настрой\s+обслуживание",
+            [("configure_maintenance", lambda m: {"config": {}})],
+        ),
+        (
+            r"история\s+обслуживания",
+            [("get_maintenance_history", lambda m: {})],
+        ),
+        (
+            r"проверь\s+уведомления",
+            [("check_and_notify", lambda m: {})],
+        ),
+        (
+            r"покажи\s+уведомления",
+            [("list_notifications", lambda m: {"acknowledged": False})],
+        ),
+        (
+            r"(?i)подтверди\s+уведомление\s+(\S+)",
+            [("acknowledge_notification", lambda m: {"notification_id": m.group(1).strip()})],
+        ),
+        (
+            r"очисти\s+все\s+уведомления",
+            [("dismiss_all_notifications", lambda m: {})],
+        ),
+        (
+            r"экспорт\s+графа",
+            [("export_graph", lambda m: {"format": "json"})],
+        ),
+        (
+            r"создай\s+бэкап\s+графа",
+            [("backup_graph", lambda m: {})],
+        ),
+        (
+            r"восстанови\s+граф\s+из\s+(.+)$",
+            [("restore_graph", lambda m: {"path": m.group(1).strip()})],
+        ),
+        (
+            r"переключись\s+на\s+пользователя\s+(\S+)",
+            [("set_user_context", lambda m: {"user_id": m.group(1).strip()})],
+        ),
+        (
+            r"контекст\s+пользователя\s+(\S+)",
+            [("get_user_context", lambda m: {"user_id": m.group(1).strip()})],
+        ),
+        (
+            r"поделись\s+сессией\s+(\S+)\s+с\s+пользователем\s+(\S+)",
+            [("share_session", lambda m: {"session_id": m.group(1).strip(), "to_user": m.group(2).strip()})],
+        ),
+        (
+            r"забери\s+доступ\s+к\s+сессии\s+(\S+)",
+            [("revoke_session", lambda m: {"session_id": m.group(1).strip()})],
+        ),
+        (
+            r"синхронизируй\s+мои\s+изменения",
+            [("sync_queue", lambda m: {})],
+        ),
+        # Stage 37: NL desktop intents (spec v5.0)
+        (
+            r"click\s+(\d+)\s+(\d+)$",
+            [("desktop_click", lambda m: {"x": m.group(1), "y": m.group(2)})],
+        ),
+        (
+            r"type\s+(.+)$",
+            [("desktop_type", lambda m: {"text": m.group(1).strip()})],
+        ),
+        # Stage 37: capabilities (spec v5.0: 'что ты умеешь')
+        (
+            r"what\s+can\s+you\s+do|что\s+ты\s+умеешь|что\s+ты\s+можешь",
+            [("capabilities", lambda m: {})],
+        ),
+        (
+            r"centrality",
+            [("most_central", lambda m: {})],
+        ),
+        (
+            r"orphan",
+            [("list_orphans", lambda m: {})],
+        ),
+        # --- Cyrillic single-step ---
+        # Stage 57: RU graph hidden-connections intent MUST precede generic `найди ...`
+        (
+            r"найди\s+скрытые\s+связи",
+            [("find_hidden_connections", lambda m: {"threshold": 0.15, "limit": 20})],
+        ),
+        (
+            r"найди\s+(.+)$",
+            [("list_notes", lambda m: {"query": m.group(1).strip(), "top_k": 5})],
+        ),
+        (
+            r"открой\s+(.+)$",
+            [("open_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
+        ),
+        (
+            r"сделай\s+скриншот",
+            [("screenshot", lambda m: {})],
+        ),
+        (
+            r"позиция\s+курсора",
+            [("cursor_position", lambda m: {})],
+        ),
+        (
+            r"экспортируй\s+граф\s+в\s+(\w+)",
+            [("export_graph", lambda m: {"fmt": m.group(1)})],
+        ),
+        # Stage 37: cyrillic NL desktop + show
+        (
+            r"клик\s+(\d+)\s+(\d+)$",
+            [("desktop_click", lambda m: {"x": m.group(1), "y": m.group(2)})],
+        ),
+        (
+            r"напечатай\s+(.+)$",
+            [("desktop_type", lambda m: {"text": m.group(1).strip()})],
+        ),
+        (
+            r"открой\s+приложение\s+(.+)$",
+            [("desktop_open_app", lambda m: {"name": m.group(1).strip()})],
+        ),
+        (
+            r"центральность",
+            [("most_central", lambda m: {})],
+        ),
+        (
+            r"осиротевшие",
+            [("list_orphans", lambda m: {})],
+        ),
+        (
+            r"покажи\s+(.+)$",
+            [("show_note", lambda m: {"query": m.group(1).strip(), "top_k": 1})],
+        ),
+        # Stage 41: contextual shortcuts (conversation-aware)
+        (
+            r"^(again|повтори|repeat)$",
+            [("__again__", lambda m: {})],
+        ),
+        (
+            r"^(more|ещ[её]|еще)$",
+            [("__more__", lambda m: {})],
+        ),
+        (
+            r"^(show|покажи)$",
+            [("__show_last__", lambda m: {})],
+        ),
+    ]
+
+    def __init__(self, registry: ToolRegistry, session_store: Optional[Any] = None) -> None:
+        self._registry = registry
+        self._session = session_store
+        self._local_find: List[Dict[str, Any]] = []  # fallback if no session_store
+        self._patterns: List[Tuple[str, List[Tuple[str, Callable[[Any], Dict[str, Any]]]]]] = []
+        self._patterns.extend(self.PATTERNS)  # copy class-level defaults
+
+    def _get_last_find(self) -> List[Dict[str, Any]]:
+        if self._session:
+            return self._session.get_last_find()
+        return self._local_find
+
+    def _set_last_find(self, results: List[Dict[str, Any]], command: str = "") -> None:
+        if self._session:
+            self._session.set_last_find(results, command)
+        else:
+            self._local_find = results
+
+    def add_pattern(self, pattern: str, steps: List[Tuple[str, Callable[[Any], Dict[str, Any]]]]) -> None:
+        """Stage 40: register a dynamic NL pattern (plugin extension)."""
+        self._patterns.append((pattern, steps))
+
+    def _match(self, command: str) -> List[Tuple[str, Dict[str, Any]]]:
+        """Return a plan (list of (tool_name, kwargs)) or []."""
+        if not command or not command.strip():
+            return []
+        cmd = command.strip().lower()
+        orig = command.strip()  # preserve argument casing for extract fns
+        # Implicit reference: "open the first one" / "открой первую" -> last find top-1
+        if re.fullmatch(r"(open|открой)\s+(the\s+)?(first|первую|первый)(\s+(one|result))?", cmd):
+            if self._get_last_find():
+                top = self._get_last_find()[0]
+                return [("open_note", {"query": top.get("id", ""), "top_k": 1})]
+            # No prior find in this/recovered session -> explicit error (stateless-safe)
+            return [("__implicit_ref_no_context__", {})]
+        if re.fullmatch(r"(show|покажи)\s+(the\s+)?(first|первую|первый)(\s+(one|result))?", cmd):
+            if self._get_last_find():
+                top = self._get_last_find()[0]
+                return [("show_note", {"query": top.get("id", ""), "top_k": 1})]
+            return [("__implicit_ref_no_context__", {})]
+        # Stage 41: contextual shortcuts resolved against session history
+        if cmd in ("again", "повтори", "repeat"):
+            last = self._session.get_last_command() if self._session else ""
+            # Guard against repeat-shortcut recursion: "again" after "again"
+            # would resolve to itself and loop forever. A shortcut cannot be
+            # repeated; without a real prior command there is no context.
+            if last and last not in ("again", "повтори", "repeat", "more", "ещё", "еще", "show", "покажи"):
+                return self._match(last)  # re-resolve
+            return [("__no_context__", {})]
+        if cmd in ("more", "ещё", "еще"):
+            last_q = self._session.get_last_query() if self._session else ""
+            if last_q:
+                return [("list_notes", {"query": last_q, "top_k": 10})]
+            return [("__no_context__", {})]
+        if cmd in ("show", "покажи"):
+            last_find = self._get_last_find()
+            if last_find:
+                return [("show_note", {"query": last_find[0].get("id", ""), "top_k": 1})]
+            return [("__no_context__", {})]
+        for pattern, steps in self._patterns:
+            m = re.search(pattern, cmd)
+            if m:
+                # Re-match on original case so extracted args keep their casing
+                # (e.g. "weather in Berlin" -> city "Berlin", not "berlin").
+                m_orig = re.search(pattern, orig)
+                return [(tool_name, extract(m_orig)) for tool_name, extract in steps]
+        return []
+
+    def execute(self, command: str) -> Dict[str, Any]:
+        if not command or not command.strip():
+            return {"error": "empty command"}
+        plan = self._match(command)
+        if not plan:
+            return {
+                "ok": False,
+                "error": "unknown command",
+                "command": command,
+                "hint": "try: find X, open X, найди X, открой X, screenshot, сделай скриншот",
+            }
+        # Stage 41: contextual shortcut with no conversation context
+        if plan[0][0] == "__no_context__":
+            return {
+                "ok": False,
+                "error": "no conversation context",
+                "command": command,
+            }
+        # Validate all tools exist before executing
+        for tool_name, _ in plan:
+            if not self._registry.has(tool_name):
+                return {"ok": False, "error": f"tool '{tool_name}' not available", "command": command}
+        # Execute sequentially (fail-fast: stop on first error)
+        results: List[Dict[str, Any]] = []
+        for tool_name, kwargs in plan:
+            try:
+                result = self._registry.call(tool_name, **kwargs)
+                results.append({"tool": tool_name, "result": result})
+            except Exception as e:  # noqa: BLE001 -- surface step errors, stop chain
+                results.append({"tool": tool_name, "error": str(e)})
+                break
+        # SessionStore: remember find/list results for implicit "open the first"
+        for step_result in results:
+            if step_result.get("tool") == "list_notes" and "result" in step_result:
+                self._set_last_find(step_result["result"], command)
+        # Backward compat: single-step returns the old flat format (Stage 33),
+        # enriched with spec v5.0 fields (action/query/results) where applicable.
+        if len(results) == 1 and "error" not in results[0]:
+            out = {
+                "ok": True,
+                "command": command,
+                "tool": results[0]["tool"],
+                "result": results[0]["result"],
+            }
+            if results[0]["tool"] in ("list_notes", "show_note"):
+                out["action"] = "find" if results[0]["tool"] == "list_notes" else "show"
+                out["query"] = plan[0][1].get("query", "")
+                out["results"] = results[0]["result"] if isinstance(results[0]["result"], list) else [results[0]["result"]]
+            elif results[0]["tool"] == "open_note":
+                out["action"] = "open"
+                out["target"] = results[0]["result"].get("opened") if isinstance(results[0]["result"], dict) else None
+                out["opened_by"] = "default_app"
+            elif results[0]["tool"] == "export_format":
+                out["action"] = "export"
+                out["format"] = plan[0][1].get("fmt")
+            elif results[0]["tool"] == "capabilities":
+                out["action"] = "capabilities"
+            elif results[0]["tool"] == "screenshot":
+                out["action"] = "desktop"
+            elif results[0]["tool"] == "cursor_position":
+                out["action"] = "desktop"
+            elif results[0]["tool"] in ("desktop_click", "desktop_type", "desktop_open_app"):
+                out["action"] = "desktop"
+            # Stage 41: conversation history
+            summary = ""
+            if results:
+                first = results[0]
+                if "error" in first:
+                    summary = f"error: {first['error']}"
+                elif first.get("tool") == "list_notes":
+                    summary = f"found {len(first.get('result', []))} notes"
+                elif first.get("tool") == "open_note":
+                    summary = f"opened {first.get('result', {}).get('opened', '?')}"
+                elif first.get("tool") == "show_note":
+                    summary = f"showed {first.get('result', {}).get('id', '?')}"
+                elif first.get("tool") == "export_format":
+                    summary = f"exported {first.get('result', {}).get('format', '?')}"
+                else:
+                    summary = first.get("tool", "unknown")
+            if self._session:
+                self._session.add_turn(
+                    command,
+                    results[0].get("tool", "unknown") if results else "noop",
+                    summary,
+                )
+            return out
+        # Stage 41: conversation history (multi-step path)
+        summary = ""
+        if results:
+            first = results[0]
+            if "error" in first:
+                summary = f"error: {first['error']}"
+            elif first.get("tool") == "list_notes":
+                summary = f"found {len(first.get('result', []))} notes"
+            elif first.get("tool") == "open_note":
+                summary = f"opened {first.get('result', {}).get('opened', '?')}"
+            elif first.get("tool") == "show_note":
+                summary = f"showed {first.get('result', {}).get('id', '?')}"
+            elif first.get("tool") == "export_format":
+                summary = f"exported {first.get('result', {}).get('format', '?')}"
+            else:
+                summary = first.get("tool", "unknown")
+        if self._session:
+            self._session.add_turn(
+                command,
+                results[0].get("tool", "unknown") if results else "noop",
+                summary,
+            )
+        return {"ok": True, "command": command, "plan": results}
+
+    def execute_batch(
+        self,
+        commands: List[str],
+        continue_on_error: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Execute a sequence of commands with shared session context."""
+        results: List[Dict[str, Any]] = []
+        for cmd in commands:
+            result = self.execute(cmd)
+            results.append(result)
+            if not continue_on_error and not result.get("ok", True):
+                break
+        return results
+
+    def plan(self, command: str) -> List[str]:
+        """Dry-run: return step descriptions without executing."""
+        if not command or not command.strip():
+            return []
+        plan = self._match(command)
+        if not plan:
+            return ["no matching pattern found"]
+        return [f"step {i+1}: {tool_name}" for i, (tool_name, _) in enumerate(plan)]

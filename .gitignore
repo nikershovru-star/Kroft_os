@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.db
+.env
+.sandbox/
+.e2e_sandbox/
+.coverage

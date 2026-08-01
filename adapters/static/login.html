@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>KROFT_OS — Login</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 400px; margin: 100px auto; padding: 0 20px; }
+    input { width: 100%; padding: 10px; margin: 8px 0; font-size: 16px; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; font-size: 16px; cursor: pointer; }
+    #err { color: red; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>KROFT_OS</h1>
+  <input id="user" type="text" placeholder="Username" autocomplete="off">
+  <input id="pass" type="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+  <div id="err"></div>
+  <script>
+    async function login() {
+      const r = await fetch("/api/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          user: document.getElementById("user").value,
+          pass: document.getElementById("pass").value,
+        }),
+      });
+      if (r.ok) {
+        location.href = "/";
+      } else {
+        document.getElementById("err").textContent = "Invalid credentials";
+      }
+    }
+    document.getElementById("pass").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") login();
+    });
+  </script>
+</body>
+</html>

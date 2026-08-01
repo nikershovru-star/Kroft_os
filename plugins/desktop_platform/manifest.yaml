@@ -1,0 +1,5 @@
+name: desktop
+entrypoint: services.desktop_service:DesktopService
+capabilities: [desktop.control]
+dependencies: []
+lifecycle: true

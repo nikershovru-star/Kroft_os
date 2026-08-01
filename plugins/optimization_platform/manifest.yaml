@@ -1,0 +1,5 @@
+name: optimization
+entrypoint: services.pattern_based_optimizer:PatternBasedOptimizer
+capabilities: [config.read, optimization.apply]
+dependencies: [learning_store]
+lifecycle: true
