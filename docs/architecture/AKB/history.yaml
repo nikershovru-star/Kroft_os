@@ -129,14 +129,14 @@ history:
     law_changes: [K7]
     note: "TZ-003 WP-06 (Auto-sync PROJECT_CONTEXT_MAP). tools/context_map_sync.py regenerates AUTO-GENERATED block from real runs (tests=768, gate=14, ADR=31, open=0). Markers added to PROJECT_CONTEXT_MAP.md. Idempotent verified (regen -> empty git diff). CI drift check: hand-edited numbers -> git diff --exit-code fails."
 
-  - date: "2026-08-02"
-    commit: "wp07-deprec-container"
-    adr: "-"
-    law_changes: [K1, K3]
-    note: "TZ-003 WP-07 (Deprecated removal). Literal removal of Kernel(container=...) broke 17 tests (R2 triggered: build_kernel/_resolve_snapshotable depended on legacy container resolution). Compromise: container-path KEPT as K3-compliant Composition Root factory (kernel never instantiates DependencyContainer; container arrives fully-wired from composition/), deprecated status REMOVED. Deprecated API count -> 0. Kernel docstring updated; test_no_legacy_container_param_in_kernel removed (K3 detector already blocks DependencyContainer( instantiation in kernel). Suite 768 passed, gate 14 passed."
+  - id: WP-07
+    tz: TZ-003
+    date: "2026-08-02"
+    status: done
+    summary: "Container-path de-deprecated. Literal removal aborted due to R2 (17 tests failed via snapshotable resolution). Container kept as K3-compliant Composition Root factory. Deprecated API count = 0."
 
-  - date: "2026-08-02"
-    commit: "wp08-adr-lifecycle"
-    adr: "ADR-026..029 -> accepted"
-    law_changes: [K5]
-    note: "TZ-003 WP-08 (ADR lifecycle). adrs.yaml: all 31 ADR now carry evidence_level: III; ADR-026/027/028/029 status proposed -> accepted (implemented+verified in Phase B/C, human-approved scope K5). ADR-025 remains proposed (PHASE 6, WP-13). ADR-007 double-file stays superseded. Files ADR-026..029 frontmatter updated (status+evidence_level+Approval K5). akb-lint confirms 'All accepted/in_progress ADRs carry evidence_level' (F6 = 0 warn). PROJECT_CONTEXT_MAP + PROJECT_STATUS updated (ADR count 31, Wave 1 DONE)."
+  - id: WP-08
+    tz: TZ-003
+    date: "2026-08-02"
+    status: done
+    summary: "ADR-026..029 accepted. evidence_level: III added to all 31 ADR. F6 warn closed (akb-lint green). PROJECT_CONTEXT_MAP §4 updated."

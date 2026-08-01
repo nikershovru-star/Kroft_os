@@ -38,7 +38,7 @@ purpose: >
 
 - **HIGH architectural debt:** **0** (нет).
 - **LOW/accepted debt:** 1 (V4, не критично, model_registry — порт).
-- **Deprecated API:** **0** (container-path оставлен как K3-compliant Composition Root factory, deprecated-статус снят в WP-07 TZ-003).
+- **Deprecated API:** **0** (legacy `Kernel(container=...)` de-deprecated in WP-07; container path is now the canonical Composition Root factory, K3-compliant).
 - **Open violations:** **0** (arch-gate 14 passed).
 
 > **No High Architectural Debt** — все критические нарушения закрыты.
