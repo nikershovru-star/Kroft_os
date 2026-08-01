@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from composition import build_container, build_event_bus, build_kernel, build_services
+from composition.kernel_factory import ComponentController, build_instance_builder
 from composition.bootstrap import build_system, shutdown_system
 from runtime.kernel_runtime import run
 

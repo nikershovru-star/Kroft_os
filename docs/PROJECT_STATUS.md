@@ -18,6 +18,8 @@ purpose: >
 
 **Статус платформы:** архитектурно стабильна (Clean/Hexagonal соблюдён), готова к функциональному развитию (Supervisor & Recovery, Distributed Runtime, Marketplace).
 
+**Git-режим:** единый репозиторий (Variant A), финализирован в WP-04. `.gitignore` исключает `data/`, `*.exe`, `.hermes/`, `archive/KnowledgeOS-v5/`, `recovery_journal.jsonl`, `stubs/`, `.venv/`, `cache/`. Local git remote ОТСУТСТВУЕТ — `git push` запрещён (LAW K5).
+
 ---
 
 ## 1. Архитектурный долг (Architectural Debt)
@@ -30,12 +32,14 @@ purpose: >
 | **V2** | kernel импортирует `infrastructure.SnapshotStore` | kernel → infrastructure | K1 | ✅ CLOSED | Phase B.3 (IStateRepository port) |
 | **V3** | `adapters/router.py` импортирует `policies.budget_policy.estimate_cost` | adapters → policies | K6 | ✅ CLOSED | Phase C.1 (commit 3a899c6, ADR-030) |
 | **V4** | `services/policy_engine.py` импортирует `contracts.model_registry.ModelRegistry` | services → contracts (порт) | K6 (minor) | ⚠ ACCEPTED | model_registry — это порт, не нарушение K6 в строгом смысле |
+| **Deprecated** | `Kernel(container=...)` legacy-параметр | kernel | K1/K3 (щель) | ⏳ WP-07 (удаление) | — |
 
 ### Текущий статус долга
 
 - **HIGH architectural debt:** **0** (нет).
 - **LOW/accepted debt:** 1 (V4, не критично, model_registry — порт).
-- **Deprecated API:** legacy `Kernel(container=...)` оставлен (deprecated) в Phase B; кандидат на удаление (WP-07 TZ-001). Не нарушает K1 при использовании composition/build_system().
+- **Deprecated API:** legacy `Kernel(container=...)` — кандидат на удаление (WP-07 TZ-003). Не нарушает K1 при использовании composition/build_system().
+- **Open violations:** **0** (arch-gate 14 passed).
 
 > **No High Architectural Debt** — все критические нарушения закрыты.
 

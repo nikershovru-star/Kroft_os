@@ -13,3 +13,9 @@ data/
 *.exe
 .hermes/
 archive/KnowledgeOS-v5/
+recovery_journal.jsonl
+stubs/
+.venv/
+cache/
+.DS_Store
+*.egg-info/
