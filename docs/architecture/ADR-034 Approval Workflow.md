@@ -1,12 +1,12 @@
 ---
 id: ADR-034
 title: Approval Workflow (Human-in-loop for Dangerous Actions)
-status: proposed
+status: accepted
+evidence_level: III
 date: "2026-08-02"
 decision_score: 0.9
 confidence: high
 risk: low
-evidence_level: III
 evidence:
   - "TZ-SEC-001 WP-08: Approval System (WAIT_APPROVAL для опасных действий)"
   - "LAW K5: deploy / изменение законов / self-improve — только с подтверждения человека"

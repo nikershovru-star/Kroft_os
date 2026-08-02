@@ -423,7 +423,7 @@ adrs:
     Actions. evidence_level non-blocking WARN until WP-08 (TZ-002 Wave 2).'
 - id: ADR-032
   title: Security Architecture (Capability Boundary)
-  status: proposed
+  status: accepted
   evidence_level: III
   relates_to:
   - ADR-028
@@ -440,7 +440,7 @@ adrs:
     depends only on contracts.'
 - id: ADR-033
   title: Capability Model (RBAC + Tool Requirements)
-  status: proposed
+  status: accepted
   evidence_level: III
   relates_to:
   - ADR-032
@@ -454,7 +454,7 @@ adrs:
     depends only on contracts.'
 - id: ADR-034
   title: Approval Workflow (Human-in-loop)
-  status: proposed
+  status: accepted
   evidence_level: III
   relates_to:
   - ADR-032

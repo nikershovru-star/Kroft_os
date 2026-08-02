@@ -1,12 +1,12 @@
 ---
 id: ADR-032
 title: Security Architecture (Capability Boundary)
-status: proposed
+status: accepted
+evidence_level: III
 date: "2026-08-02"
 decision_score: 0.92
 confidence: high
 risk: low
-evidence_level: III
 evidence:
   - "TZ-SEC-001 (Design, Critical): требование capability-границы перед Multi-Agent/Autonomous"
   - "kernel/ содержит ТОЛЬКО kernel.py + __init__.py (baseline re-verify 2026-08-02)"

@@ -1,12 +1,12 @@
 ---
 id: ADR-033
 title: Capability Model (RBAC + Tool Requirements)
-status: proposed
+status: accepted
+evidence_level: III
 date: "2026-08-02"
 decision_score: 0.9
 confidence: high
 risk: low
-evidence_level: III
 evidence:
   - "TZ-SEC-001 WP-01/WP-02: Capability Framework + Role Based Access"
   - "services/agent_platform.py уже имеет AgentResult/agent-модель (точка интеграции)"
