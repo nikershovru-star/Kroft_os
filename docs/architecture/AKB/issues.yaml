@@ -90,6 +90,28 @@ issues:
   - FLAG1
   - FLAGD
   - FLAG3
+  - WM-01-GAP-CLOSED
+- id: PL-01-GAP-CLOSED
+  title: 'ТЗ-PL-01: Autonomous Planner — value-aware lookahead поверх WorldModel'
+  severity: info
+  status: closed
+  introduced_by: 'раунд 1 (Deliberate: Planning phase) / ТЗ-PL-01'
+  closed_by: 'ТЗ-PL-01 (ReferencePlanner + value-aware evaluate)'
+  addresses:
+  - TZ-PL-01
+  - FLAG2
+  - FLAG3
+  evidence:
+    contracts: contracts/i_planner.py (IPlanner)
+    impl: kernel/planning.py (ReferencePlanner)
+    integration: kernel/cognitive_kernel.py (planner.plan в tick)
+    tests: tests/test_autonomous_planner.py (+9), tests/test_world_model.py (+3 value-aware)
+  note: >
+    Planning больше не lambda-stub в build_kernel. Planner РАНЖИРУЕТ по predicted
+    value-aware utility (WorldModel.simulate + evaluate с values); Decision ВЫБИРАЕТ.
+    Флаг 2 (evaluate мёртвый параметр) закрыт: hard violation -> utility 0 (veto),
+    soft utility re-ranks. Флаг 3: relevance по action effect, не carry-over.
+
 - id: WM-01-GAP-CLOSED
   title: 'ТЗ-WM-01: World Model — предиктивная модель поверх WorldState'
   severity: info

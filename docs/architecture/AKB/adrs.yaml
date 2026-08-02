@@ -773,6 +773,20 @@ adrs:
   - FLAG1
   - FLAGD
   - FLAG3
+  - WM-01-GAP-CLOSED
+- id: ADR-058
+  title: Autonomous Planner — value-aware lookahead over World Model (ТЗ-PL-01 / ADR-045)
+  status: accepted
+  evidence_level: V
+  date: '2026-08-03'
+  decision_score: 0.85
+  confidence: high
+  risk: low
+  related: [ADR-045, ADR-047, ADR-054, ADR-056, ADR-057]
+  addresses:
+  - TZ-PL-01
+  - FLAG2
+  - FLAG3
 - id: ADR-057
   title: World Model — predictive advisor over WorldState (ТЗ-WM-01 / ADR-047)
   status: accepted

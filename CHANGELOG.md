@@ -5,6 +5,43 @@ Format: `commit-range | scope | summary`.
 
 ---
 
+## 2026-08-03 — ТЗ-PL-01 (Autonomous Planner, value-aware lookahead) — DONE
+
+`21b1da1 a0373f7 9c460e8 539a015 ec984f3 <docs>`
+
+- **flag 2 — evaluate value-aware (prerequisite).** `IWorldModel.evaluate(predicted,
+  intent, values)` РЕАЛЬНО использует `values`: `hard_violations(predicted)` -> utility 0
+  (veto predicted states, нарушающих KROFT Laws / hard constraints); иначе soft utility
+  через `values.score`. Без `values` -> backward-compatible confidence*relevance.
+  `ReferenceReasoningEngine` теперь несёт `IValueSystem` и передаёт в `evaluate`, так что
+  predicted utility value-aware (не просто word-relevance). `build_kernel` проводит values.
+- **Контракт Planner.** `contracts/i_planner.py`: `IPlanner.plan(goal, reasoning_steps,
+  world, budget, intent=None) -> List[Plan]` ранжированный BEST-first (через
+  `Plan.confidence`). Заменяет lambda-candidate-генератор в `build_kernel`.
+- **Reference impl (LLM-free, I-09).** `kernel/planning.py`: `ReferencePlanner` — один
+  candidate Plan на reasoning step; каждый прогоняется через `WorldModel.simulate`
+  (lookahead, horizon=1) и `evaluate(intent, values)`; `Plan.confidence` = predicted
+  value-aware utility; ранжируется BEST-first. Без WorldModel -> fallback на step
+  confidence. Relevance считается по ACTION EFFECT (`effect:*` ключи), не carry-over
+  (флаг 3: planner в полном мире, но relevance отражает эффект действия).
+- **Интеграция.** `CognitiveKernel` принимает `IPlanner`; `tick` зовёт
+  `planner.plan(goal, steps, world_snapshot, budget, intent)`. `build_kernel` проводит
+  `ReferencePlanner` (shared clock + world_model + values). Planner РАНЖИРУЕТ;
+  детерминированный Decision ВЫБИРАЕТ (I-03/I-09) — planner не подменяет Decision.
+- **Тесты (K8).** `tests/test_autonomous_planner.py` (+9): ranked best-first; lookahead
+  через simulate (1 call/candidate); hard-veto -> utility 0; soft-utility re-ranks;
+  negative: без WorldModel -> иной порядок (fallback на step confidence); Decision
+  всё ещё выбирает финал. `tests/test_world_model.py` (+3 value-aware): hard-veto,
+  soft-rerank, no-values fallback. Legacy planner-лямбды в тестах -> `IPlanner`.
+- **Docs.** `ADR-058` (accepted) — Autonomous Planner; `ADR-057` amended (§7: evaluate
+  value-aware, transition = stub честно, relevance по effect); AKB (adrs/issues);
+  CHANGELOG; PROJECT_STATUS.
+
+**Verification:** full suite `1032 passed, 19 skipped, 1 xpassed, 0 failed`;
+arch-gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## 2026-08-02 — ТЗ-WM-01 (World Model, предиктивный советник) — DONE
 
 `b0523d6 f26eb7e 07d7730 66043a4 f33c5fc <docs>`

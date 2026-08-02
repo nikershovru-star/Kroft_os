@@ -61,3 +61,20 @@ utility**, а не по совпадению слов. Раунд 1: World State
 ## 6. Non-scope (explicit)
 LLM-backed World Model, полная simulation/RL/learning, реальная сеть (TcpEventBus),
 vector clock/HLC — будущие раунды. Здесь только детерминированный reference (I-09).
+
+## 7. Amendments (ТЗ-PL-01, 2026-08-03)
+- **`evaluate` стала VALUE-AWARE (флаг 2 закрыт).** При наличии `values`:
+  `hard_violations(predicted) -> utility 0` (veto predicted states, нарушающих KROFT
+  Laws / hard constraints); иначе `soft = values.score(predicted)`. Без `values` ->
+  backward-compatible `confidence * relevance`. Ранее `values` был мёртвым параметром
+  (параметр принимался, но не влиял на utility) — теперь живой.
+- **Transition model = STUB (честно).** `predict` = carry-over всех фактов мира +
+  `effect:{action.id} = payload` + decay confidence по horizon. Это grounding+decay,
+  НЕ содержательная transition dynamics («как действие меняет мир»). Настоящая
+  transition model — future (LLM-backed / learned). Reference допустим.
+- **Relevance считается по ACTION EFFECT** (`effect:*` ключи projected_facts), не по
+  carry-over всех фактов — иначе каждый predicted state выглядит одинаково релевантным
+  (флаг 3: planner оценивает в полном мире, но relevance отражает эффект действия).
+- **Acceptance suite обновлён:** +3 теста value-aware в tests/test_world_model.py
+  (hard-veto -> 0; soft-utility re-ranks; no-values fallback). Full suite на момент
+  ТЗ-PL-01: **1032 passed**, gate **14/14**, akb-lint PASSED.
