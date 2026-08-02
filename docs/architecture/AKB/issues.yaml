@@ -42,3 +42,25 @@ issues:
   - PROJECT_STATUS
   - ADR-044
   - FLAG1-INFRA
+- id: CAUSAL-SEQ-LIMIT
+  title: 'CausalMark per-node seq across nodes (gate C.2 / ТЗ-CAUSAL-01)'
+  severity: high
+  status: closed
+  discovered: '2026-08-02'
+  root_cause: >-
+    Интеграционный срез (commit c610da8) выявил: CausalMark.ordering семантически
+    некорректен для реальной федерации — per-node seq сравнивался ACROSS nodes,
+    подменяя causal order на «кто больше операций сделал» (talkative node wins).
+    Без receive-обновления Lamport вырождается в обычный counter — тот же баг.
+  resolution: >-
+    ТЗ-CAUSAL-01: CausalMark заменён на Lamport logical clock (CausalMark.lamport +
+    node_origin tiebreak), методы tick()/receive(). merge_remote и InMemoryWorldState.update
+    делают receive при получении удалённого факта (clock = max(local, received) + 1);
+    локальные события (tick/emit) делают tick(). Stored fact marks сохраняют remote origin
+    для конвергентности. Idempotent replay: clock растёт только при causally-newer mark.
+    Commits 65a3ee2 (contract) + 3724248 (tests). 13/13 ad-hoc PASS, 19 causal-тестов PASS.
+  related:
+  - ADR-054
+  - ADR-055
+  - TZ-CAUSAL-01
+  - gate-C.2

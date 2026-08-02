@@ -65,9 +65,9 @@ purpose: >
 
 ## 3. Метрики (реальный прогон 2026-08-02)
 
-- **Tests:** `993 passed, 19 skipped, 0 failed` (реальный прогон 2026-08-02; +foundation 15 +crash-test 3 +TZ-015 8; WP14-RACE xfail'd)
+- **Tests:** `1002 passed, 19 skipped, 1 xpassed, 0 failed` (реальный прогон 2026-08-02; +ТЗ-CAUSAL-01: +9 тестов Lamport; WP14-RACE xfail'd)
 - **Arch-gate:** `14 passed` (8 positive + 6 negative)
-- **ADR:** 55 (ADR-001..055; ADR-007 — двойной файл, логически один)
+- **ADR:** 55 (ADR-001..055; ADR-055 accepted + Lamport amendment; ADR-007 — двойной файл, логически один)
 - **Laws:** 8 (K1–K8)
 - **Forbidden patterns:** 6 (F1–F6)
 - **Open violations:** **0**
@@ -118,7 +118,9 @@ WorldState-управляемого) как самостоятельного м�
 как явный gap, а не «планируется» без уточнения.
 
 
-**Integration slice (path 3, 2026-08-02):** ядро × федерация связаны in-process (2 kernel + 2 SharedContextService, in-memory канал). Доказано: federated-факт (CausalMark A,seq=10) достигает узла B и МЕНЯЕТ Decision@B через WorldState — KROFT_OS когнитивная ОС, не distributed store с LLM. CausalMark.__lt__ исправлен на seq-primary (был node-name-primary — неверный merge).
+**Integration slice (path 3, 2026-08-02):** ядро × федерация связаны in-process (2 kernel + 2 SharedContextService, in-memory канал). Доказано: federated-факт (CausalMark A,lamport=10) достигает узла B и МЕНЯЕТ Decision@B через WorldState — KROFT_OS когнитивная ОС, не distributed store с LLM. CausalMark.__lt__ исправлен на lamport-primary (был node-name-primary — неверный merge); далее ТЗ-CAUSAL-01 повысил CausalMark до Lamport clock с receive-обновлением (закрыт дефект «talkative node wins»).
+
+**ТЗ-CAUSAL-01 (2026-08-02, DONE — code):** CausalMark → Lamport logical clock. `merge_remote` и `InMemoryWorldState.update` делают `receive` при получении удалённого факта (clock = max+1); локальные события (tick/emit) делают `tick()`; stored marks сохраняют remote origin для конвергентности; idempotent replay. Commits 65a3ee2 (contract) + 3724248 (tests). Ad-hoc 13/13 PASS; 19 causal-тестов PASS; full 1002/0; gate 14/14; issues `CAUSAL-SEQ-LIMIT` CLOSED. ADR-055 amended (§6 Lamport contract, status accepted).
 
 **Следствие для статус-дашборда:** W3 (Shared Context + causal-merge) РЕАЛЬНО частично сделан
 (in-process) — карта/PROJECT_STATUS это отражают (TZ-015 = CODE STARTED, не deferred).
