@@ -685,3 +685,15 @@ adrs:
   - ADR-047
   - WP-14
   - Wave-3
+- id: ADR-051
+  title: Federated Knowledge Network — selective sharing, trust, identity (TZ-022)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-022
+  - TZ-015
+  - WP-14
+  - ADR-047
+  - ADR-050
+  - Wave-3

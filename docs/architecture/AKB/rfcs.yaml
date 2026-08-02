@@ -121,3 +121,7 @@ rfcs:
   title: AI Marketplace — registries, packages, versioning, compatibility (TZ-021)
   status: under_review
   date: '2026-08-02'
+- id: RFC-022
+  title: Federated Knowledge Network — selective sharing, trust, identity (TZ-022)
+  status: under_review
+  date: '2026-08-02'

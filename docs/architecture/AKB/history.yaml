@@ -498,3 +498,14 @@ history:
     2.0), ICompatibility, MarketplaceService. Research: AI Agent Marketplace 2026,
     Skilldex arxiv 2604, VS Code plugin arch, SemVer 2.0. ADR-050 + RFC-021. Code
     deferred (K5 go pending). K1/K3/K5/K6/K8.'
+- id: TZ-022-design
+  tz: TZ-022
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-022 Federated Knowledge Network design (research-first). 8 comps: IFederationProtocol
+    (reuse TZ-015 TcpEventBus), IIdentity (zero-trust keypair), IPermissions (default
+    DENY), ITrustModel (graph propagation), ISelectiveSharing (permitted subgraph
+    only), ISynchronization (reuse CrdtGraphEngine WP-14), IRemoteSearch, ICrossNodeReasoning,
+    FederationService. Research: Federated KG Actian 2026, Fed Trust Springer 2026,
+    Zero-Trust CISA 2026, Selective Sharing TwinGuard-Sec Nature 2026. ADR-051 + RFC-022.
+    Code deferred (K5 go pending). K1/K3/K5/K6/K8.'

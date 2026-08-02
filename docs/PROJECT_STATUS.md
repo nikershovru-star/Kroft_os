@@ -91,6 +91,7 @@ purpose: >
 | TZ-019 | Agent Society (8 comps) | 🔬 design RFC-019/ADR-048 DONE, code deferred |
 | TZ-020 | Self Improvement (8 comps) | 🔬 design RFC-020/ADR-049 DONE, code deferred |
 | TZ-021 | AI Marketplace (8 comps) | 🔬 design RFC-021/ADR-050 DONE, code deferred |
+| TZ-022 | Federated Knowledge Network (8 comps) | 🔬 design RFC-022/ADR-051 DONE, code deferred |
 
 ### Функциональные этапы (после стабилизации)
 - Phase D — Configuration & Secrets
