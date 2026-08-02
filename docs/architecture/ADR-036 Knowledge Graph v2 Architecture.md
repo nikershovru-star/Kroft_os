@@ -1,7 +1,7 @@
 ---
 id: ADR-036
 title: "Knowledge Graph v2 Architecture"
-status: proposed
+status: accepted
 evidence_level: III
 date: "2026-08-02"
 decision_score: 0.9

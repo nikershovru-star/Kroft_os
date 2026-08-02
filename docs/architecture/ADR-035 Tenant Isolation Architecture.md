@@ -1,7 +1,7 @@
 ---
 id: ADR-035
 title: "Tenant Isolation Architecture"
-status: proposed
+status: accepted
 evidence_level: III
 date: "2026-08-02"
 decision_score: 0.9
