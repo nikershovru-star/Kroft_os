@@ -109,3 +109,7 @@ rfcs:
   title: World Model — internal world representation + prediction (TZ-018)
   status: under_review
   date: '2026-08-02'
+- id: RFC-019
+  title: Agent Society — roles, reputation, negotiation, voting, auctions (TZ-019)
+  status: under_review
+  date: '2026-08-02'

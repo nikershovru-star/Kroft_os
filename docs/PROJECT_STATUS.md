@@ -88,6 +88,7 @@ purpose: >
 | TZ-016 | Autonomous Planner (8 comps) | 🔬 design RFC-016/ADR-045 DONE, code deferred |
 | TZ-017 | Long-Term Memory Evolution (7 comps) | 🔬 design RFC-017/ADR-046 DONE, code deferred |
 | TZ-018 | World Model (7 comps) | 🔬 design RFC-018/ADR-047 DONE, code deferred |
+| TZ-019 | Agent Society (8 comps) | 🔬 design RFC-019/ADR-048 DONE, code deferred |
 
 ### Функциональные этапы (после стабилизации)
 - Phase D — Configuration & Secrets

@@ -469,3 +469,12 @@ history:
     (roll-out futures), WorldModelService (answers ''what happens next?''). Reuse
     ICrdtGraph (WP-14) + ILlm (TZ-AGENT-001). Predict-only (K5). ADR-047 + RFC-018.
     Code deferred (K5 go pending). K1/K3/K5/K6/K8.'
+- id: TZ-019-design
+  tz: TZ-019
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-019 Agent Society design (research-first). 8 comps: IRoleRegistry (planner/research/developer/reviewer/supervisor),
+    ISkillRegistry, IReputationEngine, INegotiation (argumentation), IVoting (weighted),
+    IAuction (task/resource bidding), IConflictResolution (escalation negotiate->vote->mediate->arbitrate),
+    IResourceSharing, AgentSocietyService. Reuse IAgentPlatform (TZ-AGENT-001) + IClusterRegistry
+    (TZ-015). ADR-048 + RFC-019. Code deferred (K5 go pending). K1/K3/K5/K6/K8.'

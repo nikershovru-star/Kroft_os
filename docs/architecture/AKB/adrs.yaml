@@ -651,3 +651,14 @@ adrs:
   - TZ-AGENT-001
   - WP-14
   - Wave-3
+- id: ADR-048
+  title: Agent Society — roles, reputation, negotiation, voting, auctions (TZ-019)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-019
+  - TZ-AGENT-001
+  - ADR-045
+  - WP-14
+  - Wave-3
