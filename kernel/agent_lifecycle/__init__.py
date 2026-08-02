@@ -91,6 +91,10 @@ class AgentLifecycleFSM(IAgentLifecycle):
         with self._lock:
             return self._states.get(agent_id)
 
+    def list_agents(self) -> List[str]:
+        with self._lock:
+            return list(self._states.keys())
+
     # -- helpers -----------------------------------------------------------
 
     def _record(self, agent_id: str, to_state: AgentState, reason: str) -> AgentLifecycleEvent:

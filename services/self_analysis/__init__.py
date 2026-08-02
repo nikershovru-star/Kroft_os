@@ -51,19 +51,35 @@ class SelfAnalyzer(ISelfAnalyzer):
 
     def health_check(self) -> HealthReport:
         agents: Dict[str, str] = {}
-        # collect agent states via lifecycle (we iterate over known ids)
-        states = self._lifecycle  # type: ignore[assignment]
-        # The FSM exposes get_state per id; we probe a snapshot by reading history
-        # is not public, so health_check relies on the orchestrator's pool for
-        # the agent list. Here we do a lightweight K1 snapshot instead.
+        stale = False
+        for agent_id in self._lifecycle.list_agents():
+            state = self._lifecycle.get_state(agent_id)
+            if state is None:
+                continue
+            agents[agent_id] = state.value
+            if state is AgentState.STALE:
+                stale = True
         k1_ok = self._k1_snapshot_ok()
-        status = "green" if k1_ok else "red"
+        if not k1_ok:
+            status = "red"
+        elif stale:
+            status = "yellow"
+        else:
+            status = "green"
         return HealthReport(status=status, agents=agents, drifts=[])
 
     def detect_drift(self) -> List[DriftRecord]:
         matrix = self._load_matrix()
+        # Q5: drift scope = kernel/ + runtime/ only (where K1/K8 are critical).
+        scan_pkgs = {"kernel", "runtime"}
         drifts: List[DriftRecord] = []
-        for pkg, allowed in matrix.items():
+        # project packages that, if imported cross-boundary, count as drift
+        known_pkgs = set(matrix.keys()) | {
+            "contracts", "kernel", "runtime", "services", "adapters",
+            "infrastructure", "policies", "plugins", "composition", "cli",
+        }
+        for pkg in scan_pkgs:
+            allowed = matrix.get(pkg, [])
             pkg_dir = self._root / pkg
             if not pkg_dir.is_dir():
                 continue
@@ -74,6 +90,12 @@ class SelfAnalyzer(ISelfAnalyzer):
                 for lineno, line in enumerate(py.read_text(encoding="utf-8").splitlines(), 1):
                     target = self._import_target(line)
                     if target is None:
+                        continue
+                    if target == pkg:  # self-package import is always legal
+                        continue
+                    # only project-to-project boundary violations are drift;
+                    # stdlib / third-party imports are out of scope (R2).
+                    if target not in known_pkgs:
                         continue
                     if target not in allowed and not target.startswith("__"):
                         drifts.append(DriftRecord(
