@@ -113,3 +113,7 @@ rfcs:
   title: Agent Society — roles, reputation, negotiation, voting, auctions (TZ-019)
   status: under_review
   date: '2026-08-02'
+- id: RFC-020
+  title: Self Improvement — self-metrics, weakness, benchmarks, evolution loop (TZ-020)
+  status: under_review
+  date: '2026-08-02'

@@ -662,3 +662,14 @@ adrs:
   - ADR-045
   - WP-14
   - Wave-3
+- id: ADR-049
+  title: Self Improvement — self-metrics, weakness, benchmarks, evolution loop (TZ-020)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-020
+  - ADR-042
+  - ADR-045
+  - TZ-AGENT-001
+  - Wave-3

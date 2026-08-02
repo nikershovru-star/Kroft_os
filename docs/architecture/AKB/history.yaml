@@ -478,3 +478,13 @@ history:
     IAuction (task/resource bidding), IConflictResolution (escalation negotiate->vote->mediate->arbitrate),
     IResourceSharing, AgentSocietyService. Reuse IAgentPlatform (TZ-AGENT-001) + IClusterRegistry
     (TZ-015). ADR-048 + RFC-019. Code deferred (K5 go pending). K1/K3/K5/K6/K8.'
+- id: TZ-020-design
+  tz: TZ-020
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-020 Self Improvement design (research-first). 8 comps: ISelfMetrics
+    (reuse ITelemetrySink TZ-OBS), IWeaknessDetector, IBenchmarkRunner, IArchitectureCritic
+    (reuse ADR-042 L5/L6), IAutoRefactorSuggestions, IPromptEvolution (GEPA reflective),
+    IPolicyEvolution (Goodhart guard), ILearningLoop, SelfImprovementService. Research:
+    Self-Evolving Survey arxiv 2507.21046, GEPA ICLR2026, Darwin Godel Machine Goodhart
+    trap. ADR-049 + RFC-020. Code deferred (K5 go pending). K1/K3/K5/K6/K8.'
