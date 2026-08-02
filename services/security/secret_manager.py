@@ -34,6 +34,19 @@ class SecretManager(ISecretManager):
     def has(self, key: str) -> bool:
         return key in self._env
 
+    def get_for(self, tenant_id: str, key: str) -> str:
+        """Tenant-scoped lookup (TZ-MULTI-001 R10, Q2): ``{tenant}_{key}``.
+
+        Extends (does NOT replace) get(); tenant secrets are namespaced keys.
+        """
+        from contracts.tenant import TenantId
+        TenantId(tenant_id)  # validate
+        scoped = f"{tenant_id}_{key}"
+        val = self._env.get(scoped)
+        if val is None:
+            raise KeyError(f"secret {scoped} not found")
+        return val
+
     def mask(self, value: str) -> str:
         """Mask a secret: keep first 4 + last 4, replace middle with ****."""
         if not value:
