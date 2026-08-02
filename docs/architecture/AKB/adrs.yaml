@@ -758,3 +758,19 @@ adrs:
   - TZ-016
   - TZ-023
   - Wave-3
+- id: ADR-056
+  title: Reasoning Engine — parametric Deliberate component (ТЗ-RE-01)
+  status: accepted
+  evidence_level: V
+  date: '2026-08-02'
+  decision_score: 0.88
+  confidence: high
+  risk: low
+  related:
+  - ADR-054
+  - ADR-055
+  - TZ-RE-01
+  - FLAG1
+  - FLAGD
+  - FLAG3
+  supersedes: []

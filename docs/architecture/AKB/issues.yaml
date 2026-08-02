@@ -64,3 +64,29 @@ issues:
   - ADR-055
   - TZ-CAUSAL-01
   - gate-C.2
+- id: RE-01-GAP-CLOSED
+  title: 'ТЗ-RE-01 W2-gap: Reasoning Engine + world-aware Decision + single node clock'
+  severity: info
+  status: closed
+  introduced_by: архитектурное ревью (флаг 4) — dedicated Reasoning Engine отсутствовал как компонент
+  discovered: '2026-08-02'
+  root_cause: 'В FSM была только фаза Deliberate (Reasoning->Planning->Decision в общем виде).
+    Reasoning не параметризовался Intent и не читал WorldState; IDecisionEngine.select
+    не видел WorldState (bind()-хак); три независимых Lamport-clock с хардкодом
+    node_origin="kernel" ломали causal order + federation tiebreak.'
+  impact: 'Закрыто ТЗ-RE-01 в 6 атомарных коммитах (clock/reasoning/decision/wire/tests/docs).'
+  resolution_options:
+  - IReasoningEngine.reason(intent, world, attention_context, budget) -> ReasoningStep[] (LLM-free reference)
+  - IDecisionEngine.select(goal, candidates, values, world, intent) — world-aware через порт
+  - NodeLamportClock единый на узел, инжект в kernel+world+federation; node_origin=node_id
+  - wire-ключ "seq"->"lamport"
+  notes: 'Коммиты 47d96bd, 4ac6ce5, 0f86b9f, 1a66633, cd525df, docs(ADR-056).
+    Full suite 1010 passed, gate 14/14, akb-lint PASSED.'
+  related:
+  - ADR-054
+  - ADR-055
+  - ADR-056
+  - TZ-RE-01
+  - FLAG1
+  - FLAGD
+  - FLAG3

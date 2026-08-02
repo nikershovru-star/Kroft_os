@@ -65,9 +65,9 @@ purpose: >
 
 ## 3. Метрики (реальный прогон 2026-08-02)
 
-- **Tests:** `1002 passed, 19 skipped, 1 xpassed, 0 failed` (реальный прогон 2026-08-02; +ТЗ-CAUSAL-01: +9 тестов Lamport; WP14-RACE xfail'd)
+- **Tests:** `1010 passed, 19 skipped, 1 xpassed, 0 failed` (реальный прогон 2026-08-02; +ТЗ-CAUSAL-01: +9 тестов Lamport; +ТЗ-RE-01: +8 тестов Reasoning; WP14-RACE xfail'd)
 - **Arch-gate:** `14 passed` (8 positive + 6 negative)
-- **ADR:** 55 (ADR-001..055; ADR-055 accepted + Lamport amendment; ADR-007 — двойной файл, логически один)
+- **ADR:** 56 (ADR-001..056; ADR-055 accepted + Lamport amendment; ADR-056 accepted — Reasoning Engine; ADR-007 — двойной файл, логически один)
 - **Laws:** 8 (K1–K8)
 - **Forbidden patterns:** 6 (F1–F6)
 - **Open violations:** **0**
@@ -146,3 +146,5 @@ WorldState-управляемого) как самостоятельного м�
 - **ADR-025** (PHASE 6 Multimodal) — status `proposed`, K5 decision **defer to Wave 3** (no IMultimodalParser port; heavy deps need optional adapters per K8; not blocking).
 
 > **v1.0 changelog:** создан в рамках TZ-002 (D2). Зафиксирован V1/V2/V3 CLOSED, No High Architectural Debt, метрики 768 passed / 0 failed / 0 open violations.
+
+> **ТЗ-RE-01 (2026-08-02, DONE — code):** Reasoning Engine как parametric Deliberate-компонент (IReasoningEngine + ReasoningStep + ReferenceReasoningEngine, LLM-free), world-aware Decision (IDecisionEngine.select получает WorldState+Intent, bind()-хак удалён), единый NodeLamportClock на узел (инжект в kernel+world+federation; node_origin=node_id), wire-ключ "seq"→"lamport". 6 атомарных коммитов (47d96bd, 4ac6ce5, 0f86b9f, 1a66633, cd525df, docs/ADR-056). Full suite 1010 passed, gate 14/14, akb-lint PASSED. ADR-056 accepted; issues RE-01-GAP-CLOSED.
