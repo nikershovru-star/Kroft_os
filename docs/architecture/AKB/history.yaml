@@ -271,3 +271,10 @@ history:
     (infrastructure/), NOT reused for architecture graph (K8); services/ has only
     security/ (no knowledge/memory pkg); AKB has no edges field; MOCs/ absent. Code
     WP-01..WP-08 pending K5-approval.'
+- id: WP-MULTI-001-code
+  date: '2026-08-02'
+  commit: 0de54fe
+  status: done
+  summary: 'TZ-MULTI-001 Code WP-01..WP-08: contracts/tenant, kernel/tenant (context+isolation),
+    services/tenant (manager/isolator/onboarding), FileSandbox tenant-prefix, AuthorizationEngine
+    cross-tenant deny, SecretManager.get_for, 28 tests. WP-09 docs v1.5.'
