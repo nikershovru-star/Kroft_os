@@ -63,7 +63,7 @@ Runtime / Applications
 | **KL** | Language | `docs/architecture/KL/` | Убиквитарный язык: термины, определения, запрещённые синонимы |
 | **RFC** | Request for Comments | `docs/architecture/RFC/` | Предложения до ADR. Статусы: draft → under_review → decided / rejected / superseded |
 | **AKB** | Architecture Knowledge Base | `docs/architecture/AKB/` | Машиночитаемая память: YAML (laws, adrs, patterns, standards, glossary, rfcs, history, evidence_levels, org_memory, tech_catalog, pattern_library) |
-| **ADR** | Architecture Decision Records | `docs/architecture/ADR-*.md` | Принятые решения. ADR-001..030. Плоское хранение (не в подпапке), имена с пробелами |
+| **ADR** | Architecture Decision Records | `docs/architecture/ADR-*.md` | Принятые решения. ADR-001..034. Плоское хранение (не в подпапке), имена с пробелами |
 
 ---
 
@@ -250,7 +250,7 @@ ADR-034 Approval Workflow (Human-in-loop)
 - **Tests:** `768 passed, 19 skipped, 0 failed`
 - **Arch-gate:** `14 passed` (8 positive + 6 negative, proof-of-fire)
 - **ADR:** 34 (ADR-001..034), из них ADR-025 — proposed (PHASE 6), ADR-026..029 — **accepted** (WP-08 TZ-003), ADR-030 — proposed, ADR-031 — proposed (CI, WP-05), ADR-032/033/034 — proposed (Security, TZ-SEC-001); ADR-007 — двойной файл (superseded, логически один)
-- **RFC:** 6 (RFC-001..006; RFC-005 decided CI, RFC-006 under_review Secure Runtime)
+- **RFC:** 5 (RFC-001..004 + RFC-006 under_review Secure Runtime; примечание: «RFC-005» НЕ существует — CI Pipeline это ADR-031, не RFC)
 - **Import matrix:** `AKB/import_matrix.yaml` (single source)
 - **Gate coverage:** `AKB/gate_coverage.md`
 - **Открытые нарушения:** **0** (V1/V2 закрыты в Phase B; V3 закрыт в Phase C)
@@ -329,7 +329,7 @@ ADR-034 Approval Workflow (Human-in-loop)
 | `standards/coding.yaml` | стандарты кода |
 | `standards/interfaces.yaml` | стандарты интерфейсов |
 | `glossary.yaml` | KL термины |
-| `rfcs.yaml` | RFC-001..006 |
+| `rfcs.yaml` | RFC-001..004 + RFC-006 |
 | `evidence_levels.yaml` | уровни доказательств I–V |
 | `tech_catalog.yaml` | каталог технологий |
 | `history.yaml` | история изменений (включая WP-02, TZ-002) |
@@ -392,4 +392,4 @@ ADR-034 Approval Workflow (Human-in-loop)
 
 > **Запомни:** KROFT_OS строит не только код. Она строит организационную память. Код можно переписать. Потерянное знание «почему сделали так» — нет.
 >
-> **v1.3 changelog:** синхронизация с реальностью после TZ-003 (WP-04..WP-08) + TZ-SEC-001 (Design). ADR-001..034 (было 030: добавлены 031 CI, 032/033/034 Security). Arch-gate 14 passed (8 positive + 6 negative, WP-02). RFC-001..006 (RFC-005 CI decided, RFC-006 Secure under_review). TZ-003 Wave 1 DONE (WP-04..08). TZ-SEC-001 Design DONE (RFC-006 + ADR-032/033/034 proposed, код заблокирован до K5). Метрики: 768 passed, 0 failed, 0 open violations.
+> **v1.3 changelog:** синхронизация с реальностью после TZ-003 (WP-04..WP-08) + TZ-SEC-001 (Design). ADR-001..034 (добавлены 031 CI, 032/033/034 Security). Arch-gate 14 passed (8 positive + 6 negative, WP-02). RFC-001..004 + RFC-006 (under_review Secure); примечание: «RFC-005» НЕ существует — CI Pipeline зафиксирован как ADR-031, не RFC. TZ-003 Wave 1 DONE (WP-04..08). TZ-SEC-001 Design DONE (RFC-006 + ADR-032/033/034 proposed, код заблокирован до K5). Метрики: 768 passed, 0 failed, 0 open violations.
