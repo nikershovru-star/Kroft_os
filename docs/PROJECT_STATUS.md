@@ -65,7 +65,7 @@ purpose: >
 
 ## 3. Метрики (реальный прогон 2026-08-02)
 
-- **Tests:** `916 passed, 19 skipped, 0 failed` (реальный прогон 2026-08-02; включает TZ-MULTI/KNOW/AGENT + Wave 2 WP-10 + TZ-EXECUTION-001)
+- **Tests:** `927 passed, 19 skipped, 0 failed` (реальный прогон 2026-08-02; TZ-MULTI/KNOW/AGENT + Wave 2 WP-10 + TZ-EXECUTION-001 + TZ-OBS-001)
 - **Arch-gate:** `14 passed` (8 positive + 6 negative)
 - **ADR:** 38 (ADR-001..038; ADR-007 — двойной файл, логически один)
 - **Laws:** 8 (K1–K8)

@@ -558,7 +558,7 @@ adrs:
   - Stage-31
 - id: ADR-040
   title: In-Memory Telemetry & Event-Driven Alerting
-  status: proposed
+  status: accepted
   evidence_level: III
   date: '2026-08-02'
   related:

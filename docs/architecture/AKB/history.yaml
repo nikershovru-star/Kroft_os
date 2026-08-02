@@ -364,3 +364,14 @@ history:
   summary: 'ADR-025 (Multimodal, PHASE 6) K5-decision: DEFER to Wave 3. Rationale:
     no IMultimodalParser port, heavy external deps (PyMuPDF/OCR) need optional adapters
     per K8, not blocking. Revisit at Wave 3 with TZ-MULTIMODAL-001 spec.'
+- id: WP-OBS-001-code
+  tz: TZ-OBS-001
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-OBS-001 CODE: ITelemetrySink port (contracts/i_telemetry.py) + MetricPoint
+    + InMemoryTelemetrySink (adapters, ring-buffer thread-safe) + AlertEngine (services,
+    EventBus threshold rules, alert.{severity} publish + .kos/alerts.log JSONL, K5
+    alert-only no recovery). Emit-points: SubprocessSandbox->sandbox.kill (optional
+    bus), SupervisorService->circuit.open+degradation.level, SelfAnalyzer->self.drift.
+    composition wires ITelemetrySink+AlertEngine (K3). 11 tests. Suite 927 passed,
+    gate 14, akb-lint PASSED. K1/K5/K6/K8 clean.'
