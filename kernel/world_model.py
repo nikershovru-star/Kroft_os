@@ -121,8 +121,13 @@ class ReferenceWorldModel(IWorldModel):
         else:
             soft = predicted.confidence.value
         intent_words = set(intent.text.lower().split())
-        proj_text = " ".join(predicted.projected_facts.values()).lower()
-        proj_words = set(proj_text.split())
+        # relevance is computed from the ACTION EFFECT projected by this prediction
+        # (keys prefixed "effect:"), NOT the carry-over of all world facts — otherwise
+        # every predicted state would look equally relevant (ТЗ-PL-01 flag 3: planner
+        # evaluates in the full world, but relevance must reflect THIS action's effect).
+        effect_text = " ".join(v for k, v in predicted.projected_facts.items()
+                                if str(k).startswith("effect:")).lower()
+        proj_words = set(effect_text.split())
         rel = len(intent_words & proj_words) / max(1, len(intent_words))
         # predicted utility = soft_value * intent-relevance (0..1)
         return float(min(1.0, soft * (0.5 + 0.5 * rel)))

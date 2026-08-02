@@ -12,7 +12,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from contracts.cognitive_domain import Goal, Plan, ReasoningStep, WorldState
+from contracts.cognitive_domain import Goal, Intent, Plan, ReasoningStep, WorldState
 from contracts.i_world_model import IWorldModel
 
 
@@ -24,11 +24,13 @@ class IPlanner(ABC):
     field); the first element is the highest-utility candidate. The planner must NOT
     make the final selection — that stays with the Decision Engine.
 
-    Without a WorldModel the planner falls back to ranking by reasoning-step
-    confidence (backward compatible).
+    `intent` is accepted so the planner can run value-aware evaluation through the
+    World Model (ТЗ-PL-01 flag 2); it is optional for backward-compatible use without
+    a World Model.
     """
 
     @abstractmethod
     def plan(self, goal: Goal, reasoning_steps: List[ReasoningStep],
-             world: WorldState, budget_tokens: int) -> List[Plan]:
+             world: WorldState, budget_tokens: int,
+             intent: Optional["Intent"] = None) -> List[Plan]:
         """Return candidate Plans ranked by predicted utility (best first)."""

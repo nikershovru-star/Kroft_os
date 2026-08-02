@@ -1,0 +1,113 @@
+"""Reference Autonomous Planner (ТЗ-PL-01) — deterministic, LLM-free (I-09).
+
+K1-compliant: imports ONLY contracts + stdlib. No service/adapter/runtime imports.
+
+The Planner is the DELIBERATE candidate generator (ADR-054: Reasoning -> Planning ->
+Decision). It turns ReasoningSteps into candidate Plans, runs each through the World
+Model (lookahead via simulate), and RANKS them by PREDICTED VALUE-AWARE utility
+(ТЗ-PL-01 flag 2). The ranking rides in `Plan.confidence`; the planner only RANKS —
+the deterministic Decision Engine still makes the final pick (I-03 / I-09).
+"""
+
+from __future__ import annotations
+
+import uuid
+from typing import List, Optional
+
+from contracts.cognitive_domain import (
+    Action,
+    ConfidenceScore,
+    Goal,
+    Intent,
+    Plan,
+    Provenance,
+    ProvenanceType,
+    ReasoningStep,
+    WorldState,
+)
+from contracts.i_cognitive_kernel import IValueSystem
+from contracts.i_world_model import IWorldModel
+from contracts.i_planner import IPlanner
+
+
+def _uid(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:8]}"
+
+
+class ReferencePlanner(IPlanner):
+    """Deterministic planner with World-Model lookahead (LLM-free core).
+
+    Strategy: one candidate Plan per reasoning step (its description becomes the plan
+    step). When a WorldModel is wired, each candidate is ROLLED OUT via
+    `simulate(world, plan)` and scored by `evaluate(predicted, intent, values)` —
+    value-aware (hard violations veto the candidate to utility 0; soft utilities
+    re-rank). The candidate's `Plan.confidence` becomes the predicted value-aware
+    utility, and candidates are returned BEST-first.
+
+    Without a WorldModel the planner falls back to ranking by the reasoning-step
+    confidence (backward compatible). Hard-violating candidates (utility 0) sink to
+    the bottom; an explore-only step still yields a fallback candidate.
+    """
+
+    def __init__(self, clock, world_model: Optional[IWorldModel] = None,
+                 values: Optional[IValueSystem] = None) -> None:
+        # ТЗ-RE-01 flag 1: planner advances the SAME shared node clock as the kernel.
+        self._clock = clock
+        self._world_model = world_model
+        self._values = values
+
+    def _predicted_utility(self, plan: Plan, world: WorldState,
+                          intent: Optional[Intent],
+                          step: Optional[ReasoningStep] = None) -> float:
+        """Value-aware predicted utility of a candidate plan via World Model lookahead."""
+        if self._world_model is None or intent is None:
+            return plan.confidence.value  # backward-compatible fallback
+        # Build the simulated action from the GROUNDED fact (not the step description),
+        # so the predicted outcome actually reflects acting on that world fact — this
+        # is what makes Y-rank > X-rank value-aware (ТЗ-PL-01 flag 3: full-world eval,
+        # but the action is the fact's content, not the step label).
+        if step is not None and step.based_on_facts:
+            key = step.based_on_facts[0]
+            payload = world.facts.get(key, step.description)
+        else:
+            payload = plan.steps[0] if plan.steps else plan.description if hasattr(plan, "description") else ""
+        action = Action(id=f"{plan.id}-sim", kind="rule", payload=payload,
+                        confidence=plan.confidence, provenance=plan.provenance)
+        rollout = self._world_model.simulate(world, Plan(
+            id=plan.id, goal_id=plan.goal_id, steps=(payload,),
+            confidence=plan.confidence, provenance=plan.provenance), horizon=1)
+        if not rollout:
+            return plan.confidence.value
+        # predicted utility = worst-case along the rollout (a plan is only as good as
+        # its weakest predicted step); value-aware via evaluate(intent, values).
+        utils = [self._world_model.evaluate(st, intent, self._values) for st in rollout]
+        return float(min(utils))
+
+    def plan(self, goal: Goal, reasoning_steps: List[ReasoningStep],
+             world: WorldState, budget_tokens: int,
+             intent: Optional[Intent] = None) -> List[Plan]:
+        candidates: List[Plan] = []
+        for s in reasoning_steps:
+            # each reasoning step becomes a candidate plan whose step is the step's
+            # grounded description (e.g. "grounded-in:prefer-Y").
+            plan = Plan(id=_uid("plan"), goal_id=goal.id,
+                        steps=(s.description,),
+                        confidence=s.confidence,
+                        provenance=Provenance(source="reasoning", actor="kernel"))
+            # value-aware predicted utility via World Model lookahead (ТЗ-PL-01 flag 2)
+            util = self._predicted_utility(plan, world, intent, step=s)
+            ranked = Plan(id=plan.id, goal_id=goal.id, steps=plan.steps,
+                          confidence=ConfidenceScore(util, ProvenanceType.RULE_INFERENCE),
+                          provenance=plan.provenance)
+            candidates.append(ranked)
+
+        if not candidates:
+            # fallback explore candidate (no reasoning step)
+            candidates.append(Plan(id=_uid("plan"), goal_id=goal.id,
+                                    steps=(f"explore-for:{goal.description}",),
+                                    confidence=ConfidenceScore(0.4, ProvenanceType.RULE_INFERENCE),
+                                    provenance=Provenance(source="planner", actor="kernel")))
+
+        # rank BEST-first by predicted value-aware utility (planner only ranks)
+        candidates.sort(key=lambda p: p.confidence.value, reverse=True)
+        return candidates
