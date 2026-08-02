@@ -407,3 +407,13 @@ history:
     + telemetry drift/circuit audit -> DebtReport), EvolutionEngine (drift+circuit
     trends + debt -> roadmap). Reuse AKB YAML (LAW K8) + ITelemetrySink (TZ-OBS).
     11 tests. Suite 951 passed, gate 14, akb-lint PASSED. K1/K8 clean.'
+- id: WP-14-design
+  tz: TZ-DISTRIBUTED-001
+  date: '2026-08-02'
+  status: accepted
+  summary: 'WP-14 Distributed Runtime design (research-first): CRDT (LWW-Element-Set
+    + PN-Counter) for KG state, Raft-lite ONLY for leader election (not per-op), distributed
+    EventBus (drop-in IEventBus via gRPC/WS), sharding by tenant/type (reuse TenantIsolator).
+    Network partition -> graceful local+merge (eventual consistency). ADR-043 + RFC-014.
+    Reuses WP-10 recovery, WP-12 metrics, TZ-KNOW TenantIsolator. Code deferred (requires
+    transport deps, K5 go pending). K1/K3/K5/K6/K8.'

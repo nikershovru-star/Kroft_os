@@ -591,3 +591,16 @@ adrs:
   - ADR-041
   - ADR-038
   - Wave-3
+- id: ADR-043
+  title: Distributed Runtime — CRDT KG, Raft-lite Supervisor, Distributed EventBus
+    (WP-14)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-DISTRIBUTED-001
+  - ADR-042
+  - ADR-041
+  - ADR-038
+  - TZ-AGENT-001
+  - Wave-3

@@ -89,3 +89,7 @@ rfcs:
   title: Multimodal Knowledge Engine — Video/Audio/Vision Ingestion
   status: under_review
   date: '2026-08-02'
+- id: RFC-014
+  title: Distributed Runtime — CRDT KG + Raft-lite Supervisor + Distributed EventBus
+  status: under_review
+  date: '2026-08-02'
