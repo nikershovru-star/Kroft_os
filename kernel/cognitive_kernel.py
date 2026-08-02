@@ -17,6 +17,7 @@ import uuid
 from typing import Callable, Dict, List, Optional
 
 from contracts.cognitive_domain import (
+    CausalMark,
     CognitiveEvent,
     CognitiveEventType,
     CognitiveState,
@@ -56,13 +57,19 @@ class InMemoryWorldState(IWorldState):
     def __init__(self, node_id: str = "local") -> None:
         self._node_id = node_id
         self._facts: Dict[str, str] = {}
+        self._facts_meta: Dict[str, CausalMark] = {}
+        self._seq = 0
 
-    def update(self, observation: Observation) -> WorldState:
+    def update(self, observation: Observation, causal: Optional[CausalMark] = None) -> WorldState:
+        self._seq += 1
+        mark = causal or CausalMark(self._node_id, self._seq)
         self._facts[observation.id] = observation.content
+        self._facts_meta[observation.id] = mark
         return self.snapshot()
 
     def snapshot(self) -> WorldState:
-        return WorldState(node_id=self._node_id, facts=dict(self._facts))
+        return WorldState(node_id=self._node_id, facts=dict(self._facts),
+                          facts_meta=dict(self._facts_meta))
 
     def get(self, key: str) -> Optional[str]:
         return self._facts.get(key)

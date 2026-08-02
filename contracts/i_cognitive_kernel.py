@@ -23,6 +23,7 @@ from typing import Callable, Dict, List, Optional
 
 from contracts.cognitive_domain import (
     ConfidenceScore,
+    CausalMark,
     Decision,
     Goal,
     Intent,
@@ -132,10 +133,14 @@ class ILearningPolicy(ABC):
 # World State (I-07) — local node single source of truth.
 # --------------------------------------------------------------------------
 class IWorldState(ABC):
-    """Local node SSOT. All phases read/write through this port (not free mutation)."""
+    """Local node SSOT. All phases read/write through this port (not free mutation).
+
+    `update` accepts a CausalMark (gate C, TZ-015) so facts carry federation-safe
+    causality instead of only wall-clock time.
+    """
 
     @abstractmethod
-    def update(self, observation: Observation) -> WorldState: ...
+    def update(self, observation: Observation, causal: Optional["CausalMark"] = None) -> WorldState: ...
 
     @abstractmethod
     def snapshot(self) -> WorldState: ...

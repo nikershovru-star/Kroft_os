@@ -129,6 +129,26 @@ class CognitiveEventType(str, Enum):
     POLICY_UPDATED = "PolicyUpdated"
 
 
+# -------------------------------------------------------------------------
+# Causal mark (gate C, TZ-015 federation) — CRDT merge/dedup needs causality
+# -------------------------------------------------------------------------
+@dataclass(frozen=True)
+class CausalMark:
+    """Per-node causal label for CRDT merge/dedup across federated nodes (ADR-054 I-08/I-17).
+
+    Single-writer-per-node causal order: (node_origin, seq) uniquely identifies an
+    event/fact and gives a total order for merge. Wall-clock `timestamp` is NOT
+    sufficient (node clocks drift). Vector clocks can layer on top later without
+    breaking this shape.
+    """
+    node_origin: str                       # originating node id
+    seq: int                               # monotonic per-node sequence number
+
+    def __lt__(self, other: "CausalMark") -> bool:
+        # lexicographic (node_origin, seq) total order
+        return (self.node_origin, self.seq) < (other.node_origin, other.seq)
+
+
 @dataclass(frozen=True)
 class CognitiveEvent:
     """Emitted on every FSM transition (I-17). Reuse IEventBus.publish(topic, dict)."""
@@ -137,6 +157,7 @@ class CognitiveEvent:
     provenance: Provenance
     confidence: ConfidenceScore
     timestamp: str = field(default_factory=_now)
+    causal: CausalMark = field(default_factory=lambda: CausalMark("local", 0))
 
     def to_bus(self) -> dict:
         """Convert to IEventBus payload shape (dict, topic = type.value)."""
@@ -149,6 +170,8 @@ class CognitiveEvent:
             "calibration": self.confidence.calibration.value,
             "provenance_type": self.confidence.provenance.value,
             "timestamp": self.timestamp,
+            "causal_node": self.causal.node_origin,
+            "causal_seq": self.causal.seq,
         }
 
 
@@ -248,10 +271,13 @@ class WorldState:
     """Local node single source of truth snapshot (ADR-054 I-07).
 
     The live store is behind IWorldState port; this is the immutable projection
-    the FSM reads/writes through transitions.
+    the FSM reads/writes through transitions. `facts_meta` carries the CAUSAL mark
+    per fact (gate C, TZ-015) so federated merge/dedup is well-defined without
+    trusting wall-clock time.
     """
     node_id: str
     facts: Dict[str, str] = field(default_factory=dict)
+    facts_meta: Dict[str, CausalMark] = field(default_factory=dict)
     updated_at: str = field(default_factory=_now)
     confidence: ConfidenceScore = field(
         default_factory=lambda: ConfidenceScore(1.0, ProvenanceType.OBSERVATION)
