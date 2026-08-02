@@ -1,22 +1,44 @@
-# AKB Issues — tracked known issues / tech-debt (machine-readable, K5 reviewable)
 issues:
-  - id: WP14-RACE
-    title: "WP-14 leader/follower broadcast race on wall-clock timing"
-    severity: medium
-    status: open
-    introduced_by: "latent pre-fix; surfaced by test-infra fix (eager imports, pytest.ini)"
-    discovered: "2026-08-02"
-    root_cause: >
-      test_failover_leader_broadcasts_to_follower relies on wall-clock sleeps
-      (0.5s / 0.3s) + RaftLiteElector timers (heartbeat 0.05s, election_timeout 0.15s)
-      under multithreaded EventBus. Under CI load the follower may not apply the
-      replicated op before the assertion, causing a flaky failure.
-    impact: "Full-suite run was red (1 failed) after infra fix exposed the latent race."
-    resolution_options:
-      - "xfail(strict=False) + this ticket (honest green, no logic change) — CHOSEN"
-      - "determinize broadcast via logical clock / barrier instead of wall-clock sleep"
-    notes: >
-      NOT caused by Cognitive Kernel foundation (test does not import
-      kernel.cognitive_kernel). The test-infra fix (conftest eager import + pytest.ini
-      testpaths) changed init ordering/timing, making the race visible.
-    related: [ADR-043, WP-14, commit-8832f1d]
+- id: WP14-RACE
+  title: WP-14 leader/follower broadcast race on wall-clock timing
+  severity: medium
+  status: open
+  introduced_by: latent pre-fix; surfaced by test-infra fix (eager imports, pytest.ini)
+  discovered: '2026-08-02'
+  root_cause: 'test_failover_leader_broadcasts_to_follower relies on wall-clock sleeps
+    (0.5s / 0.3s) + RaftLiteElector timers (heartbeat 0.05s, election_timeout 0.15s)
+    under multithreaded EventBus. Under CI load the follower may not apply the replicated
+    op before the assertion, causing a flaky failure.
+
+    '
+  impact: Full-suite run was red (1 failed) after infra fix exposed the latent race.
+  resolution_options:
+  - xfail(strict=False) + this ticket (honest green, no logic change) — CHOSEN
+  - determinize broadcast via logical clock / barrier instead of wall-clock sleep
+  notes: 'NOT caused by Cognitive Kernel foundation (test does not import kernel.cognitive_kernel).
+    The test-infra fix (conftest eager import + pytest.ini testpaths) changed init
+    ordering/timing, making the race visible.
+
+    '
+  related:
+  - ADR-043
+  - WP-14
+  - commit-8832f1d
+- id: FLAG4-NUM-DRIFT
+  title: 'Нумерационный дрейф: карта vs ADR/RFC-трекер vs код'
+  severity: medium
+  status: open
+  discovered: '2026-08-02'
+  root_cause: '>Внутренний TZ-015=Distributed Runtime (ADR-044/RFC-015) консистентен
+    в KROFT_OS-трекере (ADR-053/PROJECT_STATUS), но расходится с внешней v1-картой
+    из стартового промпта (TZ-015=Reasoning Engine W2). Reasoning Engine как dedicated
+    компонент НЕ выделен (есть фаза Deliberate, движка нет).'
+  resolution: SoT выбран явно = ADR-053 + PROJECT_STATUS (v2.0). Mapping ADR-044<->W3
+    (Shared Context TZ-023 / Federation TZ-024 / Network TZ-028) задокументирован.
+    Reasoning Engine помечен открытым пробелом W2. Метрики PROJECT_STATUS обновлены
+    (991 passed, ADR-055 accepted).
+  related:
+  - ADR-053
+  - PROJECT_STATUS
+  - ADR-044
+  - FLAG1-INFRA

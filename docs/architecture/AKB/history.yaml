@@ -570,3 +570,13 @@ history:
     gap CLOSED. Full suite 991 passed / 0 failed (1 xpass WP14-RACE). Component coverage:
     NodeDiscovery/ClusterRegistry/RemoteAgentExecutor/SharedContext/NetworkSupervisor/ClusterMetrics
     = all started; replication + select-scope + partition/reconnect still TODO (follow-up).'
+- id: flag4-num-reconcile
+  tz: flag-4
+  date: '2026-08-02'
+  status: accepted
+  summary: Reconcile нумерационного дрейфа (Флаг 4). SoT = ADR-053 + PROJECT_STATUS
+    (v2.0). External v1-map (TZ-015=Reasoning Engine W2) declared NOT-SoT. Mapping
+    ADR-044/TZ-015 (Distributed Runtime) -> W3 Shared Context (TZ-023)/Federation
+    (TZ-024)/Network (TZ-028). Reasoning Engine marked OPEN W2 gap (phase Deliberate
+    exists, dedicated engine missing). PROJECT_STATUS metrics updated (991 passed,
+    ADR-055 accepted, AKB 16 files).

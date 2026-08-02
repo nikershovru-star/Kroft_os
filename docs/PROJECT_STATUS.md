@@ -65,13 +65,13 @@ purpose: >
 
 ## 3. Метрики (реальный прогон 2026-08-02)
 
-- **Tests:** `966 passed, 19 skipped, 0 failed` (реальный прогон 2026-08-02; +WP-14 Distributed Runtime +15)
+- **Tests:** `991 passed, 19 skipped, 0 failed` (реальный прогон 2026-08-02; +foundation 15 +crash-test 3 +TZ-015 8; WP14-RACE xfail'd)
 - **Arch-gate:** `14 passed` (8 positive + 6 negative)
-- **ADR:** 38 (ADR-001..038; ADR-007 — двойной файл, логически один)
+- **ADR:** 55 (ADR-001..055; ADR-007 — двойной файл, логически один)
 - **Laws:** 8 (K1–K8)
 - **Forbidden patterns:** 6 (F1–F6)
 - **Open violations:** **0**
-- **AKB YAML:** 15 файлов (laws, adrs, patterns/*, standards/*, glossary, rfcs, history, evidence_levels, org_memory, tech_catalog, pattern_library, import_matrix, gate_coverage)
+- **AKB YAML:** 16 файлов (laws, adrs, rfcs, history, issues, patterns/*, standards/*, glossary, evidence_levels, org_memory, tech_catalog, pattern_library, import_matrix, gate_coverage)
 
 ---
 
@@ -84,7 +84,7 @@ purpose: >
 | Wave 2 | WP-09 (KG v2 ✅ TZ-KNOW-001), WP-10 (Supervisor/Recovery ⏸ design RFC-010/ADR-038), WP-11 (self-analysis ✅ TZ-AGENT-001) | WP-10 design DONE, code ждёт K5 |
 | TZ-EXECUTION-001 | WP-01 (Sandbox port+adapter), WP-02 (ToolRegistry+DesktopAdapter integration), WP-03 (tests +12) | ✅ DONE |
 | Wave 3 | WP-12/13/14 DONE | ✅ COMPLETE |
-| TZ-015 | Distributed Runtime Implementation (9 comps) | 🔬 design RFC-015/ADR-044 DONE, code deferred |
+| TZ-015 | Distributed Runtime Implementation (9 comps) | 🔧 CODE STARTED — ports+services scaffolded (gate C causal), in-process federation DONE; real network (TcpEventBus/partition) deferred (WP14-RACE infra) |
 | TZ-016 | Autonomous Planner (8 comps) | 🔬 design RFC-016/ADR-045 DONE, code deferred |
 | TZ-017 | Long-Term Memory Evolution (7 comps) | 🔬 design RFC-017/ADR-046 DONE, code deferred |
 | TZ-018 | World Model (7 comps) | 🔬 design RFC-018/ADR-047 DONE, code deferred |
@@ -95,8 +95,31 @@ purpose: >
 | TZ-023 | Cognitive Operating System (8 comps) | 🔬 design RFC-023/ADR-052 DONE, code deferred |
 | **v2.0 Roadmap** | TZ-015..023 unified (ADR-053) | 🔬 ALL DESIGNS DONE (9×8/8 PASS, gate 14, akb-lint PASSED) |
 | **ADR-054** | Cognitive Kernel Constitution (CONSTITUTION, 20 invariants I-01..I-20) | ✅ ACCEPTED — primary invariant, all TZ subordinate |
-| **ADR-055** | ConfidenceScore Contract (unified cross-entity) | 🔬 proposed (derived from I-12) |
+| **ADR-055** | ConfidenceScore Contract (unified cross-entity) | ✅ ACCEPTED (derived from I-12; aggregation rule added) |
 | Compatibility Matrix | ADR-044..053 vs ADR-054 | ✅ DONE — 9/10 compatible, 4 critical clarifications |
+
+### 4.1 Нумерационный reconciliation (Флаг 4, 2026-08-02)
+
+**Source of Truth выбран явно: KROFT_OS ADR-053 + PROJECT_STATUS (v2.0 roadmap).** Любая
+внешняя/устаревшая карта (напр. v1-таблица из стартового промпта, где `TZ-015 = Reasoning
+Engine (W2)`) — НЕ SoT, должна считаться archived и заменена на ADR-053.
+
+**Mapping (внутренний ADR/RFC-трекер ↔ карта W-волн):**
+| Внутренний номер | Что реализует | На карте W-волн (ADR-053) |
+|------------------|---------------|---------------------------|
+| TZ-015 / ADR-044 / RFC-015 | Distributed Runtime (CRDT/Elector/Bus + Shared Context + causal-merge) | **W3**: Shared Context (TZ-023) + Federation Layer (TZ-024) + Network Layer (TZ-028) |
+| Reasoning Engine (компонент) | WorldModel-backed reasoning в фазе Deliberate | **W2**: Deliberate = Reasoning (WorldModel ADR-047 / TZ-018) → Planning (TZ-016) → Decision (I-03) |
+
+**Открытый пробел W2 (честно):** dedicated **Reasoning Engine как отдельный КОМПОНЕНТ**
+(Planner/Solver/Inference Engine) НЕ выделен — в FSM покрыт фазой `Deliberate`
+(Reasoning→Planning→Decision в общем виде), но параметризуемого движка (Intent/Attention/
+WorldState-управляемого) как самостоятельного модуля нет. → W2 статус (~60%) СКОРРЕКТИРОВАН
+вниз: фаза есть, компонента-движка нет. Это НЕ блокирует code-фазу, но должно быть в трекере
+как явный gap, а не «планируется» без уточнения.
+
+**Следствие для статус-дашборда:** W3 (Shared Context + causal-merge) РЕАЛЬНО частично сделан
+(in-process) — карта/PROJECT_STATUS это отражают (TZ-015 = CODE STARTED, не deferred).
+Реальная сеть (TcpEventBus/partition/reconnect) и dedicated Reasoning Engine остаются OPEN.
 
 ### Функциональные этапы (после стабилизации)
 - Phase D — Configuration & Secrets
