@@ -440,3 +440,13 @@ history:
     reuse IAgentPlatform), Shared Context (CRDT KG), Network Supervisor (Raft-lite
     + gossip + WP-10 recovery), Cluster Metrics (reuse ITelemetrySink). ADR-044 +
     RFC-015. Code deferred (K5 go pending). K1/K3/K5/K6/K8.'
+- id: TZ-016-design
+  tz: TZ-016
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-016 Autonomous Planner design (research-first). 8 comps: IGoalPlanner
+    (LLM goal->DAG), ITaskGraph (DAG+topo), IPriorityEngine (critical-path), IExecutionPlanner
+    (parallel-ready units), IRollbackPlanner (compensating), IRetryStrategy (escalation
+    ladder retry->patch->replan), IParallelPlanner (multi-ready-unit), AutonomousPlanner
+    orchestrator. Reuse ILlm+IAgentPlatform (TZ-AGENT-001), ICrdtGraph (WP-14). ADR-045
+    + RFC-016. Code deferred (K5 go pending). K1/K3/K5/K6/K8.'

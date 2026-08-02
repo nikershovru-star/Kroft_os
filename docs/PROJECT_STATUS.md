@@ -85,6 +85,7 @@ purpose: >
 | TZ-EXECUTION-001 | WP-01 (Sandbox port+adapter), WP-02 (ToolRegistry+DesktopAdapter integration), WP-03 (tests +12) | ✅ DONE |
 | Wave 3 | WP-12/13/14 DONE | ✅ COMPLETE |
 | TZ-015 | Distributed Runtime Implementation (9 comps) | 🔬 design RFC-015/ADR-044 DONE, code deferred |
+| TZ-016 | Autonomous Planner (8 comps) | 🔬 design RFC-016/ADR-045 DONE, code deferred |
 
 ### Функциональные этапы (после стабилизации)
 - Phase D — Configuration & Secrets

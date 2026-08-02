@@ -617,3 +617,15 @@ adrs:
   - TZ-AGENT-001
   - TZ-OBS-001
   - Wave-3
+- id: ADR-045
+  title: Autonomous Planner — Goal→Task DAG→Execution (TZ-016)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-016
+  - TZ-AGENT-001
+  - ADR-044
+  - RFC-015
+  - WP-14
+  - Wave-3
