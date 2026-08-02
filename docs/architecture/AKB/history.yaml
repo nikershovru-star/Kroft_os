@@ -509,3 +509,15 @@ history:
     FederationService. Research: Federated KG Actian 2026, Fed Trust Springer 2026,
     Zero-Trust CISA 2026, Selective Sharing TwinGuard-Sec Nature 2026. ADR-051 + RFC-022.
     Code deferred (K5 go pending). K1/K3/K5/K6/K8.'
+- id: TZ-023-design
+  tz: TZ-023
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-023 Cognitive Operating System design (research-first, FINAL architecture).
+    8 comps: IConsciousWorkspace (GWT broadcast+ignition gate), IAttentionEngine (salience
+    novelty*uncertainty*goal*evidence), IExecutiveFunction (cognitive cycle), IReflectionEngine
+    (reuse TZ-017), IInternalDialogue (J-space), IMetaLearning (System 3), IStrategyLayer
+    (reuse TZ-016/020), IIdentityLayer (persistent self-model), CognitiveOS orchestrator.
+    Research: GWT for LLM Anthropic 2026, Zylos 2026, Theater of Mind arxiv 2604.08206,
+    Sophia 2025 System 3, Ref Cog Arch ScienceDirect 2024. ADR-052 + RFC-023. Code
+    deferred (K5 go pending). K1/K3/K5/K6/K8.'

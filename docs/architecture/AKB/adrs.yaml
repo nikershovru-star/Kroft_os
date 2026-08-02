@@ -697,3 +697,17 @@ adrs:
   - ADR-047
   - ADR-050
   - Wave-3
+- id: ADR-052
+  title: Cognitive Operating System — conscious workspace + executive + identity (TZ-023)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-023
+  - TZ-016
+  - TZ-017
+  - TZ-019
+  - TZ-020
+  - ADR-047
+  - WP-14
+  - Wave-3
