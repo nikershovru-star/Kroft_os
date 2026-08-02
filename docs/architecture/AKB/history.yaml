@@ -580,3 +580,14 @@ history:
     (TZ-024)/Network (TZ-028). Reasoning Engine marked OPEN W2 gap (phase Deliberate
     exists, dedicated engine missing). PROJECT_STATUS metrics updated (991 passed,
     ADR-055 accepted, AKB 16 files).
+- id: tz015-federation-slice
+  tz: TZ-015
+  date: '2026-08-02'
+  status: in_progress
+  summary: Integration slice core x federation in-process (path 3) DONE. Two CognitiveKernel
+    + two SharedContextService, in-memory channel. Proves federated fact (CausalMark
+    A,seq=10) reaches B and FLIPS Decision@B (world-aware engine) -> federation is
+    cognitive. CausalMark.__lt__ fixed to seq-primary (was node-name-primary, wrong).
+    merge_remote(remote_facts, local_world) honest two-world merge. Full suite 993
+    passed / 0 failed. Reasoning Engine dedicated component still OPEN W2 gap (flag
+    4).

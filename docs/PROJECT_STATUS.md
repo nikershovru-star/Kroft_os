@@ -65,7 +65,7 @@ purpose: >
 
 ## 3. Метрики (реальный прогон 2026-08-02)
 
-- **Tests:** `991 passed, 19 skipped, 0 failed` (реальный прогон 2026-08-02; +foundation 15 +crash-test 3 +TZ-015 8; WP14-RACE xfail'd)
+- **Tests:** `993 passed, 19 skipped, 0 failed` (реальный прогон 2026-08-02; +foundation 15 +crash-test 3 +TZ-015 8; WP14-RACE xfail'd)
 - **Arch-gate:** `14 passed` (8 positive + 6 negative)
 - **ADR:** 55 (ADR-001..055; ADR-007 — двойной файл, логически один)
 - **Laws:** 8 (K1–K8)
@@ -116,6 +116,9 @@ Engine (W2)`) — НЕ SoT, должна считаться archived и заме
 WorldState-управляемого) как самостоятельного модуля нет. → W2 статус (~60%) СКОРРЕКТИРОВАН
 вниз: фаза есть, компонента-движка нет. Это НЕ блокирует code-фазу, но должно быть в трекере
 как явный gap, а не «планируется» без уточнения.
+
+
+**Integration slice (path 3, 2026-08-02):** ядро × федерация связаны in-process (2 kernel + 2 SharedContextService, in-memory канал). Доказано: federated-факт (CausalMark A,seq=10) достигает узла B и МЕНЯЕТ Decision@B через WorldState — KROFT_OS когнитивная ОС, не distributed store с LLM. CausalMark.__lt__ исправлен на seq-primary (был node-name-primary — неверный merge).
 
 **Следствие для статус-дашборда:** W3 (Shared Context + causal-merge) РЕАЛЬНО частично сделан
 (in-process) — карта/PROJECT_STATUS это отражают (TZ-015 = CODE STARTED, не deferred).
