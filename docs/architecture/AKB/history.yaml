@@ -545,3 +545,15 @@ history:
     contract derived (I-12). Supersedes ADR-053 (now subordinate). Reuse WP-14 CrdtGraphEngine/TcpEventBus.
     K1/K3/K5/K6/K8 enforced. Research: OODA/Cognitive Decision Loop XMPro 2026, Event
     Sourcing Fowler, GWT Anthropic 2026.'
+- id: foundation-8832f1d-note
+  tz: foundation
+  date: '2026-08-02'
+  status: accepted
+  summary: 'commit 8832f1d mixes TWO orthogonal changes (flag 1 post-review): (1)
+    Cognitive Kernel foundation (contracts/cognitive_domain.py, contracts/i_cognitive_kernel.py,
+    kernel/cognitive_kernel.py, tests/test_cognitive_kernel.py) — feature; (2) conftest.py
+    eager imports + pytest.ini (testpaths=tests, norecursedirs=archive) — test-infra
+    fix changing full-suite collection for whole repo+CI. History NOT rewritten (pushed,
+    rewrite on shared branch riskier). Rule going forward: infra-bootstrap (conftest/pytest.ini/pyproject)
+    ALWAYS separate commit. Documented in CHANGELOG + AKB issues WP14-RACE (test_failover_leader_broadcasts_to_follower
+    xfail''d).'
