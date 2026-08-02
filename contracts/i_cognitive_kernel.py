@@ -145,6 +145,26 @@ class IWorldState(ABC):
 
 
 # --------------------------------------------------------------------------
+# Layered Memory (I-14) — Learning routes writes by layer (episode vs normative)
+# --------------------------------------------------------------------------
+class ILayeredMemory(ABC):
+    """Two-layer memory (ADR-054 I-14): episode (raw) vs normative (rules/ADR).
+
+    LearningPolicy proposes; memory persists. Write routing by layer is enforced
+    here so Learning NEVER writes memory directly (I-14).
+    """
+
+    @abstractmethod
+    def record_episode(self, episode: "Episode") -> None: ...
+
+    @abstractmethod
+    def commit_normative(self, policy: "Policy") -> None: ...
+
+    @abstractmethod
+    def get_episodes(self) -> List["Episode"]: ...
+
+
+# --------------------------------------------------------------------------
 # Cognitive Kernel (I-01) — orchestrator wiring the FSM.
 # --------------------------------------------------------------------------
 class ICognitiveKernel(ABC):

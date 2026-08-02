@@ -56,6 +56,33 @@ class ConfidenceScore:
             object.__setattr__(self, "aggregation_rule", AggregationRule.WEIGHTED)
 
 
+def aggregate_confidence(steps: List[ConfidenceScore],
+                         rule: Optional[AggregationRule] = None) -> ConfidenceScore:
+    """Combine step confidences into a composite (ADR-055).
+
+    - MIN: conservative lower bound (one weak step sinks the plan).
+    - PRODUCT: multiplicative (independence assumption).
+    - WEIGHTED: depth-weighted average (default), later steps weigh slightly less.
+    """
+    if not steps:
+        return ConfidenceScore(0.0, ProvenanceType.AGGREGATION)
+    rule = rule or AggregationRule.WEIGHTED
+    vals = [s.value for s in steps]
+    if rule is AggregationRule.MIN:
+        comp = min(vals)
+    elif rule is AggregationRule.PRODUCT:
+        import math
+        comp = math.prod(vals)
+    else:  # WEIGHTED: deeper steps weigh (n - i)/n
+        n = len(vals)
+        w = [(n - i) / n for i in range(n)]
+        comp = sum(v * wi for v, wi in zip(vals, w)) / sum(w)
+    return ConfidenceScore(
+        round(comp, 4), ProvenanceType.AGGREGATION,
+        calibration=CalibrationType.EPISTEMIC, aggregation_rule=rule,
+    )
+
+
 # --------------------------------------------------------------------------
 # Provenance (ADR-054 I-13) — every cognitive artifact carries this
 # --------------------------------------------------------------------------
