@@ -543,7 +543,7 @@ adrs:
   - ADR-036
 - id: ADR-039
   title: Subprocess-based Execution Sandbox (IExecutionSandbox)
-  status: proposed
+  status: accepted
   evidence_level: III
   date: '2026-08-02'
   related:

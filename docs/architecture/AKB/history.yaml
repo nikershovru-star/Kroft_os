@@ -337,3 +337,13 @@ history:
     technical debt). Hypotheses: 47=GraphViz interactive renderer (Stage 23 export-only),
     48=Real-time collab/multi-user OR plugin marketplace. Not blocking core; covered
     by Wave 3 (ADR-025, Phase G). Documented in PROJECT_STATUS.md §5.'
+- id: WP-EXECUTION-001-code
+  tz: TZ-EXECUTION-001
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-EXECUTION-001 CODE: IExecutionSandbox port (contracts/i_execution_sandbox.py)
+    + ExecutionResult + SubprocessSandbox (adapters, stdlib, thread-safe, timeout+kill,
+    env deny-list). Tool.dangerous flag (contracts/agent.py). PyAutoGUIAdapter.open_app
+    -> sandbox (kills os.system injection). ToolRegistry dangerous routing + fail-secure
+    RuntimeError + K5 ApprovalManager. composition wires SubprocessSandbox (K3). 12
+    tests. Suite 916 passed, gate 14, akb-lint PASSED. K1/K8 clean.'
