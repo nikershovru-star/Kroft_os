@@ -168,7 +168,13 @@ class SupervisorService:
         cb.on_failure()
         if cb.current_state is CircuitState.OPEN:
             # Sustained agent failures -> escalate degradation (K5 on MINIMAL).
+            prev_level = self._degradation.level
             self._degradation.on_circuit_open(agent_id)
+            self._bus.publish_sync("circuit.open", {"agent_id": agent_id})
+            if self._degradation.level != prev_level:
+                self._bus.publish_sync("degradation.level", {
+                    "level": self._degradation.level.value, "reason": f"circuit open: {agent_id}",
+                })
             if self._log:
                 self._log.error("agent.circuit.open", name=agent_id,
                                 level=self._degradation.level.value)

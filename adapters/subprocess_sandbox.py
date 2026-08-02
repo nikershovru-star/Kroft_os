@@ -13,6 +13,7 @@ import uuid
 from typing import Dict, List, Optional
 
 from contracts.i_execution_sandbox import ExecutionResult, IExecutionSandbox
+from contracts import IEventBus
 
 # Sensitive env vars stripped before passing to a sandboxed child process.
 _ENV_DENY_LIST = (
@@ -27,8 +28,9 @@ _ENV_DENY_LIST = (
 class SubprocessSandbox(IExecutionSandbox):
     """Stdlib subprocess sandbox. Command is a List[str] (no shell injection)."""
 
-    def __init__(self, default_timeout: float = 30.0) -> None:
+    def __init__(self, default_timeout: float = 30.0, bus: Optional["IEventBus"] = None) -> None:
         self._default_timeout = default_timeout
+        self._bus = bus
         self._lock = threading.Lock()
         self._procs: Dict[str, subprocess.Popen] = {}
 
@@ -76,6 +78,10 @@ class SubprocessSandbox(IExecutionSandbox):
             # communicate() already closed the pipes on timeout; do not re-read.
             stdout, stderr = "", ""
             killed = True
+            if self._bus is not None:
+                self._bus.publish_sync("sandbox.kill", {
+                    "handle": handle, "returncode": -9, "label": label,
+                })
         finally:
             with self._lock:
                 self._procs.pop(handle, None)

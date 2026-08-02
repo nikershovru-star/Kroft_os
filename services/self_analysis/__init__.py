@@ -21,6 +21,7 @@ from contracts.agent_orchestration import (
     IAgentLifecycle,
     ISelfAnalyzer,
 )
+from contracts import IEventBus
 
 
 # Allowed import targets per scanned package (single source of truth:
@@ -40,12 +41,14 @@ class SelfAnalyzer(ISelfAnalyzer):
         lifecycle: IAgentLifecycle,
         root: Path,
         matrix_path: Optional[Path] = None,
+        bus: Optional["IEventBus"] = None,
     ) -> None:
         self._lifecycle = lifecycle
         self._root = Path(root)
         self._matrix_path = matrix_path or (
             self._root / "docs" / "architecture" / "AKB" / "import_matrix.yaml"
         )
+        self._bus = bus
 
     # -- ISelfAnalyzer -----------------------------------------------------
 
@@ -102,9 +105,20 @@ class SelfAnalyzer(ISelfAnalyzer):
                             file=rel, line=lineno, rule=f"{pkg}->{target}",
                             actual_import=line.strip(),
                         ))
+        self._publish_drift(drifts)
         return drifts
 
     # -- helpers -----------------------------------------------------------
+
+    def _publish_drift(self, drifts: List[DriftRecord]) -> None:
+        if self._bus is None or not drifts:
+            return
+        # score = normalized count (capped) as a simple confidence proxy
+        score = min(1.0, len(drifts) / 20.0)
+        self._bus.publish_sync("self.drift", {
+            "score": score, "count": len(drifts),
+            "files": [d.file for d in drifts[:5]],
+        })
 
     def _k1_snapshot_ok(self) -> bool:
         """Quick K1 check: kernel/ must not import services/ or adapters/."""
