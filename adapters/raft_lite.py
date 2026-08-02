@@ -111,16 +111,24 @@ class RaftLiteElector(ILeaderElector):
                 self._become_leader()
 
     def _on_vote_request(self, event: dict) -> None:
+        if event.get("from") == self._node_id:
+            return  # ignore our own broadcast
         with self._lock:
             term = event.get("term", 0)
-            if term >= self._term:
+            # only step down if the requester has a STRICTLY higher term;
+            # equal-term concurrent requests must not reset a candidate.
+            if term > self._term:
                 self._term = term
                 self._state = "follower"
                 self._leader = None
+            else:
+                return
         self._bus.publish_sync("raft.vote_grant",
                                {"term": term, "from": self._node_id, "to": event.get("from")})
 
     def _on_vote_grant(self, event: dict) -> None:
+        if event.get("from") == self._node_id:
+            return  # ignore our own broadcast
         with self._lock:
             if event.get("to") != self._node_id or self._state != "candidate":
                 return
@@ -162,6 +170,7 @@ class RaftLiteElector(ILeaderElector):
             if term >= self._term:
                 self._term = term
                 self._leader = event.get("from")
-                if self._state != "follower":
+                # acknowledge leader: a candidate steps down; a leader stays leader
+                if self._state == "candidate":
                     self._state = "follower"
                 self._last_heartbeat = time.monotonic()

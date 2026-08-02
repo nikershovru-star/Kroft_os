@@ -594,7 +594,7 @@ adrs:
 - id: ADR-043
   title: Distributed Runtime — CRDT KG, Raft-lite Supervisor, Distributed EventBus
     (WP-14)
-  status: proposed
+  status: accepted
   evidence_level: III
   date: '2026-08-02'
   related:

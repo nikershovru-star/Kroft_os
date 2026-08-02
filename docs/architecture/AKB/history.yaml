@@ -417,3 +417,16 @@ history:
     Network partition -> graceful local+merge (eventual consistency). ADR-043 + RFC-014.
     Reuses WP-10 recovery, WP-12 metrics, TZ-KNOW TenantIsolator. Code deferred (requires
     transport deps, K5 go pending). K1/K3/K5/K6/K8.'
+- id: WP-14-code
+  tz: TZ-DISTRIBUTED-001
+  date: '2026-08-02'
+  status: accepted
+  summary: 'WP-14 Distributed Runtime CODE (ADR-043/RFC-014): ICrdtGraph port + CrdtGraphEngine
+    (LWW-Element-Set + PN-Counter, idempotent merge/export_ops/apply_ops, thread-safe).
+    ILeaderElector + RaftLiteElector (election-only, term heartbeat + majority, no
+    log replication, bus-driven). IDistributedEventBus + TcpEventBus (localhost TCP
+    pub/sub, stdlib only, partition-tolerant retry-connect). SupervisorFailover (leader
+    broadcasts CRDT ops, followers apply/merge, recover_cb hook). composition: IGraphEngine->CrdtGraphEngine
+    drop-in (MediaIntelligenceService unchanged), wires elector/failover, TcpEventBus
+    factory optional. 15 tests. Suite 966 passed, gate 14, akb-lint PASSED. K1/K6/K8
+    clean.'

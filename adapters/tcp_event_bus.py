@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import socket
 import threading
+import time
 from typing import Callable, Dict, List
 
 from contracts.i_distributed_event_bus import IDistributedEventBus
@@ -92,21 +93,27 @@ class TcpEventBus(IDistributedEventBus):
         while self._running and self._server:
             try:
                 conn, _ = self._server.accept()
+            except socket.timeout:
+                continue  # no incoming connection yet; keep listening
             except OSError:
                 break
             except Exception:
                 continue
             self._spawn_reader(conn)
 
-    def _connect_peer(self, seed: str) -> None:
-        try:
-            host, port = seed.split(":")
-            sock = socket.create_connection((host, int(port)), timeout=2.0)
-            with self._peers_lock:
-                self._peers[seed] = sock
-            self._spawn_reader(sock)
-        except OSError:
-            pass  # partition: peer unreachable now; reconnect on next join/heartbeat
+    def _connect_peer(self, seed: str, retries: int = 5, delay: float = 0.1) -> None:
+        host, port = seed.split(":")
+        for attempt in range(retries):
+            try:
+                sock = socket.create_connection((host, int(port)), timeout=2.0)
+                with self._peers_lock:
+                    self._peers[seed] = sock
+                self._spawn_reader(sock)
+                return
+            except OSError:
+                if attempt < retries - 1:
+                    time.sleep(delay)
+                continue
 
     def _spawn_reader(self, sock: socket.socket) -> None:
         t = threading.Thread(target=self._read_loop, args=(sock,), daemon=True)

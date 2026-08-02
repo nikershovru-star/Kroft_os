@@ -59,10 +59,10 @@ class CrdtGraphEngine(ICrdtGraph):
     def add_edge(self, e: Edge) -> Edge:
         with self._lock:
             lamport = self.tick()
-            key = (e.source_id, e.target_id, e.type.value if isinstance(e.type, object) else str(e.type))
+            key = (e.source_id, e.target_id, e.type.value)
             self._put_edge(e, lamport, self._node_id)
             self._ops.append(CrdtOp("add_edge", e.source_id, lamport,
-                                     {"target_id": e.target_id, "type": str(e.type),
+                                     {"target_id": e.target_id, "type": e.type.value,
                                       "weight": e.weight, "evidence": e.evidence},
                                      self._node_id))
             return e
