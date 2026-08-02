@@ -640,3 +640,14 @@ adrs:
   - TZ-AGENT-001
   - WP-14
   - Wave-3
+- id: ADR-047
+  title: World Model — internal world representation + prediction (TZ-018)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-018
+  - ADR-046
+  - TZ-AGENT-001
+  - WP-14
+  - Wave-3

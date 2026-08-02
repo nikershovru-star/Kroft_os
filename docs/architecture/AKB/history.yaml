@@ -459,3 +459,13 @@ history:
     IReflectionEngine (100->15->3), IKnowledgeDistillation (3->1). Pipeline: events->experiences->rules->strategy->writeback
     to memory (Experience stage arxiv 2605). Reuse InMemoryMemoryStore+ILlm (TZ-AGENT-001),
     ICrdtGraph (WP-14). ADR-046 + RFC-017. Code deferred (K5 go pending). K1/K3/K5/K6/K8.'
+- id: TZ-018-design
+  tz: TZ-018
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-018 World Model design (research-first). 7 comps: IWorldObject/IWorldRelation
+    (reuse KG OBJECT/CAUSES), ITimeModel (temporal state), ICausalityEngine (do-intervention),
+    IProbabilityModel (P over KG), IStatePredictor (state,action->next), ISimulationEngine
+    (roll-out futures), WorldModelService (answers ''what happens next?''). Reuse
+    ICrdtGraph (WP-14) + ILlm (TZ-AGENT-001). Predict-only (K5). ADR-047 + RFC-018.
+    Code deferred (K5 go pending). K1/K3/K5/K6/K8.'

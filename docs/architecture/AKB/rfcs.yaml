@@ -105,3 +105,7 @@ rfcs:
   title: Long-Term Memory Evolution — self-developing memory (TZ-017)
   status: under_review
   date: '2026-08-02'
+- id: RFC-018
+  title: World Model — internal world representation + prediction (TZ-018)
+  status: under_review
+  date: '2026-08-02'
