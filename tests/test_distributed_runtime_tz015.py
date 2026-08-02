@@ -61,7 +61,7 @@ def test_shared_context_publish_selective_emits_causal():
     w.facts_meta["b"] = CausalMark("n1", 3)
     sel = svc.publish_selective(w, "scope:x")
     assert [d["key"] for d in sel] == ["scope:x"]
-    assert sel[0]["node_origin"] == "n1" and sel[0]["seq"] == 2  # seq key carries lamport
+    assert sel[0]["node_origin"] == "n1" and sel[0]["lamport"] == 2  # seq key carries lamport
 
 
 def test_shared_context_merge_remote_is_causal_not_wallclock():
@@ -72,9 +72,9 @@ def test_shared_context_merge_remote_is_causal_not_wallclock():
     """
     svc = SharedContextService("n1")
     remote = [
-        {"key": "fact", "value": "from-n2", "node_origin": "n2", "seq": 5},
+        {"key": "fact", "value": "from-n2", "node_origin": "n2", "lamport": 5},
         # n1 with HIGHER wall-clock but LOWER causal seq -> must NOT win
-        {"key": "fact", "value": "from-n1-stale", "node_origin": "n1", "seq": 3},
+        {"key": "fact", "value": "from-n1-stale", "node_origin": "n1", "lamport": 3},
     ]
     merged = svc.merge_remote(remote, WorldState(node_id="n1"))
     assert merged.facts["fact"] == "from-n2"
@@ -83,7 +83,7 @@ def test_shared_context_merge_remote_is_causal_not_wallclock():
 
 def test_shared_context_merge_remote_idempotent_on_replay():
     svc = SharedContextService("n1")
-    remote = [{"key": "k", "value": "v", "node_origin": "n3", "seq": 7}]
+    remote = [{"key": "k", "value": "v", "node_origin": "n3", "lamport": 7}]
     m1 = svc.merge_remote(remote, WorldState(node_id="n1"))
     m2 = svc.merge_remote(remote, WorldState(node_id="n1"))  # duplicate delivery
     assert m1.facts == m2.facts

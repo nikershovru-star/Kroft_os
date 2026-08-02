@@ -94,7 +94,7 @@ def test_concurrent_equal_lamport_converges_on_both_nodes():
 # -------------------------------------------------------------------------
 def test_idempotent_replay_does_not_change_result():
     svc = SharedContextService("n1")
-    remote = [{"key": "k", "value": "v", "node_origin": "n3", "seq": 7}]
+    remote = [{"key": "k", "value": "v", "node_origin": "n3", "lamport": 7}]
     # replay into a FRESH local world twice (simulating duplicate delivery)
     w1 = svc.merge_remote(remote, __world("n1"))
     w2 = svc.merge_remote(remote, __world("n1"))
@@ -113,7 +113,7 @@ def test_shared_context_receive_advances_local_clock():
     This test proves merge_remote advances the service's own Lamport clock."""
     svc = SharedContextService("B")
     assert svc._clock.mark == CausalMark("B", 0)
-    remote = [{"key": "fact", "value": "from-A", "node_origin": "A", "seq": 10}]
+    remote = [{"key": "fact", "value": "from-A", "node_origin": "A", "lamport": 10}]
     svc.merge_remote(remote, __world("B"))
     # B received A@10, which is causally newer than local 0 -> clock = 10 + 1 = 11.
     assert svc._clock.mark == CausalMark("B", 11)

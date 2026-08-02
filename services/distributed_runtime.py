@@ -129,7 +129,7 @@ class SharedContextService(ISharedContext):
             if scope in key or scope == "*":
                 mark = world.facts_meta.get(key, CausalMark(world.node_id, 0))
                 out.append({"key": key, "value": val,
-                            "node_origin": mark.node_origin, "seq": mark.lamport})
+                            "node_origin": mark.node_origin, "lamport": mark.lamport})
         return out
 
     def merge_remote(self, remote_facts: List[dict],
@@ -150,7 +150,7 @@ class SharedContextService(ISharedContext):
         max_remote = CausalMark(self._node_id, 0)
         for rf in remote_facts:
             key = rf["key"]
-            remote_mark = CausalMark(rf["node_origin"], rf["seq"])
+            remote_mark = CausalMark(rf["node_origin"], rf["lamport"])
             if remote_mark > max_remote:
                 max_remote = remote_mark
             if key not in meta or remote_mark > meta[key]:
