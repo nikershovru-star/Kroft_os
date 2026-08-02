@@ -31,6 +31,7 @@ from contracts.cognitive_domain import (
     Plan,
     Policy,
     Provenance,
+    ReasoningStep,
     WorldState,
 )
 
@@ -127,6 +128,29 @@ class ILearningPolicy(ABC):
     @abstractmethod
     def accepts(self, proposal: Policy) -> bool:
         """Policy Check gate before Commit to Memory (I-14)."""
+
+
+# -------------------------------------------------------------------------
+# Reasoning Engine (ТЗ-RE-01) — parametric engine of the Deliberate phase
+# -------------------------------------------------------------------------
+class IReasoningEngine(ABC):
+    """Reasoning step BEFORE Planning (ADR-054 Deliberate: Reasoning -> Planning -> Decision).
+
+    Reads Intent + WorldState (+ Attention context) and yields ReasoningSteps that
+    become candidates for the Planner. Deterministic by default (LLM-free core, I-09);
+    an LLM may ADVISE but the step generation stays rule/policy-based. Every step
+    carries its own ConfidenceScore + CausalMark (the node's shared clock).
+    """
+
+    @abstractmethod
+    def reason(self, intent: Intent, world: WorldState,
+               attention_context: List[str], budget_tokens: int) -> List["ReasoningStep"]:
+        """Return world-aware reasoning steps (candidates for Planning)."""
+
+
+# -------------------------------------------------------------------------
+# World State (I-07) — local node single source of truth.
+# -------------------------------------------------------------------------
 
 
 # --------------------------------------------------------------------------

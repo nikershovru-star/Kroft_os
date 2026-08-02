@@ -33,6 +33,7 @@ from contracts.cognitive_domain import (
     Policy,
     Provenance,
     ProvenanceType,
+    WorldState,
     aggregate_confidence,
 )
 from contracts.i_cognitive_kernel import (
@@ -64,14 +65,16 @@ class RealisticAttention(IAttention):
     def __init__(self, resources: IResourceManager) -> None:
         self._res = resources
 
-    def select_context(self, intent: Intent, world: IWorldState, budget_tokens: int) -> list:
+    def select_context(self, intent: Intent, world: WorldState, budget_tokens: int) -> list:
+        # NOTE: `world` is already a WorldState snapshot (the kernel passes it
+        # through Reasoning); do NOT call .snapshot() again.
         granted = self._res.request_quota("attention", "tokens", budget_tokens)
-        items = list(world.snapshot().facts.keys())
+        items = list(world.facts.keys())
         cap = max(1, granted // 10)
         return items[-cap:]
 
-    def salience(self, item_id: str, intent: Intent, world: IWorldState) -> ConfidenceScore:
-        content = world.get(item_id) or ""
+    def salience(self, item_id: str, intent: Intent, world: WorldState) -> ConfidenceScore:
+        content = world.facts.get(item_id, "") if hasattr(world, "facts") else ""
         overlap = len(set(content.lower().split()) & set(intent.text.lower().split()))
         return ConfidenceScore(min(1.0, 0.4 + 0.1 * overlap), ProvenanceType.RULE_INFERENCE)
 
@@ -82,7 +85,7 @@ class ConfidenceAggregatingPlanner:
     def __init__(self, world: IWorldState) -> None:
         self._world = world
 
-    def __call__(self, goal: Goal) -> list:
+    def __call__(self, goal: Goal, steps: list) -> list:
         # two steps, each with its own confidence -> plan confidence aggregated
         step_a = ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE)
         step_b = ConfidenceScore(0.4, ProvenanceType.RULE_INFERENCE)  # weak step

@@ -42,7 +42,9 @@ from contracts.i_cognitive_kernel import (
     IValueSystem,
     IWorldState,
     IAttention,
+    IReasoningEngine,
 )
+from kernel.reasoning import ReferenceReasoningEngine
 
 
 def _uid(prefix: str) -> str:
@@ -251,8 +253,9 @@ class CognitiveKernel(ICognitiveKernel):
                  decision: IDecisionEngine,
                  executive: IExecutive,
                  learning: ILearningPolicy,
-                 planner: Callable[[Goal], List[Plan]],
-                 clock: Optional["NodeLamportClock"] = None) -> None:
+                 planner: Callable[[Goal, List["ReasoningStep"]], List[Plan]],
+                 clock: Optional["NodeLamportClock"] = None,
+                 reason: Optional["IReasoningEngine"] = None) -> None:
         # ТЗ-RE-01 flag 1: ONE shared Lamport clock per node. World store is wired
         # to the same clock (see build_kernel), so kernel events + world facts share
         # one causal order; node_origin = node_id (not the literal "kernel").
@@ -269,6 +272,10 @@ class CognitiveKernel(ICognitiveKernel):
         self._executive = executive
         self._learning = learning
         self._planner = planner
+        # ТЗ-RE-01: Reasoning Engine is the parametric engine of Deliberate. If none
+        # is injected, the kernel has no reasoning step (still legal — Planning runs
+        # with empty steps). build_kernel always wires ReferenceReasoningEngine.
+        self._reason = reason
         self._state = CognitiveState.IDLE
         self._goal: Optional[Goal] = None
         self._events: list = []
@@ -317,7 +324,15 @@ class CognitiveKernel(ICognitiveKernel):
                     provenance=Provenance(source="intent", actor="kernel"))
         self._goal = goal
         self._emit(CognitiveEventType.GOAL_CREATED, goal.id, goal.confidence)
-        candidates = self._planner(goal)
+        # Deliberate: Reasoning -> Planning -> Decision (ADR-054 / ТЗ-RE-01)
+        # Reasoning reads Intent + WorldState through Attention and yields
+        # world-aware reasoning steps (candidates for Planning).
+        world_snapshot = self._world.snapshot()
+        attention_ctx = self._attention.select_context(intent, world_snapshot, 100)
+        steps = self._reason.reason(intent, world_snapshot, attention_ctx, 100) if self._reason else []
+        for s in steps:
+            self._emit(CognitiveEventType.REASONING_STEP, s.id, s.confidence)
+        candidates = self._planner(goal, steps)
         for p in candidates:
             self._emit(CognitiveEventType.PLAN_GENERATED, p.id, p.confidence)
         decision = self._decision.select(goal, candidates, self._values)
@@ -400,16 +415,26 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     dec = DeterministicDecisionEngine()
     exec_ = DeterministicExecutive(res)
     learn = SimpleLearningPolicy()
+    # ТЗ-RE-01: Reasoning Engine wired with the SAME shared node clock (flag 1) so
+    # reasoning steps carry the node's causal order + node_origin = node_id.
+    reason = ReferenceReasoningEngine(shared_clock, attn)
 
-    def planner(goal: Goal) -> List[Plan]:
-        # deterministic candidate generator (adapter would call LLM)
-        return [
-            Plan(id=_uid("plan"), goal_id=goal.id, steps=(f"step-for:{goal.description}",),
-                 confidence=ConfidenceScore(0.8, ProvenanceType.RULE_INFERENCE),
-                 provenance=Provenance(source="planner", actor="kernel")),
-            Plan(id=_uid("plan"), goal_id=goal.id, steps=(f"alt-for:{goal.description}",),
-                 confidence=ConfidenceScore(0.6, ProvenanceType.RULE_INFERENCE),
-                 provenance=Provenance(source="planner", actor="kernel")),
-        ]
+    def planner(goal: Goal, steps: list) -> List[Plan]:
+        # deterministic candidate generator: one candidate per reasoning step
+        # (grounded in a world fact), plus a fallback "explore" candidate when no
+        # reasoning step exists. An adapter would call an LLM here.
+        cands = []
+        for s in steps:
+            cands.append(Plan(id=_uid("plan"), goal_id=goal.id,
+                              steps=(f"act-on:{s.description}",),
+                              confidence=s.confidence,
+                              provenance=Provenance(source="reasoning", actor="kernel")))
+        if not cands:
+            cands.append(Plan(id=_uid("plan"), goal_id=goal.id,
+                              steps=(f"explore-for:{goal.description}",),
+                              confidence=ConfidenceScore(0.4, ProvenanceType.RULE_INFERENCE),
+                              provenance=Provenance(source="planner", actor="kernel")))
+        return cands
 
-    return CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner, clock=shared_clock)
+    return CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner,
+                           clock=shared_clock, reason=reason)

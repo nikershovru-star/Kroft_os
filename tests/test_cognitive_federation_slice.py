@@ -87,7 +87,8 @@ def _make_node(node_id: str, decision_engine: IDecisionEngine) -> CognitiveKerne
     exec_ = DeterministicExecutive(res)
     learn = build_kernel(node_id)._learning
 
-    def planner_for(goal: Goal) -> list:
+    def planner_for(goal: Goal, steps: list) -> list:
+        # deterministic candidate generator (adapter would call LLM)
         return [
             Plan(id="plan-X", goal_id=goal.id, steps=("x",),
                  confidence=ConfidenceScore(0.7, ProvenanceType.RULE_INFERENCE),

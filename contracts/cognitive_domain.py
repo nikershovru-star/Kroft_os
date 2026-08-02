@@ -120,6 +120,7 @@ class CognitiveEventType(str, Enum):
     OBSERVATION_RECEIVED = "ObservationReceived"
     GOAL_CREATED = "GoalCreated"
     GOAL_CANCELLED = "GoalCancelled"
+    REASONING_STEP = "ReasoningStep"
     PLAN_GENERATED = "PlanGenerated"
     DECISION_ACCEPTED = "DecisionAccepted"
     DECISION_REJECTED = "DecisionRejected"
@@ -316,6 +317,25 @@ class Skill:
     name: str
     confidence: ConfidenceScore
     provenance: Provenance
+
+
+@dataclass(frozen=True)
+class ReasoningStep:
+    """One deterministic reasoning step in the Deliberate phase (ТЗ-RE-01).
+
+    A reasoning step reads WorldState + Intent (via the engine) and produces a
+    candidate for Planning. Each step carries a ConfidenceScore (ADR-054 I-12) and
+    a CausalMark from the node's shared clock (ТЗ-CAUSAL-01 / ТЗ-RE-01 flag 1) so
+    reasoning is causally ordered and world-aware by construction.
+    """
+    id: str
+    goal_id: str
+    description: str                       # what the step concluded / which candidate
+    based_on_facts: Tuple[str, ...] = ()   # world keys this step read (world-awareness)
+    confidence: ConfidenceScore = field(
+        default_factory=lambda: ConfidenceScore(0.5, ProvenanceType.RULE_INFERENCE)
+    )
+    causal: CausalMark = field(default_factory=lambda: CausalMark("local", 0))
 
 
 @dataclass(frozen=True)
