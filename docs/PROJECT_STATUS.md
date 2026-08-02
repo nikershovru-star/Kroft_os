@@ -65,7 +65,7 @@ purpose: >
 
 ## 3. Метрики (реальный прогон 2026-08-02)
 
-- **Tests:** `940 passed, 19 skipped, 0 failed` (реальный прогон 2026-08-02; TZ-MULTI/KNOW/AGENT + Wave 2 WP-10 + TZ-EXECUTION-001 + TZ-OBS-001 + TZ-MULTIMODAL-001)
+- **Tests:** `951 passed, 19 skipped, 0 failed` (реальный прогон 2026-08-02; +WP-12 Arch Intelligence L5/L6/L7)
 - **Arch-gate:** `14 passed` (8 positive + 6 negative)
 - **ADR:** 38 (ADR-001..038; ADR-007 — двойной файл, логически один)
 - **Laws:** 8 (K1–K8)
@@ -83,7 +83,7 @@ purpose: >
 | Wave 1 | WP-04 (repo), WP-05 (CI), WP-06 (sync), WP-07 (deprecated), WP-08 (ADR lifecycle) | ✅ WP-04, ✅ WP-05, ✅ WP-06, ✅ WP-07, ✅ WP-08 |
 | Wave 2 | WP-09 (KG v2 ✅ TZ-KNOW-001), WP-10 (Supervisor/Recovery ⏸ design RFC-010/ADR-038), WP-11 (self-analysis ✅ TZ-AGENT-001) | WP-10 design DONE, code ждёт K5 |
 | TZ-EXECUTION-001 | WP-01 (Sandbox port+adapter), WP-02 (ToolRegistry+DesktopAdapter integration), WP-03 (tests +12) | ✅ DONE |
-| Wave 3 | WP-12 (Arch Intelligence ✅ partial), WP-13 (Multimodal = TZ-MULTIMODAL-001 ✅ DONE), WP-14 (Distributed Runtime, future) | ⏸ STARTED |
+| Wave 3 | WP-12 (Arch Intelligence ✅ DONE: L5/L6/L7 services), WP-13 (Multimodal ✅ DONE), WP-14 (Distributed Runtime, future) | ⏸ STARTED |
 
 ### Функциональные этапы (после стабилизации)
 - Phase D — Configuration & Secrets

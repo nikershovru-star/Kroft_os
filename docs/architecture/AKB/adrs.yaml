@@ -580,3 +580,14 @@ adrs:
   - TZ-AGENT-001
   - TZ-OBS-001
   - Wave-2
+- id: ADR-042
+  title: Architecture Intelligence Services — L5/L6/L7 (WP-12)
+  status: accepted
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-AGENT-001
+  - TZ-OBS-001
+  - ADR-041
+  - ADR-038
+  - Wave-3
