@@ -293,3 +293,12 @@ history:
   status: accepted
   summary: 'TZ-AGENT-001 design: RFC-009 (under_review) + ADR-037 (proposed). Multi-agent
     orchestration + runtime self-analysis as KROFT-native components (reuse substrate).'
+- id: WP-AGENT-001-code
+  tz: TZ-AGENT-001
+  date: '2026-08-02'
+  status: done
+  summary: 'TZ-AGENT-001 CODE phase. WP-01..WP-09: contracts/agent_orchestration (ports+VO),
+    kernel/agent_lifecycle (FSM K1-clean), services/agent_orchestration (orchestrator
+    pool+capability, messenger EventBus+tenant boundary, healing K5-gated, recorder
+    EXPERIMENT nodes), services/self_analysis (health+drift K8). 31 agent tests. Suite
+    883 passed, gate 14, K1/K8 verified.'
