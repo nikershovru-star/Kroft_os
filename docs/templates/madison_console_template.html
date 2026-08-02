@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MADISON//AI — Autonomous Ad Agency</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/anton@latest/latin-400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/manrope@latest/latin-400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/manrope@latest/latin-500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/manrope@latest/latin-600.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/manrope@latest/latin-700.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/manrope@latest/latin-800.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/jetbrains-mono@latest/latin-400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/jetbrains-mono@latest/latin-500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/jetbrains-mono@latest/latin-700.css">
+<style>
+:root{
+  --bg:#0a1420; --bg2:#0d1a29; --panel:#0f1f31; --panel2:#13273c; --panel3:#173049;
+  --line:rgba(233,238,245,.09); --line2:rgba(233,238,245,.2);
+  --ink:#e9eef5; --mut:#93a4ba; --dim:#5c6e84;
+  --cob:#2d5bff; --cob-d:#1d44d6; --cor:#ff5436; --amb:#ffc23d; --ok:#27d3a2;
+  --paper:#f2efe6; --paper2:#e7e2d4; --p-ink:#14181a; --p-mut:#5a5f63;
+  --sh:4px 4px 0 #000; --sh-c:4px 4px 0 var(--cob); --sh-p:5px 5px 0 #000;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --sans:'Manrope',system-ui,sans-serif;
+  --disp:'Anton',var(--sans);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;padding-bottom:96px}
+::selection{background:var(--cor);color:#fff}
+button,input,select,textarea{font-family:inherit}
+a{color:inherit}
+#amb{position:fixed;inset:0;z-index:0;pointer-events:none}
+#scan{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.4;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 3px)}
+#prog{position:fixed;top:0;left:0;height:3px;background:var(--cor);z-index:80;width:0;box-shadow:0 0 12px rgba(255,84,54,.7)}
+.shell{position:relative;z-index:2}
+.wrap{max-width:1380px;margin:0 auto;padding:0 34px}
+@media(max-width:680px){.wrap{padding:0 16px}}
+.hs{box-shadow:var(--sh)}
+.press{transition:transform .1s,box-shadow .1s,background .15s,color .15s}
+.press:active{transform:translate(3px,3px);box-shadow:0 0 0 #000!important}
+
+/* ticker */
+.ticker{position:sticky;top:0;z-index:60;background:var(--cob);color:#fff;border-bottom:2px solid #000;
+  font-family:var(--mono);font-size:11px;letter-spacing:.03em;height:32px;display:flex;align-items:center}
+.ticker .lab{background:#000;color:var(--amb);padding:0 12px;height:100%;display:flex;align-items:center;gap:7px;flex:none;font-weight:700}
+.ticker .lab i{width:7px;height:7px;background:var(--cor);border-radius:50%;animation:bk 1.2s steps(2) infinite}
+@keyframes bk{50%{opacity:.2}}
+.ticker .mq{flex:1;overflow:hidden;white-space:nowrap;mask:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+.ticker .mq .tr{display:inline-block;animation:scr 50s linear infinite}
+.ticker .mq .tr span{margin:0 9px;opacity:.7}.ticker .mq .tr b{margin-right:16px;font-weight:500}
+.ticker .mq .tr em{color:#000;background:var(--amb);padding:0 5px;font-style:normal;font-weight:700}
+@keyframes scr{to{transform:translateX(-50%)}}
+
+/* masthead */
+.mast{padding:30px 0 8px;border-bottom:1px solid var(--line)}
+.mast .row{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:16px}
+.brand .logo{width:54px;height:54px;background:var(--cor);box-shadow:var(--sh);display:grid;place-items:center;position:relative;flex:none}
+.brand .logo svg{width:30px;height:30px}
+.brand h1{font-family:var(--disp);font-size:clamp(34px,6vw,62px);letter-spacing:.01em;line-height:.82;text-transform:uppercase}
+.brand h1 em{font-style:normal;color:var(--cob)}
+.brand .sub{font-family:var(--mono);font-size:11px;color:var(--mut);letter-spacing:.08em;margin-top:6px;text-transform:uppercase}
+.mast .status{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.chip{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  border:1.5px solid var(--line2);padding:6px 11px;color:var(--mut);display:flex;align-items:center;gap:7px}
+.chip b{color:var(--ink);font-weight:700}
+.chip.live{border-color:var(--ok);color:var(--ok)}
+.chip.live i{width:7px;height:7px;background:var(--ok);border-radius:50%;animation:bk 1.2s steps(2) infinite}
+.chip.warn{border-color:var(--amb);color:var(--amb)}
+
+/* ===== BRIEF SCREEN ===== */
+#briefscreen{padding:46px 0 30px}
+.brief-grid{display:grid;grid-template-columns:1.25fr .9fr;gap:34px;align-items:start}
+@media(max-width:980px){.brief-grid{grid-template-columns:1fr}}
+.brief-intro .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--cor);font-weight:700;display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.brief-intro .eyebrow::before{content:"";width:42px;height:3px;background:var(--cor)}
+.brief-intro h2{font-family:var(--disp);font-size:clamp(40px,8vw,96px);line-height:.86;letter-spacing:.005em;text-transform:uppercase}
+.brief-intro h2 .o{color:transparent;-webkit-text-stroke:2px var(--ink)}
+.brief-intro p{color:var(--mut);font-size:16.5px;max-width:46ch;margin-top:22px}
+.brief-intro p b{color:var(--ink)}
+.dept-strip{margin-top:30px;display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:2px solid var(--line2)}
+@media(max-width:680px){.dept-strip{grid-template-columns:1fr 1fr}}
+.dept-strip .d{padding:14px 12px;border-right:1px solid var(--line);font-family:var(--mono)}
+.dept-strip .d:last-child{border-right:0}
+@media(max-width:680px){.dept-strip .d:nth-child(2){border-right:0}.dept-strip .d{border-bottom:1px solid var(--line)}.dept-strip .d:nth-last-child(-n+1){border-bottom:0}}
+.dept-strip .d .ic{font-size:18px}
+.dept-strip .d .nm{font-size:10.5px;color:var(--mut);letter-spacing:.06em;text-transform:uppercase;margin-top:6px}
+.dept-strip .d .rl{font-size:9px;color:var(--dim);margin-top:2px}
+
+/* form card */
+.formcard{background:var(--panel);border:2.5px solid var(--ink);box-shadow:var(--sh);padding:0;overflow:hidden}
+.formcard .bar{background:#000;color:var(--ink);padding:11px 16px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;display:flex;align-items:center;gap:9px}
+.formcard .bar .dot{width:9px;height:9px;border-radius:50%}
+.formcard .bar .r{margin-left:auto;color:var(--dim)}
+.formcard .body{padding:22px}
+.fld{margin-bottom:18px}
+.fld>label{display:block;font-family:var(--mono);font-size:11px;color:var(--mut);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+.fld>label .req{color:var(--cor)}
+.inp,.sel,.ta{width:100%;background:var(--bg2);border:2px solid var(--line2);color:var(--ink);padding:11px 13px;font-size:14px;font-family:var(--sans);transition:border-color .15s}
+.ta{resize:vertical;min-height:62px}
+.inp:focus,.sel:focus,.ta:focus{outline:none;border-color:var(--cob)}
+.sel{appearance:none;cursor:pointer;background-image:linear-gradient(45deg,transparent 50%,var(--mut) 50%),linear-gradient(135deg,var(--mut) 50%,transparent 50%);background-position:calc(100% - 16px) 17px,calc(100% - 11px) 17px;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.inp.mono{font-family:var(--mono)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:480px){.row2{grid-template-columns:1fr}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chipb{font-family:var(--mono);font-size:11.5px;font-weight:500;border:2px solid var(--line2);background:var(--bg2);color:var(--mut);padding:8px 13px;cursor:pointer;transition:.12s;letter-spacing:.02em}
+.chipb:hover{border-color:var(--mut);color:var(--ink)}
+.chipb.on{background:var(--cob);border-color:var(--cob);color:#fff;box-shadow:var(--sh-c)}
+.sldrow{display:flex;align-items:center;gap:14px}
+.sldrow .v{font-family:var(--mono);font-size:15px;color:var(--amb);font-weight:700;min-width:78px;text-align:right}
+.rng{flex:1;-webkit-appearance:none;appearance:none;height:6px;background:var(--panel3);border:1.5px solid var(--line2);cursor:pointer}
+.rng::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;background:var(--cor);border:2px solid #000;cursor:pointer}
+.rng::-moz-range-thumb{width:16px;height:16px;background:var(--cor);border:2px solid #000;cursor:pointer;border-radius:0}
+.runbtn{width:100%;margin-top:6px;font-family:var(--disp);font-size:24px;letter-spacing:.04em;text-transform:uppercase;
+  background:var(--cor);color:#fff;border:2.5px solid #000;padding:16px;cursor:pointer;box-shadow:var(--sh);transition:.12s}
+.runbtn:hover{background:#ff6a4f;transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000}
+.runbtn:active{transform:translate(3px,3px);box-shadow:0 0 0 #000}
+.runbtn:disabled{background:var(--panel3);color:var(--dim);cursor:not-allowed;box-shadow:var(--sh);transform:none}
+.hint{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:12px;line-height:1.6}
+.hint b{color:var(--mut)}
+
+/* ===== WORKING OVERLAY ===== */
+#working{position:fixed;inset:0;z-index:90;background:rgba(6,12,20,.92);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:20px}
+#working.on{display:flex}
+.workbox{width:min(720px,100%);background:var(--panel);border:2.5px solid var(--cob);box-shadow:8px 8px 0 #000;padding:0;overflow:hidden}
+.workbox .bar{background:#000;padding:12px 18px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--amb);display:flex;align-items:center;gap:10px}
+.workbox .bar .dot{width:9px;height:9px;border-radius:50%;background:var(--cor);animation:bk 1s steps(2) infinite}
+.workbox .body{padding:22px 24px}
+.workbox h3{font-family:var(--disp);font-size:30px;letter-spacing:.02em;text-transform:uppercase;margin-bottom:4px}
+.workbox .sub{font-family:var(--mono);font-size:11px;color:var(--mut);margin-bottom:20px}
+.deptline{display:grid;grid-template-columns:150px 1fr 64px;gap:14px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+@media(max-width:520px){.deptline{grid-template-columns:110px 1fr 50px;gap:10px}}
+.deptline .nm{font-family:var(--mono);font-size:12px;color:var(--mut);letter-spacing:.04em}
+.deptline .nm b{color:var(--ink);font-weight:700;display:block}
+.deptline .nm small{color:var(--dim);font-size:9.5px}
+.deptline .pb{height:8px;background:var(--bg2);border:1.5px solid var(--line2);position:relative;overflow:hidden}
+.deptline .pb i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--cob);transition:width .25s}
+.deptline.done .pb i{background:var(--ok)}
+.deptline .st{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right}
+.deptline.done .st{color:var(--ok)}
+.deptline.active .st{color:var(--amb)}
+.worklog{margin-top:16px;font-family:var(--mono);font-size:11px;color:var(--mut);height:96px;overflow:hidden;background:var(--bg2);border:1px solid var(--line);padding:10px 12px;position:relative}
+.worklog::after{content:"";position:absolute;left:0;right:0;bottom:0;height:30px;background:linear-gradient(transparent,var(--bg2))}
+.worklog .ln{padding:2px 0;opacity:0;animation:li .3s forwards}
+.worklog .ln .t{color:var(--dim)}.worklog .ln .ok{color:var(--ok)}.worklog .ln .am{color:var(--amb)}
+@keyframes li{to{opacity:1}}
+
+/* ===== WAR ROOM ===== */
+#warroom{display:none;padding:30px 0 0}
+#warroom.on{display:block}
+.briefbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:2px solid var(--line2);padding:12px 16px;margin-bottom:18px}
+.briefbar .bb-lab{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-right:4px}
+.briefbar .bb{font-family:var(--mono);font-size:11.5px;border:1.5px solid var(--line2);padding:5px 10px;color:var(--mut)}
+.briefbar .bb b{color:var(--ink)}
+.briefbar .bb.ac{border-color:var(--cob);color:var(--cob)}
+.briefbar .editb{margin-left:auto;font-family:var(--mono);font-size:11px;background:var(--bg2);border:1.5px solid var(--line2);color:var(--mut);padding:7px 12px;cursor:pointer;font-weight:700}
+.briefbar .editb:hover{color:var(--ink);border-color:var(--mut)}
+
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:2px solid var(--line2);margin-bottom:24px}
+.tab{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);
+  background:none;border:0;padding:13px 16px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.15s;position:relative}
+.tab:hover{color:var(--mut)}
+.tab.on{color:var(--ink);border-bottom-color:var(--cor)}
+.tab.locked{opacity:.35;cursor:not-allowed}
+.tab .badge{position:absolute;top:7px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--cor);animation:bk 1s steps(2) infinite;display:none}
+.tab.pulse .badge{display:block}
+.pane{display:none;animation:fade .4s}
+.pane.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.sec-h{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:22px;flex-wrap:wrap}
+.sec-h .t{font-family:var(--disp);font-size:clamp(28px,4.5vw,52px);letter-spacing:.01em;text-transform:uppercase;line-height:.9}
+.sec-h .t small{display:block;font-family:var(--mono);font-size:11px;color:var(--mut);letter-spacing:.1em;font-weight:400;margin-bottom:8px;text-transform:uppercase}
+.sec-h .act{display:flex;gap:8px}
+.btn{font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:2px solid #000;
+  background:var(--amb);color:#000;padding:10px 16px;cursor:pointer;box-shadow:var(--sh);transition:.12s}
+.btn:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 #000}
+.btn:active{transform:translate(3px,3px);box-shadow:0 0 0 #000}
+.btn.ghost{background:var(--panel2);color:var(--ink);border-color:var(--line2);box-shadow:none}
+.btn.ghost:hover{border-color:var(--mut);box-shadow:none;transform:none}
+.btn.cob{background:var(--cob);color:#fff}
+.btn.cor{background:var(--cor);color:#fff}
+
+/* strategy */
+.strat-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:20px}
+@media(max-width:900px){.strat-grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:2px solid var(--line2);padding:22px;position:relative}
+.card .clab{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card .clab .n{color:var(--cob)}
+.bigidea{font-family:var(--disp);font-size:clamp(26px,4vw,46px);line-height:.95;letter-spacing:.005em;text-transform:uppercase}
+.bigidea em{font-style:normal;color:var(--cor)}
+.posit{color:var(--mut);font-size:15px;margin-top:14px}
+.posit b{color:var(--ink)}
+.slogans{display:flex;flex-direction:column;gap:10px}
+.slogan{background:var(--paper);color:var(--p-ink);padding:16px 18px;box-shadow:var(--sh-p);font-family:var(--disp);font-size:22px;letter-spacing:.01em;text-transform:uppercase;line-height:1;position:relative;cursor:pointer;transition:transform .12s}
+.slogan:hover{transform:translate(-2px,-2px)}
+.slogan small{display:block;font-family:var(--mono);font-size:9.5px;color:var(--p-mut);letter-spacing:.08em;margin-top:8px;text-transform:uppercase;font-weight:400}
+.slogan .cp{position:absolute;top:10px;right:12px;font-family:var(--mono);font-size:9px;color:var(--p-mut);opacity:0;transition:.15s}
+.slogan:hover .cp{opacity:1}
+.kvlist{display:flex;flex-direction:column;gap:0}
+.kvlist .kv{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.kvlist .kv:last-child{border-bottom:0}
+.kvlist .kv span{color:var(--mut)}
+.kvlist .kv b{color:var(--ink);font-weight:600;text-align:right}
+.pillars{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
+.pillar{border:1.5px solid var(--line2);padding:14px;background:var(--bg2)}
+.pillar .pn{font-family:var(--disp);font-size:18px;letter-spacing:.01em;text-transform:uppercase;color:var(--cob)}
+.pillar .pd{font-size:12.5px;color:var(--mut);margin-top:5px}
+
+/* audience */
+.pers{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:900px){.pers{grid-template-columns:1fr}}
+.per{background:var(--panel);border:2px solid var(--line2);padding:0;overflow:hidden;transition:transform .15s,box-shadow .15s}
+.per:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000}
+.per .hd{padding:18px 20px;border-bottom:2px solid var(--line2);position:relative}
+.per .hd .av{width:46px;height:46px;border:2px solid #000;display:grid;place-items:center;font-family:var(--disp);font-size:22px;color:#000;position:absolute;top:18px;right:18px}
+.per .hd .nm{font-family:var(--disp);font-size:24px;letter-spacing:.01em;text-transform:uppercase;line-height:.95;padding-right:54px}
+.per .hd .rl{font-family:var(--mono);font-size:10.5px;color:var(--mut);margin-top:5px;letter-spacing:.04em}
+.per .bd{padding:16px 20px}
+.per .blk{margin-bottom:13px}
+.per .blk:last-child{margin-bottom:0}
+.per .blk .k{font-family:var(--mono);font-size:9.5px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.per .blk .v{font-size:13px;color:var(--mut)}
+.per .blk .v b{color:var(--ink)}
+.per .tags{display:flex;flex-wrap:wrap;gap:5px}
+.per .tags span{font-family:var(--mono);font-size:9.5px;border:1px solid var(--line2);padding:3px 7px;color:var(--mut)}
+.per[data-c="0"] .hd{border-top:5px solid var(--cob)}
+.per[data-c="1"] .hd{border-top:5px solid var(--cor)}
+.per[data-c="2"] .hd{border-top:5px solid var(--amb)}
+.per[data-c="0"] .av{background:var(--cob);color:#fff}
+.per[data-c="1"] .av{background:var(--cor);color:#fff}
+.per[data-c="2"] .av{background:var(--amb)}
+
+/* creative */
+.creat-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:22px;align-items:start}
+@media(max-width:980px){.creat-grid{grid-template-columns:1fr}}
+.vartabs{display:flex;gap:6px;margin-bottom:14px}
+.vartab{font-family:var(--mono);font-size:12px;font-weight:700;border:2px solid var(--line2);background:var(--bg2);color:var(--mut);padding:9px 16px;cursor:pointer;transition:.12s}
+.vartab.on{background:var(--cor);border-color:var(--cor);color:#fff}
+.vartab .ctr{display:block;font-size:9px;color:var(--dim);font-weight:400;margin-top:2px}
+.vartab.on .ctr{color:rgba(255,255,255,.8)}
+.adprev{background:var(--paper);color:var(--p-ink);box-shadow:var(--sh-p);padding:26px 26px 22px;position:relative;min-height:240px;display:flex;flex-direction:column;justify-content:space-between}
+.adprev .fmt{position:absolute;top:12px;right:14px;font-family:var(--mono);font-size:9px;color:var(--p-mut);letter-spacing:.1em;text-transform:uppercase}
+.adprev .ey{font-family:var(--mono);font-size:10px;color:var(--cor);letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.adprev .hl{font-family:var(--disp);font-size:clamp(26px,4vw,40px);line-height:.92;letter-spacing:.005em;text-transform:uppercase;margin:10px 0}
+.adprev .bd{font-size:14.5px;color:var(--p-mut);max-width:34ch}
+.adprev .cta{align-self:flex-start;margin-top:16px;background:var(--p-ink);color:var(--paper);font-family:var(--mono);font-size:12px;font-weight:700;padding:10px 18px;letter-spacing:.05em;text-transform:uppercase}
+.adprev .brandtag{position:absolute;bottom:12px;right:14px;font-family:var(--disp);font-size:13px;color:var(--p-ink);opacity:.5;letter-spacing:.05em}
+.creat-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.creat-meta .m{border:1.5px solid var(--line2);padding:12px;background:var(--bg2)}
+.creat-meta .m .k{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase}
+.creat-meta .m .v{font-family:var(--disp);font-size:22px;letter-spacing:.01em;margin-top:3px}
+.creat-meta .m .v.cob{color:var(--cob)}.creat-meta .m .v.cor{color:var(--cor)}.creat-meta .m .v.ok{color:var(--ok)}
+.vbrief{background:var(--panel);border:2px solid var(--line2);padding:20px}
+.vbrief h4{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin-bottom:14px}
+.vbrief .vb{margin-bottom:12px}
+.vbrief .vb .k{font-family:var(--mono);font-size:9.5px;color:var(--cob);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
+.vbrief .vb .v{font-size:13px;color:var(--mut)}
+.fmtrow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
+@media(max-width:560px){.fmtrow{grid-template-columns:1fr}}
+.fmt{border:2px solid var(--line2);background:var(--bg2);overflow:hidden;cursor:pointer;transition:.15s}
+.fmt:hover{border-color:var(--cob);transform:translateY(-3px)}
+.fmt img{width:100%;height:120px;object-fit:cover;display:block;filter:saturate(1.05)}
+.fmt .cap{padding:9px 11px;font-family:var(--mono);font-size:10px;color:var(--mut);display:flex;justify-content:space-between}
+.fmt .cap b{color:var(--ink)}
+
+/* media plan */
+.media-top{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+@media(max-width:760px){.media-top{grid-template-columns:1fr 1fr}}
+.kpi{background:var(--panel);border:2px solid var(--line2);padding:16px 18px;position:relative;overflow:hidden}
+.kpi .k{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase}
+.kpi .v{font-family:var(--disp);font-size:clamp(26px,3.4vw,40px);letter-spacing:.01em;line-height:.95;margin-top:5px}
+.kpi .v .u{font-family:var(--mono);font-size:13px;color:var(--mut);font-weight:400}
+.kpi .d{font-family:var(--mono);font-size:10.5px;margin-top:4px}
+.kpi .d.up{color:var(--ok)}.kpi .d.dn{color:var(--cor)}
+.kpi::after{content:"";position:absolute;right:-10px;bottom:-10px;width:54px;height:54px;border:2px solid var(--line);border-radius:50%}
+.kpi.cob .v{color:var(--cob)}.kpi.cor .v{color:var(--cor)}.kpi.amb .v{color:var(--amb)}.kpi.ok .v{color:var(--ok)}
+.chtable{background:var(--panel);border:2px solid var(--line2)}
+.chrow{display:grid;grid-template-columns:170px 1fr 92px;gap:18px;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+@media(max-width:760px){.chrow{grid-template-columns:1fr;gap:10px}.chrow .chshare{text-align:left!important}}
+.chrow:last-child{border-bottom:0}
+.chrow .chname{display:flex;align-items:center;gap:11px}
+.chrow .chname .sw{width:14px;height:14px;border:1.5px solid #000;flex:none}
+.chrow .chname b{font-family:var(--mono);font-size:13px;font-weight:700}
+.chrow .chname small{display:block;color:var(--dim);font-size:9.5px;letter-spacing:.04em}
+.chrow .chmid{display:flex;align-items:center;gap:14px}
+.chrow .chmid .rng{flex:1}
+.chrow .chmid .bars{display:flex;gap:3px;align-items:flex-end;height:30px;flex:none;width:90px}
+.chrow .chmid .bars i{flex:1;background:var(--panel3);transition:height .4s}
+.chrow .chmid .bars i.lit{background:var(--cob)}
+.chrow .chshare{font-family:var(--mono);font-size:18px;font-weight:700;text-align:right;min-width:60px}
+.chrow .chshare .pct{color:var(--amb)}
+.chmetrics{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px dashed var(--line);margin-top:12px;padding-top:10px}
+@media(max-width:520px){.chmetrics{grid-template-columns:1fr 1fr;gap:8px}}
+.chmetrics .cm{font-family:var(--mono)}
+.chmetrics .cm .k{font-size:8.5px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.chmetrics .cm .v{font-size:12px;color:var(--mut);margin-top:2px}
+.chrow.best{background:rgba(39,211,162,.06)}
+.chrow.best .chname b::after{content:"★ BEST";font-size:8px;color:var(--ok);margin-left:8px;letter-spacing:.1em}
+
+/* simulation */
+.sim-ctrl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;background:var(--panel);border:2px solid var(--line2);padding:14px 16px}
+.sim-ctrl .grp{display:flex;gap:6px;align-items:center}
+.sim-ctrl .sp{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-right:4px}
+.sbtn{font-family:var(--mono);font-size:12px;font-weight:700;border:2px solid #000;background:var(--panel2);color:var(--ink);padding:9px 14px;cursor:pointer;box-shadow:var(--sh);transition:.1s}
+.sbtn:hover{background:var(--panel3)}
+.sbtn:active{transform:translate(2px,2px);box-shadow:none}
+.sbtn.on{background:var(--ok);color:#000}
+.sbtn.spd.on{background:var(--amb);color:#000}
+.sbtn.cor{background:var(--cor);color:#fff}
+.sim-ctrl .clock{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--amb);font-weight:700}
+.sim-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:20px;align-items:start}
+@media(max-width:900px){.sim-grid{grid-template-columns:1fr}}
+.chartbox{background:var(--panel);border:2px solid var(--line2);padding:18px}
+.chartbox .leg{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:10.5px;color:var(--mut);margin-bottom:10px}
+.chartbox .leg .it{display:flex;align-items:center;gap:6px}
+.chartbox .leg .it i{width:14px;height:3px}
+#simchart{width:100%;height:280px;display:block;cursor:crosshair}
+.sim-kpis{display:flex;flex-direction:column;gap:12px}
+.sim-kpi{background:var(--panel);border:2px solid var(--line2);padding:16px 18px;display:flex;justify-content:space-between;align-items:center}
+.sim-kpi .k{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase}
+.sim-kpi .v{font-family:var(--disp);font-size:30px;letter-spacing:.01em;line-height:1}
+.sim-kpi .v.cob{color:var(--cob)}.sim-kpi .v.cor{color:var(--cor)}.sim-kpi .v.amb{color:var(--amb)}.sim-kpi .v.ok{color:var(--ok)}
+.sim-kpi .left .sub{font-family:var(--mono);font-size:10px;color:var(--mut);margin-top:3px}
+
+/* report */
+.rep-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:900px){.rep-grid{grid-template-columns:1fr}}
+.rep-card{background:var(--panel);border:2px solid var(--line2);padding:22px}
+.rep-card.full{grid-column:1/-1}
+.rep-card h4{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.rep-card h4 .n{color:var(--cor)}
+.verdict{font-family:var(--disp);font-size:clamp(24px,3.5vw,40px);line-height:.98;letter-spacing:.005em;text-transform:uppercase}
+.verdict em{font-style:normal;color:var(--ok)}
+.verdict.bad em{color:var(--cor)}
+.rep-list{list-style:none;display:flex;flex-direction:column;gap:10px}
+.rep-list li{font-size:13.5px;color:var(--mut);padding-left:20px;position:relative}
+.rep-list li::before{content:"→";position:absolute;left:0;color:var(--cob);font-family:var(--mono)}
+.rep-list li b{color:var(--ink)}
+.roas-bar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.roas-bar .nm{font-family:var(--mono);font-size:11px;color:var(--mut);min-width:96px}
+.roas-bar .tr{flex:1;height:10px;background:var(--bg2);border:1px solid var(--line);position:relative}
+.roas-bar .tr i{position:absolute;left:0;top:0;bottom:0;background:var(--cob);transition:width 1s}
+.roas-bar .tr i.ok{background:var(--ok)}.roas-bar .tr i.cor{background:var(--cor)}
+.roas-bar .sc{font-family:var(--mono);font-size:12px;min-width:46px;text-align:right}
+
+/* chat console */
+#console{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--bg2);border-top:2px solid var(--cob);box-shadow:0 -8px 30px rgba(0,0,0,.5)}
+#console .bar{display:flex;align-items:center;gap:12px;padding:8px 34px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px}
+@media(max-width:680px){#console .bar{padding:8px 16px}}
+#console .bar .who{color:var(--amb);font-weight:700;letter-spacing:.06em}
+#console .bar .who i{color:var(--ok);animation:bk 1.2s steps(2) infinite}
+#console .bar .hintc{color:var(--dim);margin-left:auto}
+#console .bar .togc{background:var(--panel3);border:1.5px solid var(--line2);color:var(--mut);font-family:var(--mono);font-size:10px;padding:4px 10px;cursor:pointer}
+#console .feed{max-height:0;overflow:hidden;transition:max-height .35s ease}
+#console.open .feed{max-height:240px}
+#console .feedin{height:240px;overflow-y:auto;padding:12px 34px;display:flex;flex-direction:column;gap:8px}
+@media(max-width:680px){#console .feedin{padding:12px 16px}}
+.msg{max-width:78%;font-size:13.5px;line-height:1.5;padding:9px 13px;border:1.5px solid var(--line2)}
+.msg.bot{align-self:flex-start;background:var(--panel);color:var(--ink);border-left:3px solid var(--cob)}
+.msg.bot .nm{font-family:var(--mono);font-size:9.5px;color:var(--cob);letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:3px}
+.msg.me{align-self:flex-end;background:var(--cob);color:#fff;border-color:var(--cob)}
+.msg.bot b{color:var(--amb)}
+.msg .typing{display:inline-flex;gap:3px}
+.msg .typing i{width:5px;height:5px;background:var(--mut);border-radius:50%;animation:tp 1s infinite}
+.msg .typing i:nth-child(2){animation-delay:.15s}.msg .typing i:nth-child(3){animation-delay:.3s}
+@keyframes tp{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+#console .inputrow{display:flex;gap:10px;padding:10px 34px;align-items:center}
+@media(max-width:680px){#console .inputrow{padding:10px 16px}}
+#console .prompt{font-family:var(--mono);color:var(--cor);font-size:14px;font-weight:700}
+#console input{flex:1;background:transparent;border:0;color:var(--ink);font-family:var(--mono);font-size:13.5px;padding:8px 0}
+#console input:focus{outline:none}
+#console input::placeholder{color:var(--dim)}
+#console .send{font-family:var(--mono);font-size:12px;font-weight:700;background:var(--cor);color:#fff;border:2px solid #000;padding:9px 18px;cursor:pointer;box-shadow:var(--sh)}
+#console .send:active{transform:translate(2px,2px);box-shadow:none}
+.quickcmds{display:flex;gap:6px;flex-wrap:wrap;padding:0 34px 10px}
+@media(max-width:680px){.quickcmds{padding:0 16px 10px}}
+.qcmd{font-family:var(--mono);font-size:10px;border:1px solid var(--line2);background:var(--panel);color:var(--mut);padding:5px 9px;cursor:pointer;transition:.12s}
+.qcmd:hover{color:var(--ink);border-color:var(--cob)}
+
+/* toasts */
+#toasts{position:fixed;top:46px;right:18px;z-index:95;display:flex;flex-direction:column;gap:10px;max-width:320px}
+.toast{background:var(--panel);border:2px solid var(--cob);box-shadow:var(--sh);padding:13px 16px;font-size:13px;color:var(--ink);animation:tin .3s;display:flex;gap:10px;align-items:flex-start}
+.toast.ok{border-color:var(--ok)}.toast.cor{border-color:var(--cor)}.toast.amb{border-color:var(--amb)}
+.toast .ti{font-family:var(--mono);font-weight:700}
+.toast.ok .ti{color:var(--ok)}.toast.cor .ti{color:var(--cor)}.toast.amb .ti{color:var(--amb)}
+@keyframes tin{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s,transform .7s}
+.reveal.in{opacity:1;transform:none}
+</style>
+</head>
+<body>
+<canvas id="amb"></canvas>
+<div id="scan"></div>
+<div id="prog"></div>
+<div id="toasts"></div>
+
+<div class="shell">
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="lab"><i></i>RTB FEED</div>
+  <div class="mq"><div class="tr" id="tk"></div></div>
+</div>
+
+<!-- MASTHEAD -->
+<header class="mast">
+  <div class="wrap">
+    <div class="row">
+      <div class="brand">
+        <div class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M3 20V5l5 8 4-8 4 8 5-8v15" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg></div>
+        <div>
+          <h1>MADISON<em>//</em>AI</h1>
+          <div class="sub">Autonomous Ad Agency · full-stack campaign engine</div>
+        </div>
+      </div>
+      <div class="status">
+        <span class="chip live"><i></i>5 DEPTS ONLINE</span>
+        <span class="chip">BRIEFS RUN <b id="stRuns">0</b></span>
+        <span class="chip warn" id="stState">AWAITING BRIEF</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ BRIEF SCREEN ============ -->
+<section id="briefscreen">
+  <div class="wrap">
+    <div class="brief-grid">
+      <div class="brief-intro reveal">
+        <div class="eyebrow">no humans on the retainer</div>
+        <h2>Загрузи бриф.<br><span class="o">Получи агентство.</span></h2>
+        <p>Стратег, медиабайер, копирайтер, арт-директор и аналитик работают параллельно. На выходе — <b>позиционирование, персоны, креативы, медиаплан с бюджетом и живая симуляция кампании</b>. Управляй голосом через консоль снизу.</p>
+        <div class="dept-strip">
+          <div class="d"><div class="ic">◈</div><div class="nm">Strategy</div><div class="rl">позиция · big idea</div></div>
+          <div class="d"><div class="ic">◎</div><div class="nm">Audience</div><div class="rl">персоны · инсайты</div></div>
+          <div class="d"><div class="ic">✦</div><div class="nm">Creative</div><div class="rl">копи · визуал</div></div>
+          <div class="d"><div class="ic">▤</div><div class="nm">Media</div><div class="rl">байинг · бюджет</div></div>
+          <div class="d"><div class="ic">◷</div><div class="nm">Analytics</div><div class="rl">прогноз · ROAS</div></div>
+        </div>
+      </div>
+
+      <div class="formcard reveal">
+        <div class="bar"><span class="dot" style="background:var(--cor)"></span><span class="dot" style="background:var(--amb)"></span><span class="dot" style="background:var(--ok)"></span>CLIENT BRIEF<span class="r">form · 01</span></div>
+        <div class="body">
+          <div class="fld">
+            <label>Продукт / услуга <span class="req">*</span></label>
+            <input class="inp" id="bProduct" placeholder="напр. умная термо-кружка с app" value="умная термо-кружка HEAT//OS с приложением">
+          </div>
+          <div class="fld">
+            <label>Цель кампании <span class="req">*</span></label>
+            <select class="sel" id="bGoal">
+              <option value="awareness">Охват / узнаваемость (Awareness)</option>
+              <option value="leads" selected>Лиды / заявки (Leads)</option>
+              <option value="sales">Продажи / ROAS (Sales)</option>
+              <option value="installs">Установки приложения (Installs)</option>
+            </select>
+          </div>
+          <div class="row2">
+            <div class="fld">
+              <label>Бюджет, $ <span class="req">*</span></label>
+              <input class="inp mono" id="bBudget" type="number" min="500" step="500" value="40000">
+            </div>
+            <div class="fld">
+              <label>Регион</label>
+              <select class="sel" id="bRegion">
+                <option>RU / CIS</option><option>EU</option><option>US</option><option>Global</option><option>MEA</option>
+              </select>
+            </div>
+          </div>
+          <div class="row2">
+            <div class="fld">
+              <label>Длительность, нед</label>
+              <div class="sldrow"><input class="rng" id="bWeeks" type="range" min="2" max="24" value="8"><span class="v" id="bWeeksV">8</span></div>
+            </div>
+            <div class="fld">
+              <label>Средний чек, $</label>
+              <div class="sldrow"><input class="rng" id="bAov" type="range" min="5" max="500" value="65"><span class="v" id="bAovV">$65</span></div>
+            </div>
+          </div>
+          <div class="fld">
+            <label>Тон голоса</label>
+            <div class="chips" id="bTone">
+              <span class="chipb on" data-t="bold">дерзкий</span>
+              <span class="chipb" data-t="friendly">дружелюбный</span>
+              <span class="chipb" data-t="premium">премиум</span>
+              <span class="chipb" data-t="expert">экспертный</span>
+              <span class="chipb" data-t="playful">игривый</span>
+            </div>
+          </div>
+          <div class="fld" style="margin-bottom:8px">
+            <label>Контекст / задача (опц.)</label>
+            <textarea class="ta" id="bCtx" placeholder="ЦА, конкуренты, запретные темы, оффер…">Запуск DTC. ЦА — офисные работники 25-40, ценят дизайн и гаджеты. Конкуренты — Ember, Stanley. Оффер: держит температуру 12ч + трекинг привычек.</textarea>
+          </div>
+          <button class="runbtn" id="runBtn">▶ Запустить агентство</button>
+          <div class="hint"><b>СОВЕТ:</b> после запуска управляй кампанией из консоли снизу — пиши «тикток 35%», «тон премиум», «оптимизируй», «цель продажи».</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WORKING OVERLAY ============ -->
+<div id="working">
+  <div class="workbox">
+    <div class="bar"><span class="dot"></span>AGENCY PIPELINE · processing brief</div>
+    <div class="body">
+      <h3>Департаменты в работе</h3>
+      <div class="sub" id="workSub">распределяем бриф по отделам…</div>
+      <div id="deptlines"></div>
+      <div class="worklog" id="worklog"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ WAR ROOM ============ -->
+<section id="warroom">
+  <div class="wrap">
+    <div class="briefbar" id="briefbar"></div>
+    <div class="tabs" id="tabs">
+      <button class="tab locked" data-p="strategy">Strategy<span class="badge"></span></button>
+      <button class="tab locked" data-p="audience">Audience<span class="badge"></span></button>
+      <button class="tab locked" data-p="creative">Creative<span class="badge"></span></button>
+      <button class="tab locked" data-p="media">Media<span class="badge"></span></button>
+      <button class="tab locked" data-p="sim">Simulation<span class="badge"></span></button>
+      <button class="tab locked" data-p="report">Report<span class="badge"></span></button>
+    </div>
+
+    <!-- STRATEGY -->
+    <div class="pane" id="pane-strategy">
+      <div class="sec-h"><div class="t"><small>Department 01 · Strategy</small>Позиционирование и big idea</div>
+        <div class="act"><button class="btn ghost" data-copy="strategy">COPY STRATEGY</button></div></div>
+      <div class="strat-grid">
+        <div>
+          <div class="card reveal" style="margin-bottom:18px">
+            <div class="clab"><span class="n">01</span> BIG IDEA</div>
+            <div class="bigidea" id="sBigIdea"></div>
+            <div class="posit" id="sPosit"></div>
+          </div>
+          <div class="card reveal">
+            <div class="clab"><span class="n">02</span> BRAND PILLARS</div>
+            <div class="pillars" id="sPillars"></div>
+          </div>
+        </div>
+        <div>
+          <div class="card reveal" style="margin-bottom:18px">
+            <div class="clab"><span class="n">03</span> TAGLINE CANDIDATES · клик = копировать</div>
+            <div class="slogans" id="sSlogans"></div>
+          </div>
+          <div class="card reveal">
+            <div class="clab"><span class="n">04</span> STRATEGY BRIEF</div>
+            <div class="kvlist" id="sKv"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AUDIENCE -->
+    <div class="pane" id="pane-audience">
+      <div class="sec-h"><div class="t"><small>Department 02 · Audience</small>Три целевые персоны</div>
+        <div class="act"><button class="btn ghost" data-copy="audience">COPY PERSONAS</button></div></div>
+      <div class="pers" id="persGrid"></div>
+    </div>
+
+    <!-- CREATIVE -->
+    <div class="pane" id="pane-creative">
+      <div class="sec-h"><div class="t"><small>Department 03 · Creative</small>Креативы и визуальный бриф</div>
+        <div class="act"><button class="btn cob" id="promoteBtn">PROMOTE WINNER</button></div></div>
+      <div class="creat-grid">
+        <div>
+          <div class="vartabs" id="vartabs"></div>
+          <div class="adprev" id="adprev"></div>
+          <div class="creat-meta" id="creatMeta"></div>
+        </div>
+        <div>
+          <div class="vbrief">
+            <h4>Art-direction brief · активный вариант</h4>
+            <div id="vbriefBody"></div>
+          </div>
+          <div class="fmtrow" id="fmtrow"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MEDIA -->
+    <div class="pane" id="pane-media">
+      <div class="sec-h"><div class="t"><small>Department 04 · Media buying</small>Медиаплан и распределение бюджета</div>
+        <div class="act"><button class="btn ghost" id="resetMedia">RESET MIX</button><button class="btn cob" data-copy="media">COPY PLAN</button></div></div>
+      <div class="media-top" id="mediaTop"></div>
+      <div class="chtable" id="chtable"></div>
+    </div>
+
+    <!-- SIMULATION -->
+    <div class="pane" id="pane-sim">
+      <div class="sec-h"><div class="t"><small>Department 05 · Analytics</small>Живая симуляция кампании</div></div>
+      <div class="sim-ctrl">
+        <div class="grp"><button class="sbtn on" id="simPlay">▶ PLAY</button><button class="sbtn" id="simPause">❚❚ PAUSE</button><button class="sbtn" id="simReset">↺ RESET</button></div>
+        <div class="grp"><span class="sp">speed</span><button class="sbtn spd on" data-spd="1">1×</button><button class="sbtn spd" data-spd="2">2×</button><button class="sbtn spd" data-spd="4">4×</button></div>
+        <button class="sbtn cor" id="optBtn">⚡ AUTO-OPTIMIZE</button>
+        <div class="clock" id="simClock">DAY 0 / 0</div>
+      </div>
+      <div class="sim-grid">
+        <div class="chartbox">
+          <div class="leg"><div class="it"><i style="background:var(--cob)"></i>conversions</div><div class="it"><i style="background:var(--cor)"></i>spend $</div><div class="it"><i style="background:var(--amb)"></i>ROAS</div></div>
+          <canvas id="simchart"></canvas>
+        </div>
+        <div class="sim-kpis" id="simKpis"></div>
+      </div>
+    </div>
+
+    <!-- REPORT -->
+    <div class="pane" id="pane-report">
+      <div class="sec-h"><div class="t"><small>Account Director · Final</small>Итоговый отчёт и рекомендации</div>
+        <div class="act"><button class="btn cor" data-copy="report">COPY REPORT</button></div></div>
+      <div class="rep-grid" id="repGrid"></div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<!-- CHAT CONSOLE -->
+<div id="console">
+  <div class="bar"><span class="who"><i>●</i> ACCOUNT DIRECTOR</span><span style="color:var(--dim)">· ask anything, command anything</span><span class="hintc">«тикток 35%» · «тон премиум» · «оптимизируй» · «help»</span><button class="togc" id="togC">▲ EXPAND</button></div>
+  <div class="feed"><div class="feedin" id="feed"></div></div>
+  <div class="quickcmds" id="quickcmds"></div>
+  <div class="inputrow"><span class="prompt">›</span><input id="cInput" placeholder="напиши директорию агентству… (Enter)" autocomplete="off"><button class="send" id="cSend">SEND</button></div>
+</div>
+
+<script>
+/* ============================================================
+   MADISON//AI — autonomous ad agency console
+   single-file, vanilla. shared state in APP.
+============================================================ */
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const fmtN=n=>{n=Math.round(n);return n.toLocaleString('en-US');};
+const fmtK=n=>{n=Math.round(n);if(n>=1e6)return (n/1e6).toFixed(2)+'M';if(n>=1e3)return (n/1e3).toFixed(1)+'K';return ''+n;};
+const fmtM=n=>{if(n>=1e3)return '$'+(n/1e3).toFixed(1)+'K';return '$'+Math.round(n);};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+
+/* ---------- format mockups (generated) ---------- */
+const FORMATS=[
+  {id:'ooh',name:'OOH / Billboard',img:'https://image.qwenlm.ai/public_source/6cd984e4-8e00-4c47-8867-989092fe4ea4/1ff69c54a-694b-41a8-98a8-21a81d938199.png',ratio:'6:4'},
+  {id:'social',name:'Social Feed',img:'https://image.qwenlm.ai/public_source/6cd984e4-8e00-4c47-8867-989092fe4ea4/13e54c25f-e054-4027-9077-90e8d76fa238.png',ratio:'1:1'},
+  {id:'story',name:'Story / Video',img:'https://image.qwenlm.ai/public_source/6cd984e4-8e00-4c47-8867-989092fe4ea4/16bec305d-7d42-43ba-8af4-7645cdaac53a.png',ratio:'9:16'}
+];
+
+/* ---------- channel library ---------- */
+const CHANNELS=[
+  {id:'meta',name:'Meta Ads',sub:'FB + IG feed/reels',cpm:9.5,cpc:0.62,ctr:0.013,cvr:0.030,color:'#2d5bff',fmt:'social'},
+  {id:'search',name:'Google Search',sub:'intent · high CVR',cpm:38,cpc:1.45,ctr:0.062,cvr:0.075,color:'#27d3a2',fmt:'social'},
+  {id:'youtube',name:'YouTube',sub:'video · reach+consider',cpm:14,cpc:0.34,ctr:0.009,cvr:0.020,color:'#ff5436',fmt:'story'},
+  {id:'tiktok',name:'TikTok',sub:'spark · top-funnel',cpm:7.2,cpc:0.40,ctr:0.011,cvr:0.018,color:'#ffc23d',fmt:'story'},
+  {id:'prog',name:'Programmatic',sub:'display · retarget',cpm:4.5,cpc:0.28,ctr:0.006,cvr:0.022,color:'#9b6bff',fmt:'social'},
+  {id:'ooh',name:'OOH / DOOH',sub:'brand · geo',cpm:3.0,cpc:0,ctr:0.0015,cvr:0.004,color:'#27d3a2',fmt:'ooh'},
+  {id:'email',name:'Email / CRM',sub:'owned · cheapest',cpm:1.2,cpc:0.10,ctr:0.035,cvr:0.060,color:'#ff8a3d',fmt:'social'}
+];
+
+/* ---------- goal profiles ---------- */
+const GOALS={
+  awareness:{label:'Awareness',focus:'Reach / CPM',aovMul:0,
+    mix:{meta:22,search:6,youtube:24,tiktok:24,prog:10,ooh:12,email:2},cvrMul:0.5,reachMul:1.35},
+  leads:{label:'Leads',focus:'CPL / lead volume',aovMul:0,
+    mix:{meta:30,search:30,youtube:8,tiktok:10,prog:12,ooh:2,email:8},cvrMul:1.15,reachMul:1.0},
+  sales:{label:'Sales',focus:'ROAS / revenue',aovMul:1,
+    mix:{meta:28,search:34,youtube:8,tiktok:8,prog:16,ooh:0,email:6},cvrMul:1.3,reachMul:0.9},
+  installs:{label:'Installs',focus:'CPI / installs',aovMul:0,
+    mix:{meta:30,search:14,youtube:14,tiktok:30,prog:8,ooh:0,email:4},cvrMul:1.0,reachMul:1.1}
+};
+
+/* ---------- tone libraries ---------- */
+const TONES={
+  bold:{name:'дерзкий',hl:['Хватит пить остывшее.','Твой кофе сдался. Ты — нет.','Остыл только конкурент.','Не кружка. Оружие продуктивности.'],
+    body:['Держит температуру 12 часов и считает твои привычки. Приложение в комплекте, оправдания — нет.','HEAT//OS не уговаривает. Он работает, пока ты решаешь, достоин ли ты второго глотка.'],
+    cta:['ЗАБЕРИ СВОЮ','ВКЛЮЧИ ЖАРУ','ХВАТИТ ТЕРПЕТЬ'],adj:'резкий, уверенный, без извинений'},
+  friendly:{name:'дружелюбный',hl:['Твой кофе — тёплый весь день.','Забота в каждом глотке.','Мы подумали о твоём утре.','Маленький ритуал большого дня.'],
+    body:['HEAT//OS держит тепло 12 часов и мягко напоминает, когда пора сделать паузу. Потому что ты заслужил.','Просто хорошая кружка, которая помнит, как ты любишь. И приложение, которое подскажет привычки.'],
+    cta:['ПОПРОБОВАТЬ','ДАВАЙ НАЧНЁМ','ХОЧУ ТАКУЮ'],adj:'тёплый, поддерживающий, на «ты»'},
+  premium:{name:'премиум',hl:['Температура как дисциплина.','Инженерия тишины и тепла.','Объект, а не аксессуар.','Деталь, которую замечают.'],
+    body:['HEAT//OS — прецизионный термо-контроль на 12 часов и аналитика ритуалов в приложении. Создан для тех, кто выбирает осознанно.','Авиационный алюминий, вакуумная камера, бесшумное приложение. Стандарт, к которому возвращаются.'],
+    cta:['ОФОРМИТЬ','ОТКРЫТЬ КОЛЛЕКЦИЮ','ПРИСОЕДИНИТЬСЯ'],adj:'сдержанный, статусный, лаконичный'},
+  expert:{name:'экспертный',hl:['12 часов. ±1 градус.','Термодинамика на твоей стороне.','Данные вместо догадок.','Контроль, который можно измерить.'],
+    body:['HEAT//OS стабилизирует температуру до 12 часов и синхронизирует телеметрию привычек с приложением. Никакой магии — только инженерия.','Вакуумная изоляция, калиброванный датчик, открытая аналитика в app. Мы показываем цифры, а не обещания.'],
+    cta:['ИЗУЧИТЬ СПЕЦИФИКАЦИЮ','СРАВНИТЬ','РАССЧИТАТЬ'],adj:'фактологичный, точный, доказательный'},
+  playful:{name:'игривый',hl:['Кружка с характером (и Wi-Fi).','Не остывает. Не сдаётся. Не скучает.','Твой кофе завёл дневник.','Горячо. В хорошем смысле.'],
+    body:['HEAT//OS греет 12 часов и ведёт дневник твоих кофейных подвигов в приложении. Спойлер: ты пьёшь больше, чем думаешь.','Кружка, которая шлёт уведомления и держит температуру. Да, мы серьёзно. Нет, мы не остановимся.'],
+    cta:['ДАЙ ДВЕ','ХОЧУ ИГРУШКУ','ПОГНАЛИ'],adj:'лёгкий, ироничный, с юмором'}
+};
+
+/* ---------- persona templates ---------- */
+const PERSONAS=[
+  {nm:'Амбициозный профи',rl:'27-35 · офис / гибрид · средний+',av:'AP',
+    pain:'Нет времени, кофе остывает на созвонах; хочет статусную вещь, а не «ещё одну кружку».',
+    insight:'«Я покупаю не кружку — я покупаю контроль над хаосом дня».',
+    channels:['Meta','Search','Email'],trigger:'дедлайн, утро, командировка'},
+  {nm:'Гик-оптимизатор',rl:'24-40 · tech · данные решает всё',av:'GO',
+    pain:'Ненавидит маркетинговую воду; хочет спецификации, метрики, интеграции.',
+    insight:'«Покажи мне график удержания тепла — и я сам продам это друзьям».',
+    channels:['Search','YouTube','Programmatic'],trigger:'обзор, сравнение, апгрейд сетапа'},
+  {nm:'Эстет-минималист',rl:'25-38 · дизайн / креатив · насмотренность',av:'EM',
+    pain:'Вещь должна выглядеть как объект, а не как гаджет; боится визуального шума.',
+    insight:'«Если это красиво стоит на столе — я уже на полпути к покупке».',
+    channels:['TikTok','Meta','OOH'],trigger:'лента, интерьер, рекомендация друга'}
+];
+
+/* ---------- APP STATE ---------- */
+const APP={
+  brief:{product:'',goal:'leads',budget:40000,region:'RU / CIS',tone:'bold',weeks:8,aov:65,ctx:''},
+  shares:{}, strategy:null, personas:null, creatives:null, varIdx:0,
+  sim:{running:false,speed:1,day:0,imp:0,clk:0,spend:0,conv:0,rev:0,reach:0,series:[],eff:1,timer:null},
+  runs:0, unlocked:{}
+};
+
+/* ---------- derived forecast ---------- */
+function channelMetrics(ch){
+  const g=GOALS[APP.brief.goal];
+  const spend=APP.brief.budget*(APP.shares[ch.id]||0)/100;
+  const impr=ch.cpm>0?spend/ch.cpm*1000:0;
+  const clk=impr*ch.ctr;
+  const cvr=ch.cvr*g.cvrMul;
+  const conv=clk*cvr;
+  const reach=impr*0.62*g.reachMul;
+  const cpr=conv>0?spend/conv:0;
+  const rev=conv*APP.brief.aov*(g.aovMul?1:0);
+  return {spend,impr,clk,conv,reach,cpr,rev};
+}
+function totals(){
+  let t={spend:0,impr:0,clk:0,conv:0,reach:0,rev:0};
+  CHANNELS.forEach(ch=>{const m=channelMetrics(ch);for(const k in t)t[k]+=m[k];});
+  // dedupe reach across channels
+  t.reach=t.reach*0.78;
+  t.cpm=t.impr>0?t.spend/t.impr*1000:0;
+  t.cpc=t.clk>0?t.spend/t.clk:0;
+  t.ctr=t.impr>0?t.clk/t.impr:0;
+  t.cvr=t.clk>0?t.conv/t.clk:0;
+  t.roas=t.spend>0?t.rev/t.spend:0;
+  t.cpa=t.conv>0?t.spend/t.conv:0;
+  return t;
+}
+
+/* ---------- share normalization ---------- */
+function initShares(){APP.shares={};const m=GOALS[APP.brief.goal].mix;CHANNELS.forEach(c=>APP.shares[c.id]=m[c.id]||0);}
+function setShare(id,val){
+  val=clamp(Math.round(val),0,100);
+  const others=CHANNELS.filter(c=>c.id!==id);
+  const remain=100-val;
+  const sumO=others.reduce((s,c)=>s+(APP.shares[c.id]||0),0);
+  APP.shares[id]=val;
+  if(sumO>0){others.forEach(c=>APP.shares[c.id]=(APP.shares[c.id]||0)/sumO*remain);}
+  else{const e=remain/others.length;others.forEach(c=>APP.shares[c.id]=e);}
+  // round fix
+  let r=CHANNELS.map(c=>Math.round(APP.shares[c.id]));let diff=100-r.reduce((a,b)=>a+b,0);
+  r[0]+=diff;CHANNELS.forEach((c,i)=>APP.shares[c.id]=Math.max(0,r[i]));
+}
+
+/* ============================================================
+   CONTENT GENERATION (template-based, personalized)
+============================================================ */
+function genStrategy(){
+  const t=TONES[APP.brief.brief?APP.brief.tone:APP.brief.tone]||TONES.bold;
+  const P=APP.brief.product||'продукт';
+  const goal=GOALS[APP.brief.goal];
+  const bigIdeas={
+    awareness:['Категория начинается с <em>'+shortP(P)+'</em>.','Заметить — значит <em>запомнить</em>.','Мы не кричим. Мы <em>становимся нормой</em>.'],
+    leads:['Оставь заявку — <em>забери контроль</em>.','Тёплый лид начинается с <em>тёплого оффера</em>.','Меньше трения — <em>больше заявок</em>.'],
+    sales:['Каждый доллар возвращается <em>с процентами</em>.','Покупка — это <em>решение, а не импульс</em>.','ROAS как <em>спортивная дисциплина</em>.'],
+    installs:['Приложение, которое <em>остаётся на экране</em>.','Скачал — <em>привык</em>.','Первый тап — <em>начало ритуала</em>.']
+  };
+  const slogans=[t.hl[0],t.hl[1],t.hl[2]].map((h,i)=>({t:h,tag:'tagline '+(i+1)+' · tone: '+t.name}));
+  const pillars=[
+    {n:'Функция',d:'12 часов термо-контроля + телеметрия привычек в app — ядро, которое нельзя подделать.'},
+    {n:'Эмоция',d:'Ощущение контроля и заботы о себе в хаотичном дне — '+t.adj+'.'},
+    {n:'Статус',d:'Объект, который хочется поставить на стол и показать — дизайн как социальный сигнал.'},
+    {n:'Доказательство',d:'Цифры удержания, отзывы, сравнения — закрываем возражения до того, как они прозвучат.'}
+  ];
+  return {
+    bigIdea:pick(bigIdeas[APP.brief.goal]||bigIdeas.leads),
+    posit:'Мы позиционируем <b>'+P+'</b> не как «ещё одну кружку», а как <b>инструмент контроля над днём</b> — для людей, которые считают своё время и свой комфорт. Цель «'+goal.label+'» диктует фокус на <b>'+goal.focus+'</b>.',
+    slogans,pillars,
+    kv:[['Цель кампании',goal.label+' → '+goal.focus],['Тон голоса',t.name+' ('+t.adj+')'],['Регион',APP.brief.region],['Бюджет',fmtM(APP.brief.budget)+' / '+APP.brief.weeks+' нед'],['ЦА-ядро','25-40 · urban · design/tech-minded'],['Главное возражение','«зачем платить больше за кружку»'],['Ответ на возражение','функция + данные + статус, а не посуда']]
+  };
+}
+function shortP(p){p=(p||'').trim();const w=p.split(/\s+/);return w.length>3?w.slice(0,3).join(' ')+'…':p;}
+function genPersonas(){
+  return PERSONAS.map(p=>({...p,quote:p.insight}));
+}
+function genCreatives(){
+  const t=TONES[APP.brief.tone]||TONES.bold;
+  const P=APP.brief.product||'продукт';
+  const variants=[
+    {id:'A',angle:'функция',hl:t.hl[0],body:t.body[0],cta:t.cta[0],fmt:'social',
+     vb:{scene:'Крупный план продукта на контрастном фоне, пар/тепло как визуальная метафора, один доминирующий цветовой блок.',
+         palette:'кобальт + коралл + бумага (фирменная сетка MADISON)',type:'Anton, верхний регистр, крупный кернинг',motion:'статика → лёгкий zoom на продукт, 6-сек loop'}},
+    {id:'B',angle:'эмоция',hl:t.hl[1],body:t.body[1],cta:t.cta[1],fmt:'story',
+     vb:{scene:'Лайфстайл-кадр: утро, стол, рука берёт кружку — тёплый свет, минимум реквизита.',
+         palette:'тёплая бумага + акцент кораллом, мягкие тени',type:'Manrope, средний размер, дружелюбная подача',motion:'вертикальный ролик 9:16, 9 сек, субтитры крупно'}},
+    {id:'C',angle:'статус',hl:t.hl[2],body:t.body[0],cta:t.cta[2],fmt:'ooh',
+     vb:{scene:'Минималистичный билборд: продукт как арт-объект, 70% воздуха, один слоган.',
+         palette:'бумага + один кобальтовый блок, швейцарская сетка',type:'Anton, гигантский размер, один акцент',motion:'OOH статика / DOOH 5-сек смена слогана'}}
+  ];
+  // predicted CTR per variant (deterministic-ish from tone+angle)
+  const base={A:0.018,B:0.024,C:0.009};
+  variants.forEach(v=>{v.pCTR=base[v.id]*(0.85+Math.random()*0.4);v.pCVR=v.id==='B'?0.034:v.id==='A'?0.028:0.012;});
+  return variants;
+}
+
+/* ============================================================
+   RENDERERS
+============================================================ */
+function renderBriefBar(){
+  const b=APP.brief;
+  $('briefbar').innerHTML='<span class="bb-lab">ACTIVE BRIEF</span>'+
+    '<span class="bb">PRODUCT <b>'+esc(b.product||'—')+'</b></span>'+
+    '<span class="bb ac">GOAL <b>'+GOALS[b.goal].label+'</b></span>'+
+    '<span class="bb">BUDGET <b>'+fmtM(b.budget)+'</b></span>'+
+    '<span class="bb">TONE <b>'+TONES[b.tone].name+'</b></span>'+
+    '<span class="bb">'+b.weeks+' нед · '+b.region+'</span>'+
+    '<button class="editb" id="editBrief">✎ EDIT BRIEF</button>';
+  $('editBrief').onclick=()=>{ $('warroom').classList.remove('on');$('briefscreen').style.display='';window.scrollTo({top:0,behavior:'smooth'}); };
+}
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function renderStrategy(){
+  const s=APP.strategy;
+  $('sBigIdea').innerHTML=s.bigIdea;
+  $('sPosit').innerHTML=s.posit;
+  $('sPillars').innerHTML=s.pillars.map(p=>'<div class="pillar"><div class="pn">'+p.n+'</div><div class="pd">'+p.d+'</div></div>').join('');
+  $('sSlogans').innerHTML=s.slogans.map(sl=>'<div class="slogan" data-cp="'+esc(sl.t)+'">'+esc(sl.t)+'<small>'+esc(sl.tag)+'</small><span class="cp">COPY</span></div>').join('');
+  $('sSlogans').querySelectorAll('.slogan').forEach(el=>el.onclick=()=>{copy(el.dataset.cp);toast('ok','COPIED','tagline в буфере');});
+  $('sKv').innerHTML=s.kv.map(k=>'<div class="kv"><span>'+k[0]+'</span><b>'+esc(k[1])+'</b></div>').join('');
+}
+function renderPersonas(){
+  $('persGrid').innerHTML=APP.personas.map((p,i)=>`
+    <div class="per reveal" data-c="${i}">
+      <div class="hd"><div class="av">${p.av}</div><div class="nm">${esc(p.nm)}</div><div class="rl">${esc(p.rl)}</div></div>
+      <div class="bd">
+        <div class="blk"><div class="k">Pain</div><div class="v">${esc(p.pain)}</div></div>
+        <div class="blk"><div class="k">Core insight</div><div class="v"><b>${esc(p.quote)}</b></div></div>
+        <div class="blk"><div class="k">Trigger moment</div><div class="v">${esc(p.trigger)}</div></div>
+        <div class="blk"><div class="k">Channels</div><div class="tags">${p.channels.map(c=>'<span>'+c+'</span>').join('')}</div></div>
+      </div>
+    </div>`).join('');
+  revealObserve($('persGrid').querySelectorAll('.reveal'));
+}
+function renderCreative(){
+  const v=APP.creatives[APP.varIdx];
+  $('vartabs').innerHTML=APP.creatives.map((c,i)=>`<button class="vartab ${i===APP.varIdx?'on':''}" data-i="${i}">${c.id} · ${c.angle}<span class="ctr">pCTR ${(c.pCTR*100).toFixed(2)}%</span></button>`).join('');
+  $('vartabs').querySelectorAll('.vartab').forEach(b=>b.onclick=()=>{APP.varIdx=+b.dataset.i;renderCreative();});
+  $('adprev').innerHTML=`<span class="fmt">${v.fmt.toUpperCase()} · variant ${v.id}</span>
+    <div><div class="ey">${TONES[APP.brief.tone].name} · ${v.angle}</div>
+    <div class="hl">${esc(v.hl)}</div>
+    <div class="bd">${esc(v.body)}</div></div>
+    <div class="cta">${esc(v.cta)} →</div>
+    <div class="brandtag">${esc(shortP(APP.brief.product))}</div>`;
+  const g=GOALS[APP.brief.goal];
+  const estConv=totals().conv*(v.pCVR/0.03)*0.4+totals().conv*0.6;
+  $('creatMeta').innerHTML=`
+    <div class="m"><div class="k">predicted CTR</div><div class="v cob">${(v.pCTR*100).toFixed(2)}%</div></div>
+    <div class="m"><div class="k">predicted CVR</div><div class="v ok">${(v.pCVR*100).toFixed(2)}%</div></div>
+    <div class="m"><div class="k">format</div><div class="v">${v.fmt.toUpperCase()}</div></div>
+    <div class="m"><div class="k">angle</div><div class="v cor">${v.angle}</div></div>`;
+  $('vbriefBody').innerHTML=['scene','palette','type','motion'].map(k=>`<div class="vb"><div class="k">${k}</div><div class="v">${esc(v.vb[k])}</div></div>`).join('');
+  $('fmtrow').innerHTML=FORMATS.map(f=>`<div class="fmt" data-f="${f.id}"><img src="${f.img}" alt="${f.name}" loading="lazy"><div class="cap"><span>${f.name}</span><b>${f.ratio}</b></div></div>`).join('');
+  $('fmtrow').querySelectorAll('.fmt').forEach(el=>el.onclick=()=>toast('cob','FORMAT','превью «'+el.querySelector('.cap span').textContent+'» — шаблон размещения для варианта '+v.id));
+}
+function renderMedia(){
+  const t=totals();
+  const g=GOALS[APP.brief.goal];
+  const focusKPI = g.aovMul? 'ROAS':'CPA';
+  $('mediaTop').innerHTML=`
+    <div class="kpi cob"><div class="k">Total Reach</div><div class="v">${fmtK(t.reach)}</div><div class="d up">unique est.</div></div>
+    <div class="kpi"><div class="k">Impressions</div><div class="v">${fmtK(t.impr)}</div><div class="d">blended CPM $${t.cpm.toFixed(2)}</div></div>
+    <div class="kpi amb"><div class="k">${g.aovMul?'Conversions':'Leads / Conv'}</div><div class="v">${fmtK(t.conv)}</div><div class="d">${focusKPI} ${g.aovMul?('$'+t.roas.toFixed(2)):(t.cpa>0?'$'+t.cpa.toFixed(1):'—')}</div></div>
+    <div class="kpi ${g.aovMul?(t.roas>=3?'ok':'cor'):'ok'}"><div class="k">${g.aovMul?'Revenue':'Clicks'}</div><div class="v">${g.aovMul?fmtM(t.rev):fmtK(t.clk)}</div><div class="d ${g.aovMul&&t.roas>=3?'up':''}">${g.aovMul?('ROAS '+t.roas.toFixed(2)+'×'):('blended CPC $'+t.cpc.toFixed(2))}</div></div>`;
+  // best channel by conv per spend
+  let bestId=null,bestEff=-1;
+  CHANNELS.forEach(ch=>{const m=channelMetrics(ch);const e=m.spend>0?m.conv/m.spend:0;if((APP.shares[ch.id]||0)>3&&e>bestEff){bestEff=e;bestId=ch.id;}});
+  $('chtable').innerHTML=CHANNELS.map(ch=>{
+    const m=channelMetrics(ch);const sh=Math.round(APP.shares[ch.id]||0);
+    const bars=Array.from({length:8},(_,i)=>`<i class="${i<Math.round(sh/12.5)?'lit':''}" style="height:${20+Math.random()*40}%"></i>`).join('');
+    return `<div class="chrow ${ch.id===bestId?'best':''}">
+      <div class="chname"><span class="sw" style="background:${ch.color}"></span><div><b>${ch.name}</b><small>${ch.sub}</small></div></div>
+      <div class="chmid"><input class="rng" type="range" min="0" max="100" value="${sh}" data-ch="${ch.id}"><div class="bars">${bars}</div></div>
+      <div class="chshare"><span class="pct">${sh}</span>%</div>
+      <div style="grid-column:1/-1"><div class="chmetrics">
+        <div class="cm"><div class="k">spend</div><div class="v">${fmtM(m.spend)}</div></div>
+        <div class="cm"><div class="k">impr</div><div class="v">${fmtK(m.impr)}</div></div>
+        <div class="cm"><div class="k">clicks</div><div class="v">${fmtK(m.clk)}</div></div>
+        <div class="cm"><div class="k">conv</div><div class="v">${fmtK(m.conv)}</div></div>
+      </div></div>
+    </div>`;
+  }).join('');
+  $('chtable').querySelectorAll('input[type=range]').forEach(r=>r.oninput=()=>{setShare(r.dataset.ch,+r.value);renderMedia();if(APP.sim.series.length)renderSimKpis();});
+}
+function renderSimKpis(){
+  const s=APP.sim;const g=GOALS[APP.brief.goal];
+  const roas=s.spend>0?s.rev/s.spend:0;const cpa=s.conv>0?s.spend/s.conv:0;const ctr=s.imp>0?s.clk/s.imp:0;
+  $('simKpis').innerHTML=`
+    <div class="sim-kpi"><div class="left"><div class="k">Conversions</div><div class="sub">накопительно</div></div><div class="v cob">${fmtN(s.conv)}</div></div>
+    <div class="sim-kpi"><div class="left"><div class="k">Spend</div><div class="sub">из ${fmtM(APP.brief.budget)}</div></div><div class="v cor">${fmtM(s.spend)}</div></div>
+    <div class="sim-kpi"><div class="left"><div class="k">${g.aovMul?'ROAS':'CPA'}</div><div class="sub">${g.aovMul?'return on ad spend':'cost per result'}</div></div><div class="v ${g.aovMul?(roas>=3?'ok':'amb'):'amb'}">${g.aovMul?(roas.toFixed(2)+'×'):('$'+cpa.toFixed(1))}</div></div>
+    <div class="sim-kpi"><div class="left"><div class="k">Reach / CTR</div><div class="sub">${fmtK(s.reach)} unique</div></div><div class="v">${(ctr*100).toFixed(2)}%</div></div>`;
+  $('simClock').textContent='DAY '+s.day+' / '+(APP.brief.weeks*7);
+}
+function renderReport(){
+  const s=APP.sim;const t=totals();const g=GOALS[APP.brief.goal];
+  const ran=s.day>0;
+  const roas=s.spend>0?s.rev/s.spend:t.roas;
+  const conv=ran?s.conv:t.conv;const spend=ran?s.spend:t.spend;
+  const good = g.aovMul? roas>=3 : (t.cpa>0 && t.cpa<=APP.brief.aov*0.5);
+  // channel efficiency ranking
+  const rank=CHANNELS.map(ch=>{const m=channelMetrics(ch);return {n:ch.name,e:m.spend>0?m.conv/m.spend:0,sh:Math.round(APP.shares[ch.id]||0)};}).filter(r=>r.sh>0).sort((a,b)=>b.e-a.e);
+  const maxE=rank[0]?rank[0].e:1;
+  $('repGrid').innerHTML=`
+    <div class="rep-card full">
+      <h4><span class="n">01</span> VERDICT</h4>
+      <div class="verdict ${good?'':'bad'}">Кампания ${ran?'в симуляции':'по прогнозу'} — <em>${good?'эффективна':'требует правок'}</em>.</div>
+      <p style="color:var(--mut);margin-top:14px;font-size:14.5px">${ran?('Прогоняем '+s.day+' дней при бюджете '+fmtM(spend)+'. '):'Прогноз на '+APP.brief.weeks+' нед при бюджете '+fmtM(APP.brief.budget)+'. '}${g.aovMul?('Ожидаемый ROAS <b style="color:var(--ink)">'+roas.toFixed(2)+'×</b>, выручка '+fmtM(ran?s.rev:t.rev)+'.'):(conv>0?'Стоимость результата <b style="color:var(--ink)">$'+(ran?(s.conv>0?s.spend/s.conv:0):t.cpa).toFixed(1)+'</b>, '+fmtK(conv)+' конверсий.':'')}</p>
+    </div>
+    <div class="rep-card">
+      <h4><span class="n">02</span> CHANNEL EFFICIENCY</h4>
+      ${rank.map(r=>`<div class="roas-bar"><span class="nm">${r.n}</span><span class="tr"><i class="${r.e>maxE*0.66?'ok':r.e>maxE*0.33?'':'cor'}" style="width:${Math.max(4,r.e/maxE*100)}%"></i></span><span class="sc">${r.sh}%</span></div>`).join('')}
+      <p style="font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:8px">conv per $ spent · нормализовано</p>
+    </div>
+    <div class="rep-card">
+      <h4><span class="n">03</span> RECOMMENDATIONS</h4>
+      <ul class="rep-list">
+        <li>Перелить бюджет из <b>${rank[rank.length-1]?rank[rank.length-1].n:'слабого канала'}</b> в <b>${rank[0]?rank[0].n:'лидера'}</b> — авто-оптимизация в симуляции.</li>
+        <li>Креатив-лидер по pCTR — вариант <b>${APP.creatives[APP.varIdx].id}</b>; запустить A/B с ${APP.creatives[(APP.varIdx+1)%APP.creatives.length].id} на 20% трафика.</li>
+        <li>Тон «<b>${TONES[APP.brief.tone].name}</b>» ${APP.brief.goal==='sales'?'хорошо конвертит на поиске':'даёт высокий CTR в соцсетях'} — держать как контроль.</li>
+        <li>${g.aovMul&&roas<3?'Добить ретаргетинг (Programmatic + Email) — там дешевле конверсия.':'Добавить lookalike по конверсиям на Meta/TikTok для масштабирования.'}</li>
+      </ul>
+    </div>
+    <div class="rep-card full">
+      <h4><span class="n">04</span> NEXT STEPS</h4>
+      <ul class="rep-list">
+        <li><b>Неделя 1-2:</b> тизер + сбор аудиторий, креативы A/B/C в ротации.</li>
+        <li><b>Неделя 3-5:</b> масштабирование лидеров, отключение CPM&gt;порога, retarget-слой.</li>
+        <li><b>Неделя 6+:</b> lookalike, UGC-волна, пересмотр медиаплана по факту.</li>
+        <li>Все артефакты копируются кнопками COPY — передавай в продакшн без правок.</li>
+      </ul>
+    </div>`;
+}
+
+/* ============================================================
+   SIMULATION ENGINE
+============================================================ */
+function dailyStep(){
+  const t=totals();const days=APP.brief.weeks*7;
+  const daySpend=APP.brief.budget/days;
+  // distribute day across channels by share, apply efficiency multiplier
+  let dImp=0,dClk=0,dConv=0,dRev=0,dReach=0;
+  CHANNELS.forEach(ch=>{
+    const m=channelMetrics(ch);const f=1/days;
+    const noise=0.78+Math.random()*0.5;
+    dImp+=m.impr*f*noise;dClk+=m.clk*f*noise;dConv+=m.conv*f*noise*APP.sim.eff;dRev+=m.rev*f*noise*APP.sim.eff;dReach+=m.reach*f*noise;
+  });
+  APP.sim.day++;APP.sim.imp+=dImp;APP.sim.clk+=dClk;APP.sim.conv+=dConv;APP.sim.rev+=dRev;APP.sim.spend+=daySpend;APP.sim.reach+=dReach*0.7;
+  APP.sim.series.push({day:APP.sim.day,conv:APP.sim.conv,spend:APP.sim.spend,roas:APP.sim.spend>0?APP.sim.rev/APP.sim.spend:0});
+  if(APP.sim.series.length>200)APP.sim.series.shift();
+  renderSimKpis();drawSim();
+  if(APP.sim.day>=days){stopSim();toast('ok','CAMPAIGN COMPLETE','симуляция завершена — см. Report');switchTab('report');renderReport();}
+}
+function startSim(){if(APP.sim.running)return;APP.sim.running=true;$('simPlay').classList.add('on');$('simPause').classList.remove('on');
+  clearInterval(APP.sim.timer);APP.sim.timer=setInterval(dailyStep,720/APP.sim.speed);}
+function pauseSim(){APP.sim.running=false;clearInterval(APP.sim.timer);$('simPause').classList.add('on');$('simPlay').classList.remove('on');}
+function stopSim(){pauseSim();}
+function resetSim(){pauseSim();APP.sim.day=0;APP.sim.imp=0;APP.sim.clk=0;APP.sim.spend=0;APP.sim.conv=0;APP.sim.rev=0;APP.sim.reach=0;APP.sim.series=[];APP.sim.eff=1;renderSimKpis();drawSim();$('simPlay').classList.remove('on');$('simPause').classList.remove('on');}
+function optimize(){
+  // shift 12% from worst efficient (share>5) to best
+  let rank=CHANNELS.map(ch=>{const m=channelMetrics(ch);return {id:ch.id,e:m.spend>0?m.conv/m.spend:0,sh:APP.shares[ch.id]||0};}).filter(r=>r.sh>5).sort((a,b)=>b.e-a.e);
+  if(rank.length<2){toast('amb','OPTIMIZE','нечего перераспределять — увеличь число активных каналов');return;}
+  const best=rank[0].id,worst=rank[rank.length-1].id;
+  const move=Math.min(12,APP.shares[worst]-3);
+  if(move<=1){toast('amb','OPTIMIZE','микс уже близок к оптимуму');return;}
+  APP.shares[worst]-=move;APP.shares[best]+=move;
+  APP.sim.eff*=1.12;
+  renderMedia();renderSimKpis();
+  const newRoas=totals().roas;
+  toast('ok','BUDGET SHIFTED','+'+Math.round(move)+'% → '+CHANNELS.find(c=>c.id===best).name+' · прогноз ROAS '+newRoas.toFixed(2)+'×');
+  botSay('Перелил <b>'+Math.round(move)+'%</b> бюджета из '+CHANNELS.find(c=>c.id===worst).name+' в <b>'+CHANNELS.find(c=>c.id===best).name+'</b>. Множитель эффективности симуляции ×1.12 — смотри, как растёт ROAS.');
+}
+
+/* ---------- sim chart ---------- */
+let simCanvas,simCtx;
+function initSimCanvas(){simCanvas=$('simchart');simCtx=simCanvas.getContext('2d');sizeSim();addEventListener('resize',sizeSim);}
+function sizeSim(){const r=simCanvas.getBoundingClientRect();const d=devicePixelRatio||1;simCanvas.width=r.width*d;simCanvas.height=r.height*d;simCtx.setTransform(d,0,0,d,0,0);drawSim();}
+function drawSim(){
+  if(!simCtx)return;const r=simCanvas.getBoundingClientRect();const W=r.width,H=r.height;simCtx.clearRect(0,0,W,H);
+  const pad={l:46,r:46,t:14,b:24};const iw=W-pad.l-pad.r,ih=H-pad.t-pad.b;
+  // grid
+  simCtx.strokeStyle='rgba(233,238,245,.07)';simCtx.lineWidth=1;simCtx.font='10px JetBrains Mono';simCtx.fillStyle='#5c6e84';
+  for(let i=0;i<=4;i++){const y=pad.t+ih*i/4;simCtx.beginPath();simCtx.moveTo(pad.l,y);simCtx.lineTo(W-pad.r,y);simCtx.stroke();}
+  const ser=APP.sim.series;if(ser.length<2){simCtx.fillStyle='#5c6e84';simCtx.textAlign='center';simCtx.fillText('нажми PLAY — пойдёт симуляция',W/2,H/2);return;}
+  const maxC=Math.max(...ser.map(s=>s.conv),1);const maxS=Math.max(...ser.map(s=>s.spend),1);const maxR=Math.max(...ser.map(s=>s.roas),1);
+  const X=i=>pad.l+iw*(i/(ser.length-1));
+  const Yc=v=>pad.t+ih*(1-v/maxC);const Ys=v=>pad.t+ih*(1-v/maxS);const Yr=v=>pad.t+ih*(1-v/maxR);
+  // conv area
+  simCtx.beginPath();simCtx.moveTo(X(0),Yc(ser[0].conv));ser.forEach((s,i)=>simCtx.lineTo(X(i),Yc(s.conv)));
+  simCtx.lineTo(X(ser.length-1),pad.t+ih);simCtx.lineTo(X(0),pad.t+ih);simCtx.closePath();simCtx.fillStyle='rgba(45,91,255,.16)';simCtx.fill();
+  simCtx.beginPath();ser.forEach((s,i)=>i?simCtx.lineTo(X(i),Yc(s.conv)):simCtx.moveTo(X(i),Yc(s.conv)));simCtx.strokeStyle='#2d5bff';simCtx.lineWidth=2.2;simCtx.stroke();
+  // spend line
+  simCtx.beginPath();ser.forEach((s,i)=>i?simCtx.lineTo(X(i),Ys(s.spend)):simCtx.moveTo(X(i),Ys(s.spend)));simCtx.strokeStyle='#ff5436';simCtx.lineWidth=1.6;simCtx.setLineDash([4,4]);simCtx.stroke();simCtx.setLineDash([]);
+  // roas line
+  simCtx.beginPath();ser.forEach((s,i)=>i?simCtx.lineTo(X(i),Yr(s.roas)):simCtx.moveTo(X(i),Yr(s.roas)));simCtx.strokeStyle='#ffc23d';simCtx.lineWidth=1.8;simCtx.stroke();
+  // last point dot
+  const li=ser.length-1;simCtx.fillStyle='#ffc23d';simCtx.beginPath();simCtx.arc(X(li),Yr(ser[li].roas),3.5,0,7);simCtx.fill();
+  // axis labels
+  simCtx.fillStyle='#5c6e84';simCtx.textAlign='left';simCtx.fillText(fmtK(maxC),6,pad.t+8);simCtx.fillText('0',6,pad.t+ih);
+  simCtx.textAlign='right';simCtx.fillStyle='#ffc23d';simCtx.fillText(maxR.toFixed(1)+'×',W-6,pad.t+8);
+  simCtx.fillStyle='#5c6e84';simCtx.textAlign='center';simCtx.fillText('day '+ser[0].day,pad.l,H-6);simCtx.fillText('day '+ser[li].day,W-pad.r,H-6);
+}
+
+/* ============================================================
+   WORKING PIPELINE
+============================================================ */
+const DEPTS=[
+  {id:'strategy',nm:'Strategy',rl:'positioning',logs:['анализ брифа и конкурентов','формулировка big idea','генерация tagline-кандидатов']},
+  {id:'audience',nm:'Audience',rl:'personas',logs:['сегментация ЦА','построение персон','маппинг каналов на персоны']},
+  {id:'creative',nm:'Creative',rl:'copy + art',logs:['копирайтинг по тону','визуальный бриф','A/B/C варианты']},
+  {id:'media',nm:'Media',rl:'buying plan',logs:['распределение бюджета','прогноз CPM/CPC/CVR','построение медиаплана']},
+  {id:'analytics',nm:'Analytics',rl:'forecast',logs:['прогноз KPI','калибровка ROAS/CPA','сборка отчёта']}
+];
+function runPipeline(){
+  // validate
+  const p=$('bProduct').value.trim();
+  if(!p){toast('cor','BRIEF ERROR','укажи продукт / услугу');$('bProduct').focus();return;}
+  const budget=+$('bBudget').value;
+  if(!budget||budget<500){toast('cor','BRIEF ERROR','бюджет должен быть ≥ $500');$('bBudget').focus();return;}
+  // read brief
+  APP.brief.product=p;APP.brief.goal=$('bGoal').value;APP.brief.budget=budget;APP.brief.region=$('bRegion').value;
+  APP.brief.weeks=+$('bWeeks').value;APP.brief.aov=+$('bAov').value;APP.brief.ctx=$('bCtx').value;
+  const toneOn=document.querySelector('#bTone .chipb.on');APP.brief.tone=toneOn?toneOn.dataset.t:'bold';
+  initShares();resetSim();
+  // generate content
+  APP.strategy=genStrategy();APP.personas=genPersonas();APP.creatives=genCreatives();APP.varIdx=0;
+  // show overlay
+  const ov=$('working');ov.classList.add('on');
+  $('deptlines').innerHTML=DEPTS.map(d=>`<div class="deptline" data-d="${d.id}"><div class="nm"><b>${d.nm}</b><small>${d.rl}</small></div><div class="pb"><i></i></div><div class="st">queued</div></div>`).join('');
+  $('worklog').innerHTML='';
+  let di=0;
+  function nextDept(){
+    if(di>=DEPTS.length){finishPipeline();return;}
+    const d=DEPTS[di];const line=$('deptlines').querySelector('[data-d="'+d.id+'"]');
+    line.classList.add('active');line.querySelector('.st').textContent='working';
+    $('workSub').textContent=d.nm+' department processing…';
+    let li=0;const bar=line.querySelector('.pb i');
+    const iv=setInterval(()=>{
+      li++;bar.style.width=Math.min(100,li/d.logs.length*100)+'%';
+      wlog(d.logs[li-1],li===d.logs.length?'ok':'am');
+      if(li>=d.logs.length){clearInterval(iv);line.classList.remove('active');line.classList.add('done');line.querySelector('.st').textContent='done ✓';di++;setTimeout(nextDept,260);}
+    },360);
+  }
+  nextDept();
+}
+function wlog(txt,cls){const el=document.createElement('div');el.className='ln';const t=new Date().toTimeString().slice(0,8);el.innerHTML='<span class="t">'+t+'</span> <span class="'+(cls||'')+'">›</span> '+esc(txt);const wl=$('worklog');wl.prepend(el);while(wl.children.length>7)wl.lastChild.remove();}
+function finishPipeline(){
+  $('workSub').textContent='all departments delivered · opening war room';
+  setTimeout(()=>{
+    $('working').classList.remove('on');
+    APP.runs++;$('stRuns').textContent=APP.runs;$('stState').textContent='CAMPAIGN LIVE';$('stState').classList.remove('warn');$('stState').classList.add('live');
+    $('briefscreen').style.display='none';
+    $('warroom').classList.add('on');
+    renderBriefBar();renderStrategy();renderPersonas();renderCreative();renderMedia();renderSimKpis();renderReport();
+    // unlock tabs with stagger
+    const order=['strategy','audience','creative','media','sim','report'];
+    order.forEach((p,i)=>setTimeout(()=>unlockTab(p),i*180));
+    switchTab('strategy');
+    window.scrollTo({top:0,behavior:'smooth'});
+    toast('ok','DELIVERED','5 департаментов сдали работу — war room открыт');
+    botSay('Бриф принят, кампания собрана. Я твой аккаунт-директор: крути медиаплан ползунками, запускай симуляцию и пиши мне команды вниз. С чего начнём — <b>оптимизировать микс</b> или посмотреть креативы?');
+  },500);
+}
+function unlockTab(p){const t=document.querySelector('.tab[data-p="'+p+'"]');if(!t)return;t.classList.remove('locked');t.classList.add('pulse');setTimeout(()=>t.classList.remove('pulse'),2600);APP.unlocked[p]=true;}
+
+/* ---------- tabs ---------- */
+function switchTab(p){
+  if($('tabs').querySelector('.tab[data-p="'+p+'"]').classList.contains('locked'))return;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.p===p));
+  document.querySelectorAll('.pane').forEach(pn=>pn.classList.toggle('on',pn.id==='pane-'+p));
+  if(p==='sim'){sizeSim();}
+  if(p==='report'){renderReport();}
+  revealObserve(document.querySelectorAll('#pane-'+p+' .reveal'));
+}
+
+/* ============================================================
+   CHAT / ACCOUNT DIRECTOR
+============================================================ */
+const QUICK=['оптимизируй','тикток 35%','тон премиум','цель продажи','покажи отчёт','запусти симуляцию','help'];
+function initQuick(){$('quickcmds').innerHTML=QUICK.map(q=>'<span class="qcmd">'+esc(q)+'</span>').join('');$('quickcmds').querySelectorAll('.qcmd').forEach(b=>b.onclick=()=>handleCmd(b.textContent));}
+function userSay(t){const el=document.createElement('div');el.className='msg me';el.textContent=t;$('feed').appendChild(el);scrollFeed();}
+function botSay(html){
+  const el=document.createElement('div');el.className='msg bot';el.innerHTML='<span class="nm">Account Director</span><span class="typing"><i></i><i></i><i></i></span>';$('feed').appendChild(el);scrollFeed();
+  setTimeout(()=>{el.innerHTML='<span class="nm">Account Director</span>'+html;scrollFeed();},650+Math.random()*500);
+}
+function scrollFeed(){const f=$('feed');f.scrollTop=f.scrollHeight;}
+function handleCmd(raw){
+  const t=raw.trim();if(!t)return;
+  if(!$('warroom').classList.contains('on')){userSay(t);botSay('Сначала запусти агентство кнопкой <b>▶ Запустить агентство</b> — тогда я смогу управлять кампанией.');return;}
+  userSay(t);const low=t.toLowerCase();
+  // help
+  if(/help|помощ|команд|что умеешь/.test(low)){botSay('Команды: <b>бюджет 50000</b> · <b>тикток 35%</b> (или meta/google/youtube/ooh/email) · <b>тон</b> дерзкий/дружелюбный/премиум/экспертный/игривый · <b>цель</b> охват/лиды/продажи/установки · <b>оптимизируй</b> · <b>запусти/пауза/сброс</b> · <b>вариант 2</b> · <b>отчёт</b>.');return;}
+  // budget
+  let m=low.match(/бюджет|budget/);let mn=t.match(/(\d[\d\s]*)/);
+  if(m&&mn){const v=+mn[1].replace(/\s/g,'');if(v>=500){APP.brief.budget=v;renderMedia();renderBriefBar();renderSimKpis();botSay('Бюджет изменён на <b>'+fmtM(v)+'</b>. Медиаплан и прогноз пересчитаны.');return;}else{botSay('Бюджет маловат — оставил как есть. Минимум $500.');return;}}
+  // channel share
+  const chMap={тикток:'tiktok',tiktok:'tiktok',мета:'meta',meta:'meta',facebook:'meta',гугл:'search',google:'search',поиск:'search',search:'search',ютуб:'youtube',youtube:'youtube',программатик:'prog',programmatic:'prog',ретаргет:'prog',наруж:'ooh',ooh:'ooh',билборд:'ooh',email:'email',почт:'email',crm:'email'};
+  for(const k in chMap){const re=new RegExp(k);if(re.test(low)){const nm=t.match(/(\d+)/);if(nm){const v=+nm[1];setShare(chMap[k],v);renderMedia();renderSimKpis();botSay('Поставил <b>'+CHANNELS.find(c=>c.id===chMap[k]).name+' = '+Math.round(APP.shares[chMap[k]])+'%</b>, остальное перераспределил пропорционально. Смотри медиаплан.');}else{botSay('Укажи долю числом, например «'+k+' 30».');}return;}}
+  // tone
+  const toneMap={дерз:'bold',bold:'bold',дружел:'friendly',friend:'friendly',премиум:'premium',premium:'premium',люкс:'premium',эксперт:'expert',expert:'expert',техн:'expert',игрив:'playful',play:'playful',весел:'playful'};
+  for(const k in toneMap){if(low.includes(k)){APP.brief.tone=toneMap[k];APP.strategy=genStrategy();APP.creatives=genCreatives();renderStrategy();renderCreative();renderBriefBar();botSay('Тон переключён на <b>'+TONES[APP.brief.tone].name+'</b> — перегенерировал стратегию и креативы. Вариант '+APP.creatives[APP.varIdx].id+' уже с новым копи.');return;}}
+  // goal
+  const goalMap={охват:'awareness',aware:'awareness',бренд:'awareness',лид:'leads',lead:'leads',заявк:'leads',продаж:'sales',sale:'sales',roas:'sales',установк:'installs',install:'installs',приложен:'installs'};
+  for(const k in goalMap){if(low.includes(k)){APP.brief.goal=goalMap[k];initShares();resetSim();APP.strategy=genStrategy();renderStrategy();renderMedia();renderBriefBar();renderSimKpis();botSay('Цель = <b>'+GOALS[APP.brief.goal].label+'</b>. Пересобрал медиаплан под фокус «'+GOALS[APP.brief.goal].focus+'» и сбросил симуляцию.');return;}}
+  // optimize
+  if(/оптимиз|optim|перераспред/.test(low)){optimize();return;}
+  // sim control
+  if(/запуст|старт|play|go\b|поехали/.test(low)){switchTab('sim');startSim();botSay('Запустил симуляцию на скорости '+APP.sim.speed+'×. Смотри, как копятся конверсии и ROAS.');return;}
+  if(/пауз|pause|стоп|stop/.test(low)){pauseSim();botSay('Поставил симуляцию на паузу.');return;}
+  if(/сброс|reset/.test(low)){resetSim();botSay('Симуляция сброшена. Жми PLAY или «запусти».');return;}
+  if(/скорост|speed|быстр/.test(low)){const sm=t.match(/([124])/);if(sm){APP.sim.speed=+sm[1];document.querySelectorAll('.sbtn.spd').forEach(b=>b.classList.toggle('on',+b.dataset.spd===APP.sim.speed));if(APP.sim.running)startSim();botSay('Скорость симуляции = '+APP.sim.speed+'×.');}else{botSay('Укажи скорость: 1, 2 или 4.');}return;}
+  // variant
+  if(/вариант|variant|креатив/.test(low)){const vm=t.match(/([123abc])/i);if(vm){const map={a:0,b:1,c:2,'1':0,'2':1,'3':2};const idx=map[vm[1].toLowerCase()];if(idx!==undefined){APP.varIdx=idx;switchTab('creative');renderCreative();botSay('Показал вариант <b>'+APP.creatives[idx].id+'</b> (angle: '+APP.creatives[idx].angle+', pCTR '+(APP.creatives[idx].pCTR*100).toFixed(2)+'%).');}else{botSay('Есть варианты A, B, C (или 1, 2, 3).');}}else{switchTab('creative');botSay('Открыл вкладку Creative — там варианты A/B/C с прогнозом CTR.');}return;}
+  // report
+  if(/отчёт|отчет|report|итог/.test(low)){switchTab('report');renderReport();botSay('Открыл финальный отчёт. Вердикт, эффективность каналов и next steps — всё там, кнопка COPY REPORT копирует целиком.');return;}
+  // media/strategy/audience nav
+  if(/медиа|media|план|бюджет канал/.test(low)){switchTab('media');botSay('Открыл медиаплан. Двигай ползунки — KPI пересчитываются на лету.');return;}
+  if(/стратег|позиц|идея|slogan/.test(low)){switchTab('strategy');botSay('Открыл стратегию: big idea, pillars и tagline-кандидаты.');return;}
+  if(/аудитор|персон|цель аудитор|ца\b/.test(low)){switchTab('audience');botSay('Открыл персон — три сегмента с болями, инсайтами и каналами.');return;}
+  // greeting / misc
+  if(/привет|hi|hello|здоров/.test(low)){botSay('Привет. Я веду твою кампанию «'+esc(shortP(APP.brief.product))+'». Скажи, что правим — бюджет, канал, тон, цель — или «оптимизируй».');return;}
+  if(/спасиб|thanks/.test(low)){botSay('Пожалуйста. Когда будешь готов запускать в прод — выгрузи артефакты кнопками COPY.');return;}
+  // fallback
+  botSay('Принял к сведению. Чтобы я сделал действие, сформулируй командой: <b>«тикток 30%»</b>, <b>«тон премиум»</b>, <b>«цель продажи»</b>, <b>«оптимизируй»</b>, <b>«запусти»</b> или <b>«help»</b>. Сейчас цель = '+GOALS[APP.brief.goal].label+', тон = '+TONES[APP.brief.tone].name+'.');
+}
+
+/* ============================================================
+   COPY / TOAST / UTIL
+============================================================ */
+function copy(text){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).catch(()=>fbCopy(text));}else fbCopy(text);}
+function fbCopy(t){const ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);}
+function copySection(which){
+  let txt='';const b=APP.brief;
+  if(which==='strategy'){const s=APP.strategy;txt='MADISON//AI · STRATEGY\nProduct: '+b.product+'\nGoal: '+GOALS[b.goal].label+'\nBig idea: '+s.bigIdea.replace(/<[^>]+>/g,'')+'\nPositioning: '+s.posit.replace(/<[^>]+>/g,'')+'\nTaglines:\n'+s.slogans.map(x=>' - '+x.t).join('\n')+'\nPillars:\n'+s.pillars.map(p=>' - '+p.n+': '+p.d).join('\n');}
+  else if(which==='audience'){txt='MADISON//AI · PERSONAS\n'+APP.personas.map(p=>p.nm+' ('+p.rl+')\n  Pain: '+p.pain+'\n  Insight: '+p.quote+'\n  Channels: '+p.channels.join(', ')).join('\n\n');}
+  else if(which==='media'){const t=totals();txt='MADISON//AI · MEDIA PLAN\nBudget: '+fmtM(b.budget)+' / '+b.weeks+'w\nReach: '+fmtK(t.reach)+' | Impr: '+fmtK(t.impr)+' | Conv: '+fmtK(t.conv)+' | ROAS: '+t.roas.toFixed(2)+'\n\n'+CHANNELS.map(c=>c.name+' '+Math.round(APP.shares[c.id])+'%  spend '+fmtM(channelMetrics(c).spend)+'  conv '+fmtK(channelMetrics(c).conv)).join('\n');}
+  else if(which==='report'){txt='MADISON//AI · REPORT\n'+$('repGrid').innerText;}
+  copy(txt);toast('ok','COPIED',which+' — в буфере обмена');
+}
+function toast(kind,ti,msg){const el=document.createElement('div');el.className='toast '+kind;el.innerHTML='<span class="ti">'+ti+'</span><span>'+esc(msg)+'</span>';$('toasts').appendChild(el);setTimeout(()=>{el.style.transition='opacity .3s,transform .3s';el.style.opacity='0';el.style.transform='translateX(30px)';setTimeout(()=>el.remove(),320);},3200);}
+
+/* ============================================================
+   AMBIENT CANVAS (bids flowing)
+============================================================ */
+(function(){
+  const cv=$('amb'),x=cv.getContext('2d');let W,H,D,nodes=[],pulses=[];
+  function size(){D=devicePixelRatio||1;W=cv.width=innerWidth*D;H=cv.height=innerHeight*D;cv.style.width=innerWidth+'px';cv.style.height=innerHeight+'px';}
+  size();addEventListener('resize',size);
+  const N=Math.min(64,Math.round(innerWidth/22));
+  for(let i=0;i<N;i++)nodes.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.22*D,vy:(Math.random()-.5)*.22*D});
+  let mx=-9e3,my=-9e3;addEventListener('mousemove',e=>{mx=e.clientX*D;my=e.clientY*D;});
+  function frame(){
+    x.clearRect(0,0,W,H);const Dd=135*D;
+    for(const n of nodes){const dx=n.x-mx,dy=n.y-my,dm=Math.hypot(dx,dy);if(dm<110*D){n.x+=dx/dm*.5*D;n.y+=dy/dm*.5*D;}n.x+=n.vx;n.y+=n.vy;if(n.x<0||n.x>W)n.vx*=-1;if(n.y<0||n.y>H)n.vy*=-1;}
+    for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){const a=nodes[i],b=nodes[j],d=Math.hypot(a.x-b.x,a.y-b.y);if(d<Dd){const al=(1-d/Dd)*.12;x.strokeStyle='rgba(45,91,255,'+al+')';x.lineWidth=1;x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke();if(Math.random()<.0006&&pulses.length<8)pulses.push({a,b,t:0});}}
+    for(const n of nodes){x.fillStyle='rgba(147,164,186,.22)';x.beginPath();x.arc(n.x,n.y,1.4*D,0,7);x.fill();}
+    for(let k=pulses.length-1;k>=0;k--){const p=pulses[k];p.t+=.014;if(p.t>=1){pulses.splice(k,1);continue;}const px=p.a.x+(p.b.x-p.a.x)*p.t,py=p.a.y+(p.b.y-p.a.y)*p.t;x.fillStyle='rgba(255,194,61,'+(1-p.t)+')';x.beginPath();x.arc(px,py,2.4*D,0,7);x.fill();}
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+
+/* ============================================================
+   REVEAL / SCROLL PROG / TICKER / BIND
+============================================================ */
+let revIO;
+function revealObserve(list){if(!revIO)return;list.forEach(e=>{if(!e.classList.contains('in'))revIO.observe(e);});}
+(function(){
+  if('IntersectionObserver'in window){revIO=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');revIO.unobserve(e.target);}}),{threshold:.1});document.querySelectorAll('.reveal').forEach(e=>revIO.observe(e));}
+  else document.querySelectorAll('.reveal').forEach(e=>e.classList.add('in'));
+})();
+(function(){const p=$('prog');addEventListener('scroll',()=>{const h=document.documentElement.scrollHeight-innerHeight;p.style.width=(h>0?scrollY/h*100:0)+'%';},{passive:true});})();
+(function(){
+  const ch=['Meta','Search','TikTok','YouTube','OOH','Programmatic'];
+  const items=[];for(let i=0;i<14;i++){const c=ch[i%ch.length];const cpm=(2+Math.random()*16).toFixed(2);const win=Math.random()>.5;items.push('<span>'+c+' CPM</span><b>$'+cpm+'</b>'+(win?'<em>WON</em>':'<span>bid</span>'));}
+  $('tk').innerHTML=items.join('')+items.join('');
+})();
+
+function bindAll(){
+  // brief sliders
+  $('bWeeks').oninput=function(){$('bWeeksV').textContent=this.value;};
+  $('bAov').oninput=function(){$('bAovV').textContent='$'+this.value;};
+  // tone chips
+  document.querySelectorAll('#bTone .chipb').forEach(c=>c.onclick=()=>{document.querySelectorAll('#bTone .chipb').forEach(z=>z.classList.remove('on'));c.classList.add('on');});
+  // run
+  $('runBtn').onclick=runPipeline;
+  // tabs
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.p));
+  // copy buttons
+  document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copySection(b.dataset.copy));
+  // promote winner
+  $('promoteBtn').onclick=()=>{const v=APP.creatives[APP.varIdx];toast('ok','WINNER PROMOTED','вариант '+v.id+' ('+v.angle+') назначен контролем для A/B');botSay('Закрепил вариант <b>'+v.id+'</b> как контроль. В симуляции он идёт на 70% трафика, остальные 30% — челленджеры.');};
+  // media reset
+  $('resetMedia').onclick=()=>{initShares();renderMedia();renderSimKpis();toast('cob','MIX RESET','доли возвращены к дефолту под цель '+GOALS[APP.brief.goal].label);};
+  // sim controls
+  $('simPlay').onclick=()=>{switchTab('sim');startSim();};
+  $('simPause').onclick=pauseSim;
+  $('simReset').onclick=()=>{resetSim();toast('amb','RESET','симуляция обнулена');};
+  document.querySelectorAll('.sbtn.spd').forEach(b=>b.onclick=()=>{APP.sim.speed=+b.dataset.spd;document.querySelectorAll('.sbtn.spd').forEach(z=>z.classList.toggle('on',z===b));if(APP.sim.running)startSim();});
+  $('optBtn').onclick=optimize;
+  // console
+  $('togC').onclick=function(){const c=$('console');c.classList.toggle('open');this.textContent=c.classList.contains('open')?'▼ COLLAPSE':'▲ EXPAND';};
+  $('cSend').onclick=()=>{const v=$('cInput').value;$('cInput').value='';handleCmd(v);};
+  $('cInput').addEventListener('keydown',e=>{if(e.key==='Enter'){$('cSend').click();}});
+  initQuick();
+  initSimCanvas();
+  // open console by default
+  $('console').classList.add('open');$('togC').textContent='▼ COLLAPSE';
+}
+document.addEventListener('DOMContentLoaded',bindAll);
+if(document.readyState!=='loading')bindAll();
+})();
+</script>
+</body>
+</html>
