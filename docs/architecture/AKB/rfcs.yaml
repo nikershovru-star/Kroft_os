@@ -87,5 +87,5 @@ rfcs:
   date: '2026-08-02'
 - id: RFC-013
   title: Multimodal Knowledge Engine — Video/Audio/Vision Ingestion
-  status: accepted
+  status: under_review
   date: '2026-08-02'
