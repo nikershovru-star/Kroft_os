@@ -14,9 +14,10 @@ from kernel.world_model import ReferenceWorldModel
 from kernel.cognitive_kernel import (
     build_kernel, CognitiveKernel, InMemoryWorldState, SimpleAttention,
     SimpleResourceManager, SimpleValueSystem, DeterministicExecutive,
-    SimpleLearningPolicy, DeterministicDecisionEngine, NodeLamportClock as _NLC,
+    SimpleLearningPolicy, DeterministicDecisionEngine, NodeLamportClock,
 )
 from kernel.reasoning import ReferenceReasoningEngine
+from kernel.planning import ReferencePlanner
 
 
 def _world(node_id="WM", facts=None):
@@ -107,7 +108,7 @@ def test_reasoning_without_worldmodel_differs():
     steps_wm = kb._reason.reason(intent, kb._world.snapshot(),
                                  kb._attention.select_context(intent, kb._world.snapshot(), 100), 100)
     # without model
-    bare = ReferenceReasoningEngine(_NLC("WM-B"), SimpleAttention(SimpleResourceManager()))
+    bare = ReferenceReasoningEngine(NodeLamportClock("WM-B"), SimpleAttention(SimpleResourceManager()))
     steps_bare = bare.reason(intent, kb._world.snapshot(), ["prefer-Y"], 100)
     # at minimum the two engines must not be forced to agree; their confidences differ
     # in at least the projected-utility vs overlap path (assert they are independently
@@ -192,13 +193,12 @@ def test_evaluate_without_values_is_relevance_only_backward_compat():
 
 def test_flag_a_default_clock_uses_world_node_id():
     world = InMemoryWorldState("NODE-AA")
+    planner = ReferencePlanner(NodeLamportClock("NODE-AA"))
     kb = CognitiveKernel(world, SimpleAttention(SimpleResourceManager()),
-                         SimpleResourceManager(), SimpleValueSystem(),
-                         DeterministicDecisionEngine(), DeterministicExecutive(SimpleResourceManager()),
-                         SimpleLearningPolicy(),
-                         lambda g, s: [Plan(id="p", goal_id=g.id, steps=("x",),
-                                            confidence=ConfidenceScore(0.5, ProvenanceType.RULE_INFERENCE),
-                                            provenance=Provenance(source="pl", actor="k"))])
+                        SimpleResourceManager(), SimpleValueSystem(),
+                        DeterministicDecisionEngine(), DeterministicExecutive(SimpleResourceManager()),
+                        SimpleLearningPolicy(),
+                        planner)
     # no clock injected -> must derive "NODE-AA" from world, never "kernel"
     assert kb._clock.node_id == "NODE-AA"
     intent = _intent("go")

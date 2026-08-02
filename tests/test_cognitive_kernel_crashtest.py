@@ -45,6 +45,7 @@ from contracts.i_cognitive_kernel import (
     IValueSystem,
     IWorldState,
 )
+from contracts.i_planner import IPlanner
 from kernel.cognitive_kernel import (
     CognitiveKernel,
     DeterministicDecisionEngine,
@@ -79,13 +80,14 @@ class RealisticAttention(IAttention):
         return ConfidenceScore(min(1.0, 0.4 + 0.1 * overlap), ProvenanceType.RULE_INFERENCE)
 
 
-class ConfidenceAggregatingPlanner:
+class ConfidenceAggregatingPlanner(IPlanner):
     """Generates candidate plans whose confidence is AGGREGATED from step confidences."""
 
     def __init__(self, world: IWorldState) -> None:
         self._world = world
 
-    def __call__(self, goal: Goal, steps: list) -> list:
+    def plan(self, goal: Goal, reasoning_steps: list, world: "WorldState",
+             budget_tokens: int, intent=None) -> list:
         # two steps, each with its own confidence -> plan confidence aggregated
         step_a = ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE)
         step_b = ConfidenceScore(0.4, ProvenanceType.RULE_INFERENCE)  # weak step

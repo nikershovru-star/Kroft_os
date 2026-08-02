@@ -32,6 +32,7 @@ from contracts.cognitive_domain import (
     WorldState,
 )
 from contracts.i_cognitive_kernel import ICognitiveKernel, IDecisionEngine, IWorldState
+from contracts.i_planner import IPlanner
 from kernel.cognitive_kernel import (
     CognitiveKernel,
     DeterministicExecutive,
@@ -86,18 +87,21 @@ def _make_node(node_id: str, decision_engine: IDecisionEngine) -> CognitiveKerne
     exec_ = DeterministicExecutive(res)
     learn = build_kernel(node_id)._learning
 
-    def planner_for(goal: Goal, steps: list) -> list:
-        # deterministic candidate generator (adapter would call LLM)
-        return [
-            Plan(id="plan-X", goal_id=goal.id, steps=("x",),
-                 confidence=ConfidenceScore(0.7, ProvenanceType.RULE_INFERENCE),
-                 provenance=Provenance(source="planner", actor="kernel")),
-            Plan(id="plan-Y", goal_id=goal.id, steps=("y",),
-                 confidence=ConfidenceScore(0.7, ProvenanceType.RULE_INFERENCE),
-                 provenance=Provenance(source="planner", actor="kernel")),
-        ]
+    class FixedCandidatePlanner(IPlanner):
+        """Test-only planner: returns fixed plan-X/plan-Y (world-aware selection is
+        asserted at the Decision layer, not here). Real ReferencePlanner is exercised
+        in tests/test_autonomous_planner.py."""
+        def plan(self, goal, reasoning_steps, world, budget_tokens, intent=None):
+            return [
+                Plan(id="plan-X", goal_id=goal.id, steps=("x",),
+                     confidence=ConfidenceScore(0.7, ProvenanceType.RULE_INFERENCE),
+                     provenance=Provenance(source="planner", actor="kernel")),
+                Plan(id="plan-Y", goal_id=goal.id, steps=("y",),
+                     confidence=ConfidenceScore(0.7, ProvenanceType.RULE_INFERENCE),
+                     provenance=Provenance(source="planner", actor="kernel")),
+            ]
 
-    kb = CognitiveKernel(world, attn, res, val, decision_engine, exec_, learn, planner_for)
+    kb = CognitiveKernel(world, attn, res, val, decision_engine, exec_, learn, FixedCandidatePlanner())
     return kb
 
 

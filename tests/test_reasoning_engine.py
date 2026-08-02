@@ -16,6 +16,7 @@ from kernel.cognitive_kernel import (
     SimpleLearningPolicy, NodeLamportClock, build_kernel,
 )
 from kernel.reasoning import ReferenceReasoningEngine
+from kernel.planning import ReferencePlanner
 from services.distributed_runtime import SharedContextService
 
 
@@ -83,13 +84,12 @@ def test_reasoning_influences_planning_and_decision():
 def test_single_clock_shared_across_kernel_world_and_federation():
     clock = NodeLamportClock("NODE-S")
     world = InMemoryWorldState("NODE-S", clock=clock)
+    planner = ReferencePlanner(clock)
     kb = CognitiveKernel(world, SimpleAttention(SimpleResourceManager()),
                          SimpleResourceManager(), SimpleValueSystem(),
                          DeterministicDecisionEngine(), DeterministicExecutive(SimpleResourceManager()),
                          SimpleLearningPolicy(),
-                         lambda g, s: [Plan(id="p", goal_id=g.id, steps=("x",),
-                                            confidence=ConfidenceScore(0.5, ProvenanceType.RULE_INFERENCE),
-                                            provenance=Provenance(source="pl", actor="k"))],
+                         planner,
                          clock=clock)
     svc = SharedContextService("NODE-S", clock=clock)
     # kernel event

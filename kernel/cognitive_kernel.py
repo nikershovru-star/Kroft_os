@@ -45,8 +45,10 @@ from contracts.i_cognitive_kernel import (
     IReasoningEngine,
 )
 from contracts.i_world_model import IWorldModel
+from contracts.i_planner import IPlanner
 from kernel.reasoning import ReferenceReasoningEngine
 from kernel.world_model import ReferenceWorldModel
+from kernel.planning import ReferencePlanner
 
 
 def _uid(prefix: str) -> str:
@@ -256,7 +258,7 @@ class CognitiveKernel(ICognitiveKernel):
                  decision: IDecisionEngine,
                  executive: IExecutive,
                  learning: ILearningPolicy,
-                 planner: Callable[[Goal, List["ReasoningStep"]], List[Plan]],
+                 planner: "IPlanner",
                  clock: Optional["NodeLamportClock"] = None,
                  reason: Optional["IReasoningEngine"] = None,
                  world_model: Optional["IWorldModel"] = None) -> None:
@@ -345,7 +347,7 @@ class CognitiveKernel(ICognitiveKernel):
         steps = self._reason.reason(intent, world_snapshot, attention_ctx, 100) if self._reason else []
         for s in steps:
             self._emit(CognitiveEventType.REASONING_STEP, s.id, s.confidence)
-        candidates = self._planner(goal, steps)
+        candidates = self._planner.plan(goal, steps, world_snapshot, 100, intent=intent)
         for p in candidates:
             self._emit(CognitiveEventType.PLAN_GENERATED, p.id, p.confidence)
         # flag D: Decision is now world-aware — pass WorldState + Intent so a
@@ -438,25 +440,11 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     # Wired into the Reasoning Engine so grounded steps are ranked by PREDICTED
     # utility (not word overlap). The deterministic Decision still makes the final pick.
     world_model = ReferenceWorldModel(shared_clock)
-    # ТЗ-PL-01 flag 2: pass ValueSystem into reasoning so predicted utility is value-aware.
-    reason = ReferenceReasoningEngine(shared_clock, attn, world_model=world_model, values=val)
-
-    def planner(goal: Goal, steps: list) -> List[Plan]:
-        # deterministic candidate generator: one candidate per reasoning step
-        # (grounded in a world fact), plus a fallback "explore" candidate when no
-        # reasoning step exists. An adapter would call an LLM here.
-        cands = []
-        for s in steps:
-            cands.append(Plan(id=_uid("plan"), goal_id=goal.id,
-                              steps=(f"act-on:{s.description}",),
-                              confidence=s.confidence,
-                              provenance=Provenance(source="reasoning", actor="kernel")))
-        if not cands:
-            cands.append(Plan(id=_uid("plan"), goal_id=goal.id,
-                              steps=(f"explore-for:{goal.description}",),
-                              confidence=ConfidenceScore(0.4, ProvenanceType.RULE_INFERENCE),
-                              provenance=Provenance(source="planner", actor="kernel")))
-        return cands
+    # ТЗ-PL-01: Autonomous Planner — a real Deliberate-phase component (not a lambda).
+    # Generates candidates from reasoning steps, runs each through the World Model
+    # (lookahead via simulate), and ranks by PREDICTED VALUE-AWARE utility (flag 2).
+    # The planner only ranks; the deterministic Decision makes the final pick (I-03).
+    planner = ReferencePlanner(shared_clock, world_model=world_model, values=val)
 
     return CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner,
                            clock=shared_clock, reason=reason, world_model=world_model)
