@@ -438,7 +438,8 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     # Wired into the Reasoning Engine so grounded steps are ranked by PREDICTED
     # utility (not word overlap). The deterministic Decision still makes the final pick.
     world_model = ReferenceWorldModel(shared_clock)
-    reason = ReferenceReasoningEngine(shared_clock, attn, world_model=world_model)
+    # ТЗ-PL-01 flag 2: pass ValueSystem into reasoning so predicted utility is value-aware.
+    reason = ReferenceReasoningEngine(shared_clock, attn, world_model=world_model, values=val)
 
     def planner(goal: Goal, steps: list) -> List[Plan]:
         # deterministic candidate generator: one candidate per reasoning step

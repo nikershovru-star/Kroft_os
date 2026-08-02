@@ -144,8 +144,52 @@ def test_predicted_state_causal_node_origin_is_node_id():
 
 
 # -------------------------------------------------------------------------
-# 6. flag A: default kernel clock derives node_id from world (not 'kernel')
+# 0b. flag 2 (ТЗ-PL-01): evaluate is VALUE-AWARE (values no longer dead)
 # -------------------------------------------------------------------------
+def test_evaluate_hard_violation_vetoes_predicted_state():
+    wm = ReferenceWorldModel(NodeLamportClock("N"))
+    w = _world("N", {"prefer-Y": "decide Y"})
+    p = wm.predict(w, _action("decide Y"), horizon=1)
+    # a ValueSystem that vetoes anything below 0.99 confidence
+    from contracts.i_cognitive_kernel import IValueSystem
+    class HardVeto(IValueSystem):
+        def hard_violations(self, candidate):
+            return ["HARD"] if candidate.confidence.value < 0.99 else []
+        def score(self, candidate):
+            return candidate.confidence.value
+    util = wm.evaluate(p, _intent("decide Y"), HardVeto())
+    assert util == 0.0, "hard-violating predicted state must be vetoed (utility 0)"
+
+
+def test_evaluate_soft_utility_reranks():
+    wm = ReferenceWorldModel(NodeLamportClock("N"))
+    w = _world("N", {"prefer-Y": "decide Y"})
+    p = wm.predict(w, _action("decide Y"), horizon=1)
+    from contracts.i_cognitive_kernel import IValueSystem
+    class LowerSoft(IValueSystem):
+        def hard_violations(self, candidate):
+            return []
+        def score(self, candidate):
+            return candidate.confidence.value * 0.3  # dampen soft utility
+    class HigherSoft(IValueSystem):
+        def hard_violations(self, candidate):
+            return []
+        def score(self, candidate):
+            return candidate.confidence.value * 0.9  # amplify
+    u_low = wm.evaluate(p, _intent("decide Y"), LowerSoft())
+    u_high = wm.evaluate(p, _intent("decide Y"), HigherSoft())
+    assert u_high > u_low, "soft-utility must change the predicted-state rank"
+
+
+def test_evaluate_without_values_is_relevance_only_backward_compat():
+    wm = ReferenceWorldModel(NodeLamportClock("N"))
+    w = _world("N", {"prefer-Y": "decide Y"})
+    p = wm.predict(w, _action("decide Y"), horizon=1)
+    # no values -> falls back to confidence * relevance (same as pre-flag-2 logic)
+    util = wm.evaluate(p, _intent("decide Y"))
+    assert 0.0 <= util <= 1.0
+    assert util > 0.0
+
 def test_flag_a_default_clock_uses_world_node_id():
     world = InMemoryWorldState("NODE-AA")
     kb = CognitiveKernel(world, SimpleAttention(SimpleResourceManager()),

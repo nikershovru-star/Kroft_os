@@ -34,6 +34,7 @@ from contracts.cognitive_domain import (
 from contracts.i_cognitive_kernel import IAttention, IReasoningEngine
 from contracts.i_cognitive_kernel import Intent
 from contracts.i_world_model import IWorldModel
+from contracts.i_cognitive_kernel import IValueSystem
 
 
 def _uid(prefix: str) -> str:
@@ -50,19 +51,25 @@ class ReferenceReasoningEngine(IReasoningEngine):
     asserts). Confidence scales with how many intent words overlap the fact content.
 
     ТЗ-WM-01: if a WorldModel is injected, each grounded step is evaluated through the
-    model — its confidence becomes the PREDICTED utility of acting on that fact (not a
+    model — its confidence becomes the PREDICTED UTILITY of acting on that fact (not a
     word-overlap heuristic). This is what makes reasoning "real": candidates are ranked
     by predicted outcome, and the deterministic Decision then picks the max-confidence
     candidate. The World Model is an ADVISOR (I-09); the final pick stays with Decision.
+
+    ТЗ-PL-01 flag 2: the engine also carries a ValueSystem and passes it into
+    world_model.evaluate, so the predicted utility is VALUE-AWARE (hard constraints
+    veto predicted states; soft utilities re-rank them) — not just word relevance.
     """
 
     def __init__(self, clock: NodeLamportClock, attention: IAttention,
-                 world_model: Optional["IWorldModel"] = None) -> None:
+                 world_model: Optional["IWorldModel"] = None,
+                 values: Optional["IValueSystem"] = None) -> None:
         # ТЗ-RE-01 flag 1: reasoning advances the SAME shared node clock as the
         # kernel + world, so every reasoning step's CausalMark shares one order.
         self._clock = clock
         self._attention = attention
         self._world_model = world_model
+        self._values = values
 
     def _confidence_for(self, intent: Intent, world: WorldState, key: str) -> ConfidenceScore:
         """Compute a step's confidence: via WorldModel predicted utility if present,
@@ -76,7 +83,8 @@ class ReferenceReasoningEngine(IReasoningEngine):
                             confidence=ConfidenceScore(0.5, ProvenanceType.RULE_INFERENCE),
                             provenance=Provenance(source="reasoning", actor="kernel"))
             predicted = self._world_model.predict(isolated, action, horizon=1)
-            util = self._world_model.evaluate(predicted, intent)
+            # ТЗ-PL-01 flag 2: pass values so evaluate is value-aware (hard veto / soft re-rank)
+            util = self._world_model.evaluate(predicted, intent, self._values)
             return ConfidenceScore(util, ProvenanceType.RULE_INFERENCE)
         intent_words = set(intent.text.lower().split())
         overlap = len(intent_words & set(content.lower().split()))

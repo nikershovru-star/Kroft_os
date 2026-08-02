@@ -106,9 +106,23 @@ class ReferenceWorldModel(IWorldModel):
 
     def evaluate(self, predicted: PredictedState, intent: Intent,
                  values: Optional[IValueSystem] = None) -> float:
+        # ТЗ-PL-01 flag 2: evaluate is VALUE-AWARE. `values` is no longer a dead
+        # parameter — it actually gates the prediction:
+        #   - HARD violation of the predicted (projected) state -> utility 0 (veto).
+        #     `values.hard_violations` receives the PredictedState (it carries a
+        #     .confidence the checkers read), so KROFT Laws / hard constraints apply
+        #     to predicted outcomes, not just realized plans.
+        #   - otherwise soft utility = values.score(predicted); absent a ValueSystem
+        #     we fall back to the predicted confidence (backward compatible).
+        if values is not None:
+            if values.hard_violations(predicted):
+                return 0.0
+            soft = values.score(predicted)
+        else:
+            soft = predicted.confidence.value
         intent_words = set(intent.text.lower().split())
         proj_text = " ".join(predicted.projected_facts.values()).lower()
         proj_words = set(proj_text.split())
         rel = len(intent_words & proj_words) / max(1, len(intent_words))
-        # predicted utility = confidence * intent-relevance (0..1)
-        return float(min(1.0, predicted.confidence.value * (0.5 + 0.5 * rel)))
+        # predicted utility = soft_value * intent-relevance (0..1)
+        return float(min(1.0, soft * (0.5 + 0.5 * rel)))
