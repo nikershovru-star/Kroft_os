@@ -1,9 +1,10 @@
 """Desktop adapters (Stage 31)."""
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 from contracts import IDesktop
+from contracts.i_execution_sandbox import IExecutionSandbox
 
 
 class MockDesktopAdapter(IDesktop):
@@ -31,11 +32,17 @@ class MockDesktopAdapter(IDesktop):
 
 
 class PyAutoGUIAdapter(IDesktop):
-    """Real desktop automation via PyAutoGUI. Lazy-fail if not installed."""
+    """Real desktop automation via PyAutoGUI. Lazy-fail if not installed.
 
-    def __init__(self) -> None:
+    open_app is routed through an IExecutionSandbox (TZ-EXECUTION-001, ADR-039)
+    to avoid os.system shell injection. GUI automation (click/type/screenshot)
+    stays in-process (PyAutoGUI cannot be sandboxed).
+    """
+
+    def __init__(self, sandbox: Optional[IExecutionSandbox] = None) -> None:
         self._pg = None
         self._Image = None
+        self._sandbox = sandbox
 
     def _ensure(self):
         if self._pg is None:
@@ -70,6 +77,19 @@ class PyAutoGUIAdapter(IDesktop):
         return self._pg.position()
 
     def open_app(self, name: str) -> None:
+        # TZ-EXECUTION-001 / ADR-039: route through sandbox (no os.system).
+        if self._sandbox is not None:
+            import platform
+            sys_name = platform.system()
+            if sys_name == "Windows":
+                cmd = ["cmd", "/c", "start", "", name]
+            elif sys_name == "Darwin":
+                cmd = ["open", name]
+            else:
+                cmd = ["xdg-open", name]
+            self._sandbox.execute(cmd, label=f"open_app:{name}")
+            return
+        # Fallback (no sandbox wired): in-process best-effort, no injection.
         self._ensure()
         import os
         import platform

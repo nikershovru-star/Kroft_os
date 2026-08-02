@@ -31,6 +31,8 @@ from services import (
 )
 from adapters.desktop_adapter import MockDesktopAdapter
 from adapters.agent_adapter import RuleBasedAgentAdapter
+from adapters.subprocess_sandbox import SubprocessSandbox
+from kernel.security.approval_manager import ApprovalManager
 
 
 def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock") -> DependencyContainer:
@@ -51,11 +53,19 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
         persistence_path=_os.path.join(data_dir, "session.json"),
     ))
     c.register_instance("Embedding", MockEmbeddingAdapter())
+    # TZ-EXECUTION-001 / ADR-039: subprocess sandbox as the IExecutionSandbox impl.
+    sandbox = SubprocessSandbox(default_timeout=30.0)
+    c.register_instance("IExecutionSandbox", sandbox)
     if desktop_adapter == "pyautogui":
         from adapters.desktop_adapter import PyAutoGUIAdapter
-        c.register_instance("IDesktop", PyAutoGUIAdapter())
+        c.register_instance("IDesktop", PyAutoGUIAdapter(sandbox=sandbox))
     else:
         c.register_instance("IDesktop", MockDesktopAdapter())
+    c.register_factory(
+        "ToolRegistry",
+        lambda: ToolRegistry(sandbox=c.resolve("IExecutionSandbox"),
+                             approval=ApprovalManager()),
+    )
     c.register_factory(
         "DesktopService",
         lambda: DesktopService(c.resolve("IDesktop")),
@@ -69,7 +79,6 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
             vault_path,
         ),
     )
-    c.register_instance("ToolRegistry", ToolRegistry())
     c.register_factory("AgentService", lambda: _wire_agent(c))
     c.register_factory("IAgent", lambda: RuleBasedAgentAdapter(c.resolve("AgentService")))
     c.register_factory(

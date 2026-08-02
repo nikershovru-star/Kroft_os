@@ -12,6 +12,7 @@ class Tool:
     fn: Callable[..., Any]
     description: str = ""
     required_capabilities: "List[str]" = field(default_factory=list)
+    dangerous: bool = False  # TZ-EXECUTION-001: routed through IExecutionSandbox
 
 
 class IAgent(abc.ABC):
