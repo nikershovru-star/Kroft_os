@@ -102,7 +102,7 @@ def test_idempotent_replay_does_not_change_result():
     assert w1.facts_meta == w2.facts_meta
     # clock advanced to exactly 8 on first delivery; duplicate delivery must NOT
     # inflate it further (max_remote 7 is no longer > local 8 -> stable)
-    assert svc._clock.lamport == 8
+    assert svc._clock.mark.lamport == 8
 
 
 # -------------------------------------------------------------------------
@@ -112,11 +112,11 @@ def test_shared_context_receive_advances_local_clock():
     """The defect: Lamport without receive-update degenerates into a per-node counter.
     This test proves merge_remote advances the service's own Lamport clock."""
     svc = SharedContextService("B")
-    assert svc._clock == CausalMark("B", 0)
+    assert svc._clock.mark == CausalMark("B", 0)
     remote = [{"key": "fact", "value": "from-A", "node_origin": "A", "seq": 10}]
     svc.merge_remote(remote, __world("B"))
     # B received A@10, which is causally newer than local 0 -> clock = 10 + 1 = 11.
-    assert svc._clock == CausalMark("B", 11)
+    assert svc._clock.mark == CausalMark("B", 11)
     # and the merged fact preserves A's origin (convergence on future merges)
     assert svc.merge_remote(remote, __world("B")).facts_meta["fact"] == CausalMark("A", 10)
 
@@ -125,7 +125,7 @@ def test_inmemory_world_update_receive_advances_local_clock():
     """InMemoryWorldState.update with a remote causal mark must advance the local
     clock via receive (not just store the remote mark)."""
     world = InMemoryWorldState("B")
-    assert world._clock == CausalMark("B", 0)
+    assert world._clock.mark == CausalMark("B", 0)
     world.update(
         Observation(id="x", content="v",
                     confidence=ConfidenceScore(0.9, ProvenanceType.OBSERVATION),
@@ -133,7 +133,7 @@ def test_inmemory_world_update_receive_advances_local_clock():
         causal=CausalMark("A", 10),
     )
     # B received A@10 -> local clock = 11; stored fact keeps A's origin (convergence)
-    assert world._clock == CausalMark("B", 11)
+    assert world._clock.mark == CausalMark("B", 11)
     assert world.snapshot().facts_meta["x"] == CausalMark("A", 10)
 
 

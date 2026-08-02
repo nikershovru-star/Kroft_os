@@ -25,6 +25,7 @@ from contracts.cognitive_domain import (
     Decision,
     Goal,
     Intent,
+    NodeLamportClock,
     Observation,
     Plan,
     Policy,
@@ -54,27 +55,27 @@ def _uid(prefix: str) -> str:
 class InMemoryWorldState(IWorldState):
     """Local node SSOT (I-07)."""
 
-    def __init__(self, node_id: str = "local") -> None:
+    def __init__(self, node_id: str = "local", clock: Optional["NodeLamportClock"] = None) -> None:
         self._node_id = node_id
         self._facts: Dict[str, str] = {}
         self._facts_meta: Dict[str, CausalMark] = {}
-        # Lamport logical clock (ТЗ-CAUSAL-01): advanced on every local write and
-        # on every receive of a remote mark, so federation merges are causal.
-        self._clock = CausalMark(self._node_id, 0)
+        # ТЗ-RE-01 flag 1: use the SHARED node Lamport clock. If none is injected,
+        # create one (so existing callers keep working) — but the kernel always
+        # passes its single clock so kernel + world share one causal order.
+        self._clock = clock if clock is not None else NodeLamportClock(node_id)
 
     def update(self, observation: Observation, causal: Optional[CausalMark] = None) -> WorldState:
-        # Advance the LOCAL Lamport clock. If a causal mark was supplied (federation
-        # receive), fold it in via `receive` — this is the Lamport receive-rule that
-        # makes concurrent distant writes merge causally instead of by operation count.
-        # NOTE: the node's OWN clock advances, but the stored fact mark PRESERVES the
-        # original (remote) origin so future merges compare logical time, not node B's
-        # counter — this is what keeps replicas convergent (ТЗ-CAUSAL-01).
+        # Advance the SHARED node Lamport clock. If a causal mark was supplied
+        # (federation receive), fold it in via `receive` — this is the Lamport
+        # receive-rule that makes concurrent distant writes merge causally.
+        # NOTE: the node's OWN clock advances, but the stored fact mark PRESERVES
+        # the original (remote) origin so future merges compare logical time, not
+        # node B's counter — this keeps replicas convergent (ТЗ-CAUSAL-01).
         if causal is not None:
-            self._clock = self._clock.receive(causal)
+            self._clock.receive(causal)
             mark = causal
         else:
-            self._clock = self._clock.tick()
-            mark = self._clock
+            mark = self._clock.tick()
         self._facts[observation.id] = observation.content
         self._facts_meta[observation.id] = mark
         return self.snapshot()
@@ -250,7 +251,16 @@ class CognitiveKernel(ICognitiveKernel):
                  decision: IDecisionEngine,
                  executive: IExecutive,
                  learning: ILearningPolicy,
-                 planner: Callable[[Goal], List[Plan]]) -> None:
+                 planner: Callable[[Goal], List[Plan]],
+                 clock: Optional["NodeLamportClock"] = None) -> None:
+        # ТЗ-RE-01 flag 1: ONE shared Lamport clock per node. World store is wired
+        # to the same clock (see build_kernel), so kernel events + world facts share
+        # one causal order; node_origin = node_id (not the literal "kernel").
+        self._clock = clock if clock is not None else NodeLamportClock("kernel")
+        if isinstance(world, InMemoryWorldState) and world._clock is not self._clock:
+            # ensure the world store uses the SAME shared clock instance
+            world._clock = self._clock
+        self._node_id = self._clock.node_id
         self._world = world
         self._attention = attention
         self._resources = resources
@@ -264,21 +274,19 @@ class CognitiveKernel(ICognitiveKernel):
         self._events: list = []
         self._subscribers: list = []
         self._last_decision = None  # introspection
-        # Lamport logical clock for emitted CognitiveEvents (ТЗ-CAUSAL-01): every
-        # local tick/event advances it, so events carry causal order, not wall-clock.
-        self._clock = CausalMark("kernel", 0)
 
     # -- event emission (I-17) -------------------------------------------------
     def _emit(self, etype: CognitiveEventType, ref_id: str,
               confidence: ConfidenceScore, actor: str = "kernel") -> None:
-        # every local event advances the Lamport clock (ТЗ-CAUSAL-01) so emitted
-        # CognitiveEvents carry a causally-ordered mark, not a wall-clock timestamp.
-        self._clock = self._clock.tick()
+        # every local event advances the SHARED node Lamport clock (ТЗ-CAUSAL-01 /
+        # ТЗ-RE-01) so emitted CognitiveEvents carry a causally-ordered mark with
+        # node_origin = node_id (not a wall-clock timestamp).
+        mark = self._clock.tick()
         ev = CognitiveEvent(
             type=etype, ref_id=ref_id,
             provenance=Provenance(source=etype.value, actor=actor),
             confidence=confidence,
-            causal=self._clock,
+            causal=mark,
         )
         self._events.append(ev)
         payload = ev.to_bus()
@@ -377,9 +385,15 @@ class CognitiveKernel(ICognitiveKernel):
         return list(self._events)
 
 
-def build_kernel(node_id: str = "local") -> CognitiveKernel:
-    """Factory: assemble a deterministic, LLM-free reference kernel (I-09)."""
-    world = InMemoryWorldState(node_id)
+def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = None) -> CognitiveKernel:
+    """Factory: assemble a deterministic, LLM-free reference kernel (I-09).
+
+    ТЗ-RE-01 flag 1: ONE shared Lamport clock per node. The same clock instance is
+    injected into the world store AND the kernel so all emitted CausalMarks carry
+    the same causal order + node_origin = node_id (never the literal "kernel").
+    """
+    shared_clock = clock if clock is not None else NodeLamportClock(node_id)
+    world = InMemoryWorldState(node_id, clock=shared_clock)
     res = SimpleResourceManager()
     attn = SimpleAttention(res)
     val = SimpleValueSystem()
@@ -398,4 +412,4 @@ def build_kernel(node_id: str = "local") -> CognitiveKernel:
                  provenance=Provenance(source="planner", actor="kernel")),
         ]
 
-    return CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner)
+    return CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner, clock=shared_clock)

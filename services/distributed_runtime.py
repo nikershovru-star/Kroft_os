@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 from contracts.cognitive_domain import (
     CausalMark,
     ConfidenceScore,
+    NodeLamportClock,
     ProvenanceType,
     WorldState,
 )
@@ -115,10 +116,12 @@ class SharedContextService(ISharedContext):
     merge causal instead of "whoever did more operations wins".
     """
 
-    def __init__(self, self_node_id: str) -> None:
+    def __init__(self, self_node_id: str, clock: Optional["NodeLamportClock"] = None) -> None:
         self._node_id = self_node_id
-        # local Lamport clock for this node's federation service (ТЗ-CAUSAL-01)
-        self._clock = CausalMark(self_node_id, 0)
+        # ТЗ-RE-01 flag 1: SHARE the node's Lamport clock. If a node-level clock is
+        # injected (e.g. the same instance the kernel + world use), federation
+        # receive-events advance the SAME clock, keeping all causal marks consistent.
+        self._clock = clock if clock is not None else NodeLamportClock(self_node_id)
 
     def publish_selective(self, world: WorldState, scope: str) -> List[dict]:
         out: List[dict] = []
@@ -156,8 +159,8 @@ class SharedContextService(ISharedContext):
         # advance local federation clock only if we observed a causally-NEWER remote
         # mark (ТЗ-CAUSAL-01 receive-rule). Duplicate delivery of the same message
         # does NOT keep inflating the clock — that is what makes replay idempotent.
-        if max_remote.lamport > self._clock.lamport:
-            self._clock = CausalMark(self._node_id, max_remote.lamport + 1)
+        if max_remote.lamport > self._clock.mark.lamport:
+            self._clock.receive(max_remote)
         return WorldState(node_id=self._node_id, facts=merged, facts_meta=meta,
                           confidence=ConfidenceScore(1.0, ProvenanceType.OBSERVATION))
 

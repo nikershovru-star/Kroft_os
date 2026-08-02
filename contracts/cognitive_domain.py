@@ -163,6 +163,44 @@ class CausalMark:
         return (self.lamport, self.node_origin) < (other.lamport, other.node_origin)
 
 
+# -------------------------------------------------------------------------
+# Shared node Lamport clock (ТЗ-RE-01, flag 1) — ONE clock per node
+# -------------------------------------------------------------------------
+class NodeLamportClock:
+    """Mutable holder for the SINGLE Lamport clock of a node (ТЗ-RE-01 flag 1).
+
+    A node's kernel, world store, reasoning engine and federation service MUST
+    share ONE clock so every emitted CausalMark carries the same causal order and
+    the same node_origin (= node_id, NOT a hardcoded literal like "kernel").
+    Three independent clocks would break causal order and the federation tiebreak.
+
+    K1-compliant: stdlib + contracts only. The holder is intentionally stateful
+    (a clock is state); it wraps an immutable CausalMark and advances it via
+    `tick` (local event) / `receive` (remote event).
+    """
+    def __init__(self, node_id: str) -> None:
+        self._node_id = node_id
+        self._mark = CausalMark(node_id, 0)
+
+    @property
+    def node_id(self) -> str:
+        return self._node_id
+
+    @property
+    def mark(self) -> "CausalMark":
+        return self._mark
+
+    def tick(self) -> "CausalMark":
+        """Local event: advance the shared clock by 1, return the new mark."""
+        self._mark = CausalMark(self._node_id, self._mark.lamport + 1)
+        return self._mark
+
+    def receive(self, remote: "CausalMark") -> "CausalMark":
+        """Receive event: clock = max(local, remote) + 1 (Lamport rule)."""
+        self._mark = CausalMark(self._node_id, max(self._mark.lamport, remote.lamport) + 1)
+        return self._mark
+
+
 @dataclass(frozen=True)
 class CognitiveEvent:
     """Emitted on every FSM transition (I-17). Reuse IEventBus.publish(topic, dict)."""
