@@ -25,13 +25,16 @@ from contracts.cognitive_domain import (
     ConfidenceScore,
     CausalMark,
     Decision,
+    Episode,
     Goal,
     Intent,
     Observation,
     Plan,
     Policy,
+    PolicyLifecycle,
     Provenance,
     ReasoningStep,
+    SemanticFact,
     WorldState,
 )
 
@@ -185,7 +188,9 @@ class ILayeredMemory(ABC):
     """Two-layer memory (ADR-054 I-14): episode (raw) vs normative (rules/ADR).
 
     LearningPolicy proposes; memory persists. Write routing by layer is enforced
-    here so Learning NEVER writes memory directly (I-14).
+    here so Learning NEVER writes memory directly (I-14). ТЗ-ME-01 extends the
+    interface with a SOFT semantic layer (consolidated facts) and normative lifecycle
+    (deprecate / supersede).
     """
 
     @abstractmethod
@@ -196,6 +201,25 @@ class ILayeredMemory(ABC):
 
     @abstractmethod
     def get_episodes(self) -> List["Episode"]: ...
+
+    # --- ТЗ-ME-01 extensions (semantic layer + lifecycle) ---
+    @abstractmethod
+    def commit_semantic(self, fact: "SemanticFact") -> None: ...
+
+    @abstractmethod
+    def get_semantic(self) -> List["SemanticFact"]: ...
+
+    @abstractmethod
+    def get_normative(self) -> List["Policy"]: ...
+
+    @abstractmethod
+    def deprecate_normative(self, policy_id: str,
+                            superseded_by: Optional[str] = None) -> None:
+        """Mark a normative/soft policy DEPRECATED or SUPERSEDED (lifecycle, ADR-046).
+
+        HARD policies must NOT be deprecatable from experience (O1 — Self-Evolving
+        guard); implementations should raise or no-op on layer=='hard'.
+        """
 
 
 # --------------------------------------------------------------------------

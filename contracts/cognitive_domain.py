@@ -290,6 +290,22 @@ class Episode:
 
 
 @dataclass(frozen=True)
+class SemanticFact:
+    """A consolidated semantic fact derived from repeated high-confidence episodes
+    (ТЗ-ME-01, ADR-046). Lives in the SOFT semantic layer — never in the HARD layer.
+
+    Confidence is AGGREGATED across the source episodes (ADR-055 aggregate_confidence),
+    not a naive max. The CausalMark is taken from the node's shared Lamport clock
+    (ТЗ-RE-01 flag 1) so consolidated facts share one causal order.
+    """
+    id: str
+    content: str
+    confidence: ConfidenceScore
+    causal: CausalMark
+    source_episodes: Tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Policy:
     """A normative or soft policy (Normative Memory, I-11/I-19)."""
     id: str
@@ -298,6 +314,20 @@ class Policy:
     body: str
     confidence: ConfidenceScore
     provenance: Provenance
+    lifecycle: "PolicyLifecycle" = None  # ACTIVE/DEPRECATED/SUPERSEDED (ТЗ-ME-01)
+
+
+class PolicyLifecycle(Enum):
+    """Lifecycle state of a normative/soft policy (ТЗ-ME-01, ADR-046).
+
+    ACTIVE — currently in force. DEPRECATED — no longer recommended (low confidence /
+    outdated) but kept for traceability. SUPERSEDED — replaced by a newer policy
+    (superseded_by records the successor id). Only SOFT policies ever change lifecycle;
+    HARD constraints are immutable (O1 — Self-Evolving guard).
+    """
+    ACTIVE = "active"
+    DEPRECATED = "deprecated"
+    SUPERSEDED = "superseded"
 
 
 @dataclass(frozen=True)
