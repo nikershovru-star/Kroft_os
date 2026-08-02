@@ -90,3 +90,27 @@ issues:
   - FLAG1
   - FLAGD
   - FLAG3
+- id: WM-01-GAP-CLOSED
+  title: 'ТЗ-WM-01: World Model — предиктивная модель поверх WorldState'
+  severity: info
+  status: closed
+  introduced_by: раунд 1 (World State vs World Model); Reasoning Engine (ADR-056) был token-overlap заглушкой
+  discovered: '2026-08-02'
+  root_cause: 'Reasoning ранжировал candidates по совпадению слов, не по predicted utility.
+    World Model отсутствовал как компонент. Residual flag A: дефолтный clock брал
+    node_id="kernel".'
+  impact: 'Закрыто ТЗ-WM-01 в 6 атомарных коммитах (flag-A fix / контракт / impl / интеграция / тесты / docs).'
+  resolution_options:
+  - IWorldModel.predict/simulate/evaluate (contracts/i_world_model.py)
+  - PredictedState (frozen, horizon + projected_facts + ConfidenceScore + CausalMark)
+  - ReferenceWorldModel (LLM-free; confidence падает с horizon; no-fact = low)
+  - ReferenceReasoningEngine принимает world_model -> confidence = predicted utility
+  - flag A: default clock из world.snapshot().node_id; sentinel-origin normalize в publish
+  notes: 'Коммиты b0523d6, f26eb7e, 07d7730, 66043a4, f33c5fc, docs(ADR-057).
+    Full suite 1020 passed, gate 14/14, akb-lint PASSED.'
+  related:
+  - ADR-047
+  - ADR-056
+  - ADR-057
+  - TZ-WM-01
+  - FLAGA

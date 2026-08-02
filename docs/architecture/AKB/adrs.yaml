@@ -773,4 +773,19 @@ adrs:
   - FLAG1
   - FLAGD
   - FLAG3
+- id: ADR-057
+  title: World Model — predictive advisor over WorldState (ТЗ-WM-01 / ADR-047)
+  status: accepted
+  evidence_level: V
+  date: '2026-08-02'
+  decision_score: 0.86
+  confidence: high
+  risk: low
+  related:
+  - ADR-047
+  - ADR-056
+  - ADR-054
+  - TZ-WM-01
+  - FLAGA
   supersedes: []
+
