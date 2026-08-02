@@ -358,3 +358,9 @@ history:
     in sources: circuit.open/sandbox.kill/degradation.level/self.drift (AgentLifecycleFSM
     already emits agent.failure/stale from WP-10). K5: alert-only, no recovery. Code
     waits K5 go.'
+- id: K5-ADR-025-DECISION
+  date: '2026-08-02'
+  status: decided
+  summary: 'ADR-025 (Multimodal, PHASE 6) K5-decision: DEFER to Wave 3. Rationale:
+    no IMultimodalParser port, heavy external deps (PyMuPDF/OCR) need optional adapters
+    per K8, not blocking. Revisit at Wave 3 with TZ-MULTIMODAL-001 spec.'

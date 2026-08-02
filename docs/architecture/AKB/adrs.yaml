@@ -291,7 +291,7 @@ adrs:
   evidence_level: III
 - id: ADR-025
   title: Multimodal Knowledge Engine (PHASE 6)
-  status: proposed
+  status: deferred
   relates_to:
   - ADR-011
   - ADR-022
@@ -322,6 +322,10 @@ adrs:
   risk: med (YouTube 403/rate-limit; requires pip/ollama install; code after Variant
     G)
   evidence_level: III
+  k5_decision: defer-to-wave3
+  k5_rationale: No IMultimodalParser port yet; heavy external deps (PyMuPDF, OCR)
+    need optional adapters (K8). Does not block current functionality. Revisit when
+    Wave 3 starts.
 - id: ADR-026
   title: Composition Root
   status: accepted
