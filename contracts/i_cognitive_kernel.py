@@ -92,9 +92,14 @@ class IDecisionEngine(ABC):
     """
 
     @abstractmethod
-    def select(self, goal: Goal, candidates: List[Plan],
-               values: IValueSystem) -> Decision:
-        """Deterministic expected-utility selection. Rejects hard-violating plans."""
+    def select(self, goal: Goal, candidates: List[Plan], values: IValueSystem,
+               world: Optional[WorldState] = None, intent: Optional[Intent] = None) -> Decision:
+        """World-aware deterministic expected-utility selection (ТЗ-RE-01 flag D).
+
+        `world` and `intent` are passed so a production Decision Engine can read
+        WorldState directly (no bind()-hacks). Reference impl ignores them for
+        determinism; adapters may use them. Rejects hard-violating plans.
+        """
 
 
 # --------------------------------------------------------------------------

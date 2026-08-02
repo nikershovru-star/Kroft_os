@@ -3,7 +3,7 @@
 Proves the causal contract (gate C) PAYS OFF in the coupled loop — NOT just that
 merge picks the greater CausalMark (that is unit-tested in TZ-015). Here we show:
 
-    tick@A -> causal mark (A,seq) -> publish -> forward -> merge@B
+    tick@A -> causal mark (A,lamport) -> publish -> forward -> merge@B
     -> WorldState@B now carries federated fact with CausalMark(A) -> Decision@B CHANGES
 
 If merge order did not affect B's reasoning, federation would be a distributed store
@@ -14,6 +14,7 @@ network, no flaky wall-clock timing — zero infra pain, max cognitive value).
 """
 
 import pytest
+from typing import Optional
 
 from contracts.cognitive_domain import (
     CausalMark,
@@ -28,6 +29,7 @@ from contracts.cognitive_domain import (
     Plan,
     Provenance,
     ProvenanceType,
+    WorldState,
 )
 from contracts.i_cognitive_kernel import ICognitiveKernel, IDecisionEngine, IWorldState
 from kernel.cognitive_kernel import (
@@ -43,18 +45,15 @@ from services.distributed_runtime import SharedContextService
 
 class WorldAwareDecisionEngine(IDecisionEngine):
     """Test-only decision engine: picks plan by a WorldState fact, proving federation
-    influences reasoning. If WorldState has 'prefer-Y' -> choose plan containing 'Y',
-    else 'X'. This is the coupling assertion, not a production planner."""
+    influences reasoning. If the passed WorldState has 'prefer-Y' -> choose plan
+    containing 'Y', else 'X'. This is the coupling assertion, not a production planner.
 
-    def __init__(self) -> None:
-        self._world = None
+    ТЗ-RE-01 flag D: reads WorldState directly from the `select` port — no bind() hack.
+    """
 
-    def bind(self, world: IWorldState) -> "WorldAwareDecisionEngine":
-        self._world = world
-        return self
-
-    def select(self, goal: Goal, candidates: list, values) -> Decision:
-        pref = self._world.get("prefer-Y") if self._world else None
+    def select(self, goal: Goal, candidates: list, values,
+               world: Optional["WorldState"] = None, intent=None) -> Decision:
+        pref = world.facts.get("prefer-Y") if world is not None else None
         chosen = None
         for p in candidates:
             if pref and "Y" in p.id:
@@ -99,8 +98,6 @@ def _make_node(node_id: str, decision_engine: IDecisionEngine) -> CognitiveKerne
         ]
 
     kb = CognitiveKernel(world, attn, res, val, decision_engine, exec_, learn, planner_for)
-    if hasattr(decision_engine, "bind"):
-        decision_engine.bind(world)
     return kb
 
 

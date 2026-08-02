@@ -156,7 +156,8 @@ class DeterministicDecisionEngine(IDecisionEngine):
     """Expected-utility selection, DETERMINISTIC (I-03). LLM = advisor only (not used here)."""
 
     def select(self, goal: Goal, candidates: List[Plan],
-               values: IValueSystem) -> Decision:
+               values: IValueSystem, world: Optional["WorldState"] = None,
+               intent: Optional["Intent"] = None) -> Decision:
         valid = [p for p in candidates if not values.hard_violations(p)]
         if not valid:
             # reject: no hard-valid candidate
@@ -335,7 +336,10 @@ class CognitiveKernel(ICognitiveKernel):
         candidates = self._planner(goal, steps)
         for p in candidates:
             self._emit(CognitiveEventType.PLAN_GENERATED, p.id, p.confidence)
-        decision = self._decision.select(goal, candidates, self._values)
+        # flag D: Decision is now world-aware — pass WorldState + Intent so a
+        # production engine reads them directly (no bind()-hack).
+        decision = self._decision.select(goal, candidates, self._values,
+                                         world=world_snapshot, intent=intent)
         self._last_decision = decision  # introspection (K1-clean)
         if decision.selected_plan_id:
             self._emit(CognitiveEventType.DECISION_ACCEPTED, decision.id, decision.confidence)
