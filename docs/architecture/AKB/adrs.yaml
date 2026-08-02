@@ -711,3 +711,19 @@ adrs:
   - ADR-047
   - WP-14
   - Wave-3
+- id: ADR-053
+  title: KROFT_OS v2.0 Roadmap — TZ-015..023 unified cognitive architecture
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-015
+  - TZ-016
+  - TZ-017
+  - TZ-018
+  - TZ-019
+  - TZ-020
+  - TZ-021
+  - TZ-022
+  - TZ-023
+  - Wave-3

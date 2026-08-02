@@ -93,6 +93,7 @@ purpose: >
 | TZ-021 | AI Marketplace (8 comps) | 🔬 design RFC-021/ADR-050 DONE, code deferred |
 | TZ-022 | Federated Knowledge Network (8 comps) | 🔬 design RFC-022/ADR-051 DONE, code deferred |
 | TZ-023 | Cognitive Operating System (8 comps) | 🔬 design RFC-023/ADR-052 DONE, code deferred |
+| **v2.0 Roadmap** | TZ-015..023 unified (ADR-053) | 🔬 ALL DESIGNS DONE (9×8/8 PASS, gate 14, akb-lint PASSED) |
 
 ### Функциональные этапы (после стабилизации)
 - Phase D — Configuration & Secrets

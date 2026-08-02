@@ -521,3 +521,12 @@ history:
     Research: GWT for LLM Anthropic 2026, Zylos 2026, Theater of Mind arxiv 2604.08206,
     Sophia 2025 System 3, Ref Cog Arch ScienceDirect 2024. ADR-052 + RFC-023. Code
     deferred (K5 go pending). K1/K3/K5/K6/K8.'
+- id: v2.0-roadmap-design
+  tz: TZ-015..023
+  date: '2026-08-02'
+  status: accepted
+  summary: 'KROFT_OS v2.0 Roadmap: all 9 TZ (015..023) research-first designed. ADR-044..053
+    + RFC-015..023. Layer stack: Identity->Executive->Planner->Society->Reflection->WorldSim->DistributedKG->FederatedMemory->Runtime
+    Cluster->Plugin Ecosystem->Models. All design ad-hoc 8/8 PASS, gate 14, akb-lint
+    PASSED, no regressions. Code deferred (K5 go per TZ). Reuse WP-14 + TZ-AGENT-001
+    + TZ-OBS-001 + ADR-042.'
