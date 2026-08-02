@@ -33,6 +33,9 @@ from adapters.desktop_adapter import MockDesktopAdapter
 from adapters.agent_adapter import RuleBasedAgentAdapter
 from adapters.subprocess_sandbox import SubprocessSandbox
 from adapters.in_memory_telemetry import InMemoryTelemetrySink
+from adapters.ollama_vision import OllamaVisionAdapter
+from adapters.yt_dlp_transcript import YtDlpTranscriptAdapter
+from services.media_intelligence import MediaIntelligenceService
 from kernel.security.approval_manager import ApprovalManager
 from services.alert_engine import AlertEngine
 
@@ -43,6 +46,9 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
     c.register_instance("IFileSystem", LocalFileSystemAdapter(vault_path))
     c.register_instance("IEventBus", InMemoryEventBus())
     c.register_instance("IGraphBuilder", InMemoryGraphBuilder())
+    # TZ-MULTIMODAL-001 / ADR-041: Knowledge Graph v2 engine (VIDEO_NODE sink).
+    from services.knowledge_graph.engine import InMemoryGraphEngine
+    c.register_instance("IGraphEngine", InMemoryGraphEngine())
     c.register_instance("ICapabilityRegistry", CapabilityRegistry())
     # Phase B.3: state repository (IStateRepository impl) wired here.
     from infrastructure.state_repository import StateRepository
@@ -66,6 +72,22 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
     c.register_factory(
         "AlertEngine",
         lambda: AlertEngine(bus, telemetry, alert_log_path=alert_log),
+    )
+    # TZ-MULTIMODAL-001 / ADR-041: vision + transcript adapters + media service.
+    vision = OllamaVisionAdapter(model="qwen2.5vl:7b", sandbox=sandbox)
+    c.register_instance("IVisionParser", vision)  # optional; available only if ollama + model present
+    transcript = YtDlpTranscriptAdapter()
+    c.register_instance("ITranscriptParser", transcript)  # optional; available only if yt-dlp+whisper present
+    c.register_factory(
+        "MediaIntelligenceService",
+        lambda: MediaIntelligenceService(
+            graph=c.resolve("IGraphEngine"),
+            vision=vision if vision.available else None,
+            transcript=transcript if transcript.available else None,
+            sandbox=sandbox,
+            llm=None,  # LLM not wired in build_container; _blend degrades to raw blend
+            telemetry=telemetry,
+        ),
     )
     if desktop_adapter == "pyautogui":
         from adapters.desktop_adapter import PyAutoGUIAdapter

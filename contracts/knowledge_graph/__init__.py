@@ -23,6 +23,9 @@ class NodeType(str, Enum):
     PLATFORM = "PLATFORM"
     PATTERN = "PATTERN"
     LAW = "LAW"
+    VIDEO = "VIDEO"
+    AUDIO = "AUDIO"
+    IMAGE = "IMAGE"
 
 
 class EdgeType(str, Enum):
@@ -34,6 +37,7 @@ class EdgeType(str, Enum):
     VIOLATES = "VIOLATES"
     PROVES = "PROVES"
     REFERENCES = "REFERENCES"
+    CONTAINS = "CONTAINS"
 
 
 def _now() -> str:
