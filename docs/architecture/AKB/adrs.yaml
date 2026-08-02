@@ -63,9 +63,10 @@ adrs:
   title: Policy Platform — Design (superseded by ADR-009)
   status: superseded
   laws_affected: []
-  note: 'AUDIT 2026-08-01: on disk ADR-007 exists as TWO physical files (''ADR-007 Policy Platform — Design.md''
-    and ''ADR-007 Policy Platform — Superseded by ADR-009.md''). Logically one ADR (superseded). Recommend
-    renaming the design file to avoid ID collision (e.g. ADR-007-design-draft.md).'
+  note: 'AUDIT 2026-08-01: on disk ADR-007 exists as TWO physical files (''ADR-007
+    Policy Platform — Design.md'' and ''ADR-007 Policy Platform — Superseded by ADR-009.md'').
+    Logically one ADR (superseded). Recommend renaming the design file to avoid ID
+    collision (e.g. ADR-007-design-draft.md).'
   evidence_level: III
 - id: ADR-008
   title: Knowledge Platform (draft, superseded by ADR-011)
@@ -312,11 +313,14 @@ adrs:
   - 'separate ''video skill'' only (отвергнут: разрозненно, не Acquisition Layer)'
   - 'runtime-embedded vision (отвергнут: LAW K8)'
   - 'cloud-only API (отвергнут: нет локальности, зависимость от вендора)'
-  who_proposed: Hermes (Architecture Intelligence) + пользователь (Media Understanding Layer)
-  review_trigger: Появление реального YouTube-rate-limit ИЛИ когда local VRAM < нужного для Qwen-VL
+  who_proposed: Hermes (Architecture Intelligence) + пользователь (Media Understanding
+    Layer)
+  review_trigger: Появление реального YouTube-rate-limit ИЛИ когда local VRAM < нужного
+    для Qwen-VL
   decision_score: 90
   confidence: 0.8
-  risk: med (YouTube 403/rate-limit; requires pip/ollama install; code after Variant G)
+  risk: med (YouTube 403/rate-limit; requires pip/ollama install; code after Variant
+    G)
   evidence_level: III
 - id: ADR-026
   title: Composition Root
@@ -331,9 +335,9 @@ adrs:
   laws_affected:
   - K1
   - K3
-  note: Phase B. Выделенный слой composition/ — единственная точка создания/связывания (DependencyContainer,
-    SnapshotRepository, EventBus, Services, Adapters, Plugins). Kernel получает зависимости готовыми через
-    ports.
+  note: Phase B. Выделенный слой composition/ — единственная точка создания/связывания
+    (DependencyContainer, SnapshotRepository, EventBus, Services, Adapters, Plugins).
+    Kernel получает зависимости готовыми через ports.
   evidence_level: III
 - id: ADR-027
   title: Dependency Inversion
@@ -349,8 +353,9 @@ adrs:
   laws_affected:
   - K1
   - K6
-  note: 'Phase B. DIP ко всем слоям: kernel/runtime/services зависят от ports, не реализаций. Устранение
-    cross-импортов (adapters->policies, services->concrete ModelRegistry).'
+  note: 'Phase B. DIP ко всем слоям: kernel/runtime/services зависят от ports, не
+    реализаций. Устранение cross-импортов (adapters->policies, services->concrete
+    ModelRegistry).'
   evidence_level: III
 - id: ADR-028
   title: Kernel Purity
@@ -383,10 +388,10 @@ adrs:
   - K1
   - K3
   - K8
-  note: 'Phase B. Канонический жизненный цикл загрузки: configuration -> DI -> runtime -> kernel -> plugins
-    -> services -> ready (и reverse). Вся сборка в composition/ (Composition Root), ядро не создаёт зависимостей.
-    Фундамент для Supervisor/Recovery, Multi-Agent, Plugin Marketplace, Cluster, Self-Healing без изменения
-    kernel.'
+  note: 'Phase B. Канонический жизненный цикл загрузки: configuration -> DI -> runtime
+    -> kernel -> plugins -> services -> ready (и reverse). Вся сборка в composition/
+    (Composition Root), ядро не создаёт зависимостей. Фундамент для Supervisor/Recovery,
+    Multi-Agent, Plugin Marketplace, Cluster, Self-Healing без изменения kernel.'
   evidence_level: III
 - id: ADR-030
   title: Policy & Domain Boundary (Phase C)
@@ -401,10 +406,11 @@ adrs:
   - estimate_cost
   laws_affected:
   - K6
-  note: 'Phase C. V3 (adapters/router.py -> policies.budget_policy.estimate_cost) RESOLVED: estimate_cost
-    ported to contracts/cost.py; adapters depend ONLY on contracts. PolicyRegistry (policies/registry.py)
-    makes policies pluggable by name. PolicyEngine pipeline (veto->filter->rank->fallback) already implements
-    C.3 (Wave 5). All major layers now depend ONLY on contracts.'
+  note: 'Phase C. V3 (adapters/router.py -> policies.budget_policy.estimate_cost)
+    RESOLVED: estimate_cost ported to contracts/cost.py; adapters depend ONLY on contracts.
+    PolicyRegistry (policies/registry.py) makes policies pluggable by name. PolicyEngine
+    pipeline (veto->filter->rank->fallback) already implements C.3 (Wave 5). All major
+    layers now depend ONLY on contracts.'
   evidence_level: III
 - id: ADR-031
   title: CI Pipeline & AKB Linter
@@ -418,9 +424,10 @@ adrs:
   - K5
   - K7
   - K8
-  note: 'TZ-003 WP-05. Local CI (scripts/ci.py) + AKB linter (tools/akb_lint.py). Stages: import-check,
-    lint(non-block), tests, arch-gate, akb-lint, coverage(non-block). Pre-commit hook + dormant GitHub
-    Actions. evidence_level non-blocking WARN until WP-08 (TZ-002 Wave 2).'
+  note: 'TZ-003 WP-05. Local CI (scripts/ci.py) + AKB linter (tools/akb_lint.py).
+    Stages: import-check, lint(non-block), tests, arch-gate, akb-lint, coverage(non-block).
+    Pre-commit hook + dormant GitHub Actions. evidence_level non-blocking WARN until
+    WP-08 (TZ-002 Wave 2).'
 - id: ADR-032
   title: Security Architecture (Capability Boundary)
   status: accepted
@@ -436,8 +443,8 @@ adrs:
   - K3
   - K5
   - K8
-  note: 'TZ-SEC-001 (Design, Critical). Proposed, awaiting K5 approval. K1-compliant: kernel/security
-    depends only on contracts.'
+  note: 'TZ-SEC-001 (Design, Critical). Proposed, awaiting K5 approval. K1-compliant:
+    kernel/security depends only on contracts.'
 - id: ADR-033
   title: Capability Model (RBAC + Tool Requirements)
   status: accepted
@@ -450,8 +457,8 @@ adrs:
   - K1
   - K5
   - K6
-  note: 'TZ-SEC-001 (Design, Critical). Proposed, awaiting K5 approval. K1-compliant: kernel/security
-    depends only on contracts.'
+  note: 'TZ-SEC-001 (Design, Critical). Proposed, awaiting K5 approval. K1-compliant:
+    kernel/security depends only on contracts.'
 - id: ADR-034
   title: Approval Workflow (Human-in-loop)
   status: accepted
@@ -462,5 +469,25 @@ adrs:
   - RFC-006
   laws_affected:
   - K5
-  note: 'TZ-SEC-001 (Design, Critical). Proposed, awaiting K5 approval. K1-compliant: kernel/security
-    depends only on contracts.'
+  note: 'TZ-SEC-001 (Design, Critical). Proposed, awaiting K5 approval. K1-compliant:
+    kernel/security depends only on contracts.'
+- id: ADR-035
+  title: Tenant Isolation Architecture
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  decision_score: 0.9
+  confidence: high
+  risk: low
+  relates_to:
+  - TZ-MULTI-001
+  - RFC-007
+  - ADR-032
+  - ADR-033
+  - ADR-034
+  law:
+  - K1
+  - K3
+  - K5
+  - K6
+  - K8

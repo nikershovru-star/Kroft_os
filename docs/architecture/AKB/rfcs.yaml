@@ -38,5 +38,18 @@ rfcs:
   status: under_review
   evidence_level: III
   became_adr: ADR-032, ADR-033, ADR-034 (proposed)
-  note: 'Capability boundary: agent authorized by Kernel. Covers TZ-SEC-001 WP-01..WP-10. K1-compliant
-    3-layer (contracts/security ports, kernel/security clean, services/security IO).'
+  note: 'Capability boundary: agent authorized by Kernel. Covers TZ-SEC-001 WP-01..WP-10.
+    K1-compliant 3-layer (contracts/security ports, kernel/security clean, services/security
+    IO).'
+- id: RFC-007
+  title: Multi-User Tenant Isolation Model
+  status: under_review
+  date: '2026-08-02'
+  related:
+  - TZ-MULTI-001
+  - ADR-035
+  - RFC-006
+  - ADR-032
+  - ADR-033
+  - ADR-034
+  evidence_level: III

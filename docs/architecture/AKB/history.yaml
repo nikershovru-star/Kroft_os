@@ -1,148 +1,264 @@
-# KROFT OS — Architecture History (machine-readable, Knowledge Base Update log)
-# Каждое значимое изменение архитектуры фиксируется здесь (traceability).
-# Восстановлено 2026-08-01 (history пересоздана; ранние записи — по memory).
-
 history:
-  - date: "2026-07-31"
-    commit: "kroft-rebrand"
-    adr: "-"
-    law_changes: [rename]
-    note: "KnowledgeOS-v5 переименован в KROFT_OS (in-code rebrand закоммичен). Физический rename папки заблокирован OS."
-
-  - date: "2026-08-01"
-    commit: "adr021"
-    adr: ADR-021
-    law_changes: [K1, K8]
-    note: "Runtime Evolution — Architecture Intelligence Synthesis (OTP/K8s/Temporal/Dapr/Akka/Orleans/NATS/FDB/OTel/seL4 → supervision trees, declarative recovery, durable bus, virtual actors, chaos harness)."
-
-  - date: "2026-08-01"
-    commit: "adr022"
-    adr: ADR-022
-    law_changes: [K8]
-    note: "Architecture Knowledge Base (AKB) — machine-readable governance layer. Proposed."
-
-  - date: "2026-08-01"
-    commit: "adr023"
-    adr: ADR-023
-    law_changes: [K1, K3, K4, K5, K8]
-    note: "Architecture Agent Hierarchy (10 levels) & Research Mesh. KROFT-native agents via IAgentPlatform+Supervisor+EventBus."
-
-  - date: "2026-08-01"
-    commit: "adr024"
-    adr: ADR-024
-    law_changes: [K3, K8]
-    note: "Meta Architecture Engine (L11-L18) & Engineering Intelligence Platform (EIP). EIP = meta-layer OVER KROFT, NOT runtime (LAW K8). ADR-E Org Memory; heuristic>ML; human-in-loop self-improve."
-
-  - date: "2026-08-01"
-    commit: "kera-v1.0"
-    adr: KERA
-    law_changes: []
-    note: "KROFT Engineering Reference Architecture v1.0 — CONSTITUTION. Consolidates ADR-021..024 into single system-of-coordinates."
-
-  - date: "2026-08-01"
-    commit: "kes-keh-v1.0"
-    adr: KES
-    law_changes: []
-    note: "KROFT Engineering Science (KES) v1.0 + KROFT Engineering Handbook (KEH) v1.0. KES=10 science directions; KEH=methodology. MOC reorganized into hierarchy."
-
-  - date: "2026-08-01"
-    commit: "principal-restructure"
-    adr: KERA
-    law_changes: []
-    note: "PRINCIPAL REVIEW: добавлены KP (Philosophy, выше Vision, рождает LAW), KL (Language/ubiquitous), Glossary (glossary.yaml), RFC-слой (rfcs.yaml), KERA Views (адаптированный 4+1). KES/KEH реструктурированы в MOC-навигацию. P/L-нумерация → внутренние коды; primary names = смысловые."
-
-  - date: "2026-08-01"
-    commit: "krm-v1.0"
-    adr: KRM
-    law_changes: []
-    note: "KROFT Reference Model (KRM) v1.0 — метамодель: 16 entity-types (Knowledge/Artifact/Decision/Capability/Contract/Platform/Agent/Component/Signal/Boundary/State/Projection/Policy/Resource/Workflow/Evidence) + allowed relationships (Knowledge Graph 2.0 backbone)."
-
-  - date: "2026-08-01"
-    commit: "docs-reorg-subdirs"
-    adr: "-"
-    law_changes: []
-    note: "Доки architecture/ перенесены в подпапки KP/ KRM/ KERA/ KEH/ KES/ KL/ RFC/ AKB/ (структура из PROJECT_CONTEXT_MAP)."
-
-  - date: "2026-08-01"
-    commit: "akb-recovery"
-    adr: AKB
-    law_changes: [K1, K8]
-    note: "AKB YAML восстановлены после случайного удаления (rm -rf). laws.yaml (K1-K8), patterns/forbidden (F1-F6), patterns/allowed (PL1-PL10), standards/*, evidence_levels, glossary, rfcs, org_memory, pattern_library, tech_catalog, adrs, history."
-
-  - date: "2026-08-01"
-    commit: "akb-audit-v1.1.1"
-    adr: AKB
-    law_changes: [K1]
-    note: "AKB AUDIT v1.1.1: adrs.yaml синхронизирован с диском (ADR-001..025, ADR-007 теперь как два файла с одним ID -> переименован design-файл в 'ADR-007 Policy Platform — Design (superseded draft).md'). laws.yaml K1 + patterns/forbidden.yaml F1/F4/F5/F6 enforcement-поля СИНХРОНИЗИРОВАНЫ с реальностью (гейт выполняет только import-axis проверки; автоматически ловится только F2). K1-vs-gate КОНФЛИКТ задокументирован: laws.yaml запрещает kernel->infrastructure, но tests/test_architecture.py ALLOWED['kernel']={contracts,infrastructure,runtime} и зелёный. Решение: подтянуть гейт (убрать infrastructure), НЕ ослаблять закон (см. Variant A Задача 4)."
-
-  - date: "2026-08-01"
-    commit: "merge-knowledgeos-v5"
-    adr: "-"
-    law_changes: [K1 enforcement aligned with gate]
-    note: "Variant A executed: KROFT_OS absorbs KnowledgeOS-v5. Unified repo: docs + code + full git history (merge commit 84417b9, --allow-unrelated-histories). 757 tests + arch-gate preserved. KnowledgeOS-v5 moved to archive/ (OS blocked mv -> cp -r + gitignore). K1 vs gate conflict RESOLVED by tightening the gate (commit d299d0e): kernel may NOT import infrastructure. KNOWN REMAINING VIOLATION: kernel/kernel.py imports infrastructure.DependencyContainer + SnapshotStore (lines 21-22) -> test_no_forbidden_cross_layer_imports FAILS. Requires separate code-fix (extract to composition root / contracts) with human approval (LAW K5). PROJECT_CONTEXT_MAP.md on disk is v1.1 (not v1.1.1); audit-record here is authoritative."
-
-  - date: "2026-08-01"
-    commit: "phase-b-dependency-report"
-    adr: "ADR-026/027/028 (proposed)"
-    law_changes: [K1, K3, K6]
-    note: "PHASE B (Architecture Stabilization) — Step 1-6 analysis COMPLETE, NO CODE CHANGES. Created docs/architecture/Dependency Report — Phase B.md (full 7-layer audit). Findings: kernel->infrastructure violations V1 (DependencyContainer) + V2 (SnapshotStore) [K1]; NEW violation V3 adapters/router.py->policies.budget_policy [K6]; V4 services/policy_engine->contracts.model_registry.ModelRegistry [K6 minor]; V5 cli/+bootstrap_v2 split wiring [K3 org]. Created ADR-026 Composition Root, ADR-027 Dependency Inversion, ADR-028 Kernel Purity (all proposed). composition/ skeleton created (empty, documented). REFACTORING (Step 7, kernel decoupling) PENDING human approval (LAW K5) — NOT executed."
-
-  - date: "2026-08-01"
-    commit: "phase-b-refactor"
-    adr: "ADR-029 (proposed)"
-    law_changes: [K1, K3, K8]
-    note: "PHASE B REFACTOR EXECUTED (human approved). Commits: a65eb30 (IStateRepository port + impl), 4362a62 (composition/ 7 modules, main.py+bootstrap_v2 delegate), 1bd9140 (kernel constructor injection, DROP infrastructure import). K1 VIOLATION RESOLVED: kernel no longer imports infrastructure (DependencyContainer/SnapshotStore) -> arch-gate GREEN (3 passed). Kernel Purity (ADR-028) achieved: kernel imports only {contracts, runtime, stdlib}. IStateRepository port (save/load_state + save/load_snapshot + checkpoint/rollback) replaces SnapshotStore. composition/bootstrap.build_system() implements ADR-029 lifecycle. 757 passed, 19 skipped, arch-gate 3 passed. V3 (adapters->policies) DEFERRED to Phase C (per user). Legacy Kernel(container=...) retained (deprecated). NOTE: UI 'verification_evidence expired' flagged stale FAIL from pre-refactor run; this session's fresh ad-hoc confirmed GREEN."
-
-  - date: "2026-08-01"
-    commit: "phase-c-policy-boundary"
-    adr: "ADR-030 (proposed)"
-    law_changes: [K6]
-    note: "PHASE C (Policy & Domain Boundary) EXECUTED. Commits: 3a899c6 (C.1 V3 resolved), 6f0f2ca (C.2 PolicyRegistry). C.1: estimate_cost ported to contracts/cost.py; adapters/router.py now imports from contracts (NOT policies) -> V3 GONE. Arch-gate hardened: policies added to PROJECT_PKGS + ALLOWED (adapters->{contracts} catches any 'from policies' regression; negative-test verified). C.2: policies/registry.py PolicyRegistry (register/get/has/names/all by name) + PolicyEngine.register_all(). C.3: PolicyEngine pipeline (veto->filter->rank->fallback) already implemented in Wave 5. RESULT: ALL MAJOR LAYERS (kernel, runtime, services, adapters, infrastructure, policies) now depend ONLY on contracts. Last HIGH architectural debt CLOSED. 757 passed, 19 skipped, arch-gate 3 passed. V4 (services/policy_engine->model_registry) still minor K6 (accepted). Roadmap: Phase D (Config), Phase E (MCP Gateway), Phase F (Supervisor/Recovery), Phase G (Distributed)."
-
-  - date: "2026-08-02"
-    commit: "wp-02-arch-gate"
-    adr: "-"
-    law_changes: [K1, K3, K6, K8, F1, F4]
-    note: "WP-02 (TZ-001 Wave 0): Architecture Gate EXPANDED from 3 to 8 positive tests + 6 negative tests (proof-of-fire). Matrix loaded from AKB/import_matrix.yaml (single source). Added detectors: K3 (wiring only in composition: kernel/runtime/services/policies must NOT instantiate DependencyContainer/SnapshotStore), K8/F4 (kernel/runtime -> akb/research/llm forbidden), F1 (no blocking time.sleep in runtime/recovery+supervisor), F5 (AgentResult frozen if present), F6 (ADR evidence_level report, non-blocking warn). Negative fixtures in tests/fixtures_violations/ prove each detector fires. forbidden.yaml enforcement fields updated (F1/F4 now AUTOMATED, F5/F6 PARTIAL). gate_coverage.md report created. RESULT: 768 passed (+11 gate tests), 19 skipped, arch-gate 8 passed. Known open violations: 0. K1/K3/K6/K8 + F1/F4 now AUTOMATED (blocking); F5/F6 warn (partial). NOTE: WP-01 (V3) was ALREADY closed in Phase C (commits 3a899c6/6f0f2ca) before TZ-001 written -> TZ baseline was stale."
-
-  - date: "2026-08-02"
-    commit: "tz-002-wp03-docs"
-    adr: "-"
-    law_changes: []
-    note: "TZ-002 WP-03 (Documentation Consistency). Sync docs to reality after Phase B/C + WP-01/WP-02. D1: PROJECT_CONTEXT_MAP.md -> v1.2 (Variant A DONE, Composition Root = composition/ NOT bootstrap_v2, V3 CLOSED, ADR-001..030, new sections Architecture Gate + AKB Structure + full ADR Index 001..030 without gaps). D2: PROJECT_STATUS.md CREATED (arch debt: V1/V2 closed Phase B, V3 closed Phase C, No High Debt; metrics 768 passed/0 failed/0 open violations). D3/D4/D5: README.md added Architecture Overview (CLI->Composition->Kernel/Runtime/Contracts + Adapters/Infrastructure + Policies schema), Architecture Laws (K1-K8), Forbidden Patterns (link to forbidden.yaml); fixed stale schema (kernel->infrastructure -> kernel->contracts+runtime, Composition Root = composition/). D6/D7: gate coverage + import_matrix + forbidden.yaml referenced in PROJECT_CONTEXT_MAP. D8: diagrams note (bootstrap_v2 forbidden as CR). D9: ADR index 001..030 in map. D10: this history entry. Wave 2 items (WP-04..WP-13, diagrams, AKB validation, CI) deferred to next turn per approval scope."
-
-  - date: "2026-08-02"
-    commit: "wp04-repo-gitmode"
-    adr: "-"
-    law_changes: [K7]
-    note: "TZ-003 WP-04 (Repo/Git-mode final). .gitignore finalized: added recovery_journal.jsonl, stubs/, .venv/, cache/, .DS_Store. Confirmed git ls-files contains NO data/, *.exe, .hermes/, archive/KnowledgeOS-v5/. Committed legitimate Phase B leftover bootstrap_v2.py. PROJECT_STATUS.md git-mode section updated. git push NOT executed (LAW K5, no remote)."
-
-  - date: "2026-08-02"
-    commit: "wp05-ci-akb-lint"
-    adr: "ADR-031 (proposed), RFC-005 (decided)"
-    law_changes: [K5, K7, K8]
-    note: "TZ-003 WP-05 (CI + AKB-linter). scripts/ci.py orchestrator (import-check/tests/arch-gate/akb-lint blocking; lint/coverage non-blocking). tools/akb_lint.py (YAML parse, ADR<->yaml bijection, RFC transitions, KL forbidden synonyms, evidence_level). pre-commit (.pre-commit-config.yaml + scripts/precommit.py). DORMANT .github/workflows/ci.yml (GitHub Actions, activates on remote). ADR-031 + RFC-005. adrs.yaml +ADR-031. Full CI GREEN in 32.6s (<=5min target)."
-
-  - date: "2026-08-02"
-    commit: "wp06-context-map-sync"
-    adr: "-"
-    law_changes: [K7]
-    note: "TZ-003 WP-06 (Auto-sync PROJECT_CONTEXT_MAP). tools/context_map_sync.py regenerates AUTO-GENERATED block from real runs (tests=768, gate=14, ADR=31, open=0). Markers added to PROJECT_CONTEXT_MAP.md. Idempotent verified (regen -> empty git diff). CI drift check: hand-edited numbers -> git diff --exit-code fails."
-
-  - id: WP-07
-    tz: TZ-003
-    date: "2026-08-02"
-    status: done
-    summary: "Container-path de-deprecated. Literal removal aborted due to R2 (17 tests failed via snapshotable resolution). Container kept as K3-compliant Composition Root factory. Deprecated API count = 0."
-
-  - id: WP-08
-    tz: TZ-003
-    date: "2026-08-02"
-    status: done
-    summary: "ADR-026..029 accepted. evidence_level: III added to all 31 ADR. F6 warn closed (akb-lint green). PROJECT_CONTEXT_MAP §4 updated."
-
-  - id: WP-SEC-001-code
-    tz: TZ-SEC-001
-    date: "2026-08-02"
-    status: done
-    summary: "TZ-SEC-001 CODE phase. WP-01..WP-09: contracts/security ports (8 ports), kernel/security (CapabilityManager RBAC + AuthorizationEngine + ApprovalManager + FileSandbox, K1-clean), services/security (SecretManager mask/redact, AuditLogger checksum-chain, TerminalExecutor blacklist/timeout). Tool.required_capabilities added. 26 security tests (>=95% target). Full suite 794 passed, gate 14 passed, K1 verified."
+- date: '2026-07-31'
+  commit: kroft-rebrand
+  adr: '-'
+  law_changes:
+  - rename
+  note: KnowledgeOS-v5 переименован в KROFT_OS (in-code rebrand закоммичен). Физический
+    rename папки заблокирован OS.
+- date: '2026-08-01'
+  commit: adr021
+  adr: ADR-021
+  law_changes:
+  - K1
+  - K8
+  note: Runtime Evolution — Architecture Intelligence Synthesis (OTP/K8s/Temporal/Dapr/Akka/Orleans/NATS/FDB/OTel/seL4
+    → supervision trees, declarative recovery, durable bus, virtual actors, chaos
+    harness).
+- date: '2026-08-01'
+  commit: adr022
+  adr: ADR-022
+  law_changes:
+  - K8
+  note: Architecture Knowledge Base (AKB) — machine-readable governance layer. Proposed.
+- date: '2026-08-01'
+  commit: adr023
+  adr: ADR-023
+  law_changes:
+  - K1
+  - K3
+  - K4
+  - K5
+  - K8
+  note: Architecture Agent Hierarchy (10 levels) & Research Mesh. KROFT-native agents
+    via IAgentPlatform+Supervisor+EventBus.
+- date: '2026-08-01'
+  commit: adr024
+  adr: ADR-024
+  law_changes:
+  - K3
+  - K8
+  note: Meta Architecture Engine (L11-L18) & Engineering Intelligence Platform (EIP).
+    EIP = meta-layer OVER KROFT, NOT runtime (LAW K8). ADR-E Org Memory; heuristic>ML;
+    human-in-loop self-improve.
+- date: '2026-08-01'
+  commit: kera-v1.0
+  adr: KERA
+  law_changes: []
+  note: KROFT Engineering Reference Architecture v1.0 — CONSTITUTION. Consolidates
+    ADR-021..024 into single system-of-coordinates.
+- date: '2026-08-01'
+  commit: kes-keh-v1.0
+  adr: KES
+  law_changes: []
+  note: KROFT Engineering Science (KES) v1.0 + KROFT Engineering Handbook (KEH) v1.0.
+    KES=10 science directions; KEH=methodology. MOC reorganized into hierarchy.
+- date: '2026-08-01'
+  commit: principal-restructure
+  adr: KERA
+  law_changes: []
+  note: 'PRINCIPAL REVIEW: добавлены KP (Philosophy, выше Vision, рождает LAW), KL
+    (Language/ubiquitous), Glossary (glossary.yaml), RFC-слой (rfcs.yaml), KERA Views
+    (адаптированный 4+1). KES/KEH реструктурированы в MOC-навигацию. P/L-нумерация
+    → внутренние коды; primary names = смысловые.'
+- date: '2026-08-01'
+  commit: krm-v1.0
+  adr: KRM
+  law_changes: []
+  note: 'KROFT Reference Model (KRM) v1.0 — метамодель: 16 entity-types (Knowledge/Artifact/Decision/Capability/Contract/Platform/Agent/Component/Signal/Boundary/State/Projection/Policy/Resource/Workflow/Evidence)
+    + allowed relationships (Knowledge Graph 2.0 backbone).'
+- date: '2026-08-01'
+  commit: docs-reorg-subdirs
+  adr: '-'
+  law_changes: []
+  note: Доки architecture/ перенесены в подпапки KP/ KRM/ KERA/ KEH/ KES/ KL/ RFC/
+    AKB/ (структура из PROJECT_CONTEXT_MAP).
+- date: '2026-08-01'
+  commit: akb-recovery
+  adr: AKB
+  law_changes:
+  - K1
+  - K8
+  note: AKB YAML восстановлены после случайного удаления (rm -rf). laws.yaml (K1-K8),
+    patterns/forbidden (F1-F6), patterns/allowed (PL1-PL10), standards/*, evidence_levels,
+    glossary, rfcs, org_memory, pattern_library, tech_catalog, adrs, history.
+- date: '2026-08-01'
+  commit: akb-audit-v1.1.1
+  adr: AKB
+  law_changes:
+  - K1
+  note: 'AKB AUDIT v1.1.1: adrs.yaml синхронизирован с диском (ADR-001..025, ADR-007
+    теперь как два файла с одним ID -> переименован design-файл в ''ADR-007 Policy
+    Platform — Design (superseded draft).md''). laws.yaml K1 + patterns/forbidden.yaml
+    F1/F4/F5/F6 enforcement-поля СИНХРОНИЗИРОВАНЫ с реальностью (гейт выполняет только
+    import-axis проверки; автоматически ловится только F2). K1-vs-gate КОНФЛИКТ задокументирован:
+    laws.yaml запрещает kernel->infrastructure, но tests/test_architecture.py ALLOWED[''kernel'']={contracts,infrastructure,runtime}
+    и зелёный. Решение: подтянуть гейт (убрать infrastructure), НЕ ослаблять закон
+    (см. Variant A Задача 4).'
+- date: '2026-08-01'
+  commit: merge-knowledgeos-v5
+  adr: '-'
+  law_changes:
+  - K1 enforcement aligned with gate
+  note: 'Variant A executed: KROFT_OS absorbs KnowledgeOS-v5. Unified repo: docs +
+    code + full git history (merge commit 84417b9, --allow-unrelated-histories). 757
+    tests + arch-gate preserved. KnowledgeOS-v5 moved to archive/ (OS blocked mv ->
+    cp -r + gitignore). K1 vs gate conflict RESOLVED by tightening the gate (commit
+    d299d0e): kernel may NOT import infrastructure. KNOWN REMAINING VIOLATION: kernel/kernel.py
+    imports infrastructure.DependencyContainer + SnapshotStore (lines 21-22) -> test_no_forbidden_cross_layer_imports
+    FAILS. Requires separate code-fix (extract to composition root / contracts) with
+    human approval (LAW K5). PROJECT_CONTEXT_MAP.md on disk is v1.1 (not v1.1.1);
+    audit-record here is authoritative.'
+- date: '2026-08-01'
+  commit: phase-b-dependency-report
+  adr: ADR-026/027/028 (proposed)
+  law_changes:
+  - K1
+  - K3
+  - K6
+  note: 'PHASE B (Architecture Stabilization) — Step 1-6 analysis COMPLETE, NO CODE
+    CHANGES. Created docs/architecture/Dependency Report — Phase B.md (full 7-layer
+    audit). Findings: kernel->infrastructure violations V1 (DependencyContainer) +
+    V2 (SnapshotStore) [K1]; NEW violation V3 adapters/router.py->policies.budget_policy
+    [K6]; V4 services/policy_engine->contracts.model_registry.ModelRegistry [K6 minor];
+    V5 cli/+bootstrap_v2 split wiring [K3 org]. Created ADR-026 Composition Root,
+    ADR-027 Dependency Inversion, ADR-028 Kernel Purity (all proposed). composition/
+    skeleton created (empty, documented). REFACTORING (Step 7, kernel decoupling)
+    PENDING human approval (LAW K5) — NOT executed.'
+- date: '2026-08-01'
+  commit: phase-b-refactor
+  adr: ADR-029 (proposed)
+  law_changes:
+  - K1
+  - K3
+  - K8
+  note: 'PHASE B REFACTOR EXECUTED (human approved). Commits: a65eb30 (IStateRepository
+    port + impl), 4362a62 (composition/ 7 modules, main.py+bootstrap_v2 delegate),
+    1bd9140 (kernel constructor injection, DROP infrastructure import). K1 VIOLATION
+    RESOLVED: kernel no longer imports infrastructure (DependencyContainer/SnapshotStore)
+    -> arch-gate GREEN (3 passed). Kernel Purity (ADR-028) achieved: kernel imports
+    only {contracts, runtime, stdlib}. IStateRepository port (save/load_state + save/load_snapshot
+    + checkpoint/rollback) replaces SnapshotStore. composition/bootstrap.build_system()
+    implements ADR-029 lifecycle. 757 passed, 19 skipped, arch-gate 3 passed. V3 (adapters->policies)
+    DEFERRED to Phase C (per user). Legacy Kernel(container=...) retained (deprecated).
+    NOTE: UI ''verification_evidence expired'' flagged stale FAIL from pre-refactor
+    run; this session''s fresh ad-hoc confirmed GREEN.'
+- date: '2026-08-01'
+  commit: phase-c-policy-boundary
+  adr: ADR-030 (proposed)
+  law_changes:
+  - K6
+  note: 'PHASE C (Policy & Domain Boundary) EXECUTED. Commits: 3a899c6 (C.1 V3 resolved),
+    6f0f2ca (C.2 PolicyRegistry). C.1: estimate_cost ported to contracts/cost.py;
+    adapters/router.py now imports from contracts (NOT policies) -> V3 GONE. Arch-gate
+    hardened: policies added to PROJECT_PKGS + ALLOWED (adapters->{contracts} catches
+    any ''from policies'' regression; negative-test verified). C.2: policies/registry.py
+    PolicyRegistry (register/get/has/names/all by name) + PolicyEngine.register_all().
+    C.3: PolicyEngine pipeline (veto->filter->rank->fallback) already implemented
+    in Wave 5. RESULT: ALL MAJOR LAYERS (kernel, runtime, services, adapters, infrastructure,
+    policies) now depend ONLY on contracts. Last HIGH architectural debt CLOSED. 757
+    passed, 19 skipped, arch-gate 3 passed. V4 (services/policy_engine->model_registry)
+    still minor K6 (accepted). Roadmap: Phase D (Config), Phase E (MCP Gateway), Phase
+    F (Supervisor/Recovery), Phase G (Distributed).'
+- date: '2026-08-02'
+  commit: wp-02-arch-gate
+  adr: '-'
+  law_changes:
+  - K1
+  - K3
+  - K6
+  - K8
+  - F1
+  - F4
+  note: 'WP-02 (TZ-001 Wave 0): Architecture Gate EXPANDED from 3 to 8 positive tests
+    + 6 negative tests (proof-of-fire). Matrix loaded from AKB/import_matrix.yaml
+    (single source). Added detectors: K3 (wiring only in composition: kernel/runtime/services/policies
+    must NOT instantiate DependencyContainer/SnapshotStore), K8/F4 (kernel/runtime
+    -> akb/research/llm forbidden), F1 (no blocking time.sleep in runtime/recovery+supervisor),
+    F5 (AgentResult frozen if present), F6 (ADR evidence_level report, non-blocking
+    warn). Negative fixtures in tests/fixtures_violations/ prove each detector fires.
+    forbidden.yaml enforcement fields updated (F1/F4 now AUTOMATED, F5/F6 PARTIAL).
+    gate_coverage.md report created. RESULT: 768 passed (+11 gate tests), 19 skipped,
+    arch-gate 8 passed. Known open violations: 0. K1/K3/K6/K8 + F1/F4 now AUTOMATED
+    (blocking); F5/F6 warn (partial). NOTE: WP-01 (V3) was ALREADY closed in Phase
+    C (commits 3a899c6/6f0f2ca) before TZ-001 written -> TZ baseline was stale.'
+- date: '2026-08-02'
+  commit: tz-002-wp03-docs
+  adr: '-'
+  law_changes: []
+  note: 'TZ-002 WP-03 (Documentation Consistency). Sync docs to reality after Phase
+    B/C + WP-01/WP-02. D1: PROJECT_CONTEXT_MAP.md -> v1.2 (Variant A DONE, Composition
+    Root = composition/ NOT bootstrap_v2, V3 CLOSED, ADR-001..030, new sections Architecture
+    Gate + AKB Structure + full ADR Index 001..030 without gaps). D2: PROJECT_STATUS.md
+    CREATED (arch debt: V1/V2 closed Phase B, V3 closed Phase C, No High Debt; metrics
+    768 passed/0 failed/0 open violations). D3/D4/D5: README.md added Architecture
+    Overview (CLI->Composition->Kernel/Runtime/Contracts + Adapters/Infrastructure
+    + Policies schema), Architecture Laws (K1-K8), Forbidden Patterns (link to forbidden.yaml);
+    fixed stale schema (kernel->infrastructure -> kernel->contracts+runtime, Composition
+    Root = composition/). D6/D7: gate coverage + import_matrix + forbidden.yaml referenced
+    in PROJECT_CONTEXT_MAP. D8: diagrams note (bootstrap_v2 forbidden as CR). D9:
+    ADR index 001..030 in map. D10: this history entry. Wave 2 items (WP-04..WP-13,
+    diagrams, AKB validation, CI) deferred to next turn per approval scope.'
+- date: '2026-08-02'
+  commit: wp04-repo-gitmode
+  adr: '-'
+  law_changes:
+  - K7
+  note: 'TZ-003 WP-04 (Repo/Git-mode final). .gitignore finalized: added recovery_journal.jsonl,
+    stubs/, .venv/, cache/, .DS_Store. Confirmed git ls-files contains NO data/, *.exe,
+    .hermes/, archive/KnowledgeOS-v5/. Committed legitimate Phase B leftover bootstrap_v2.py.
+    PROJECT_STATUS.md git-mode section updated. git push NOT executed (LAW K5, no
+    remote).'
+- date: '2026-08-02'
+  commit: wp05-ci-akb-lint
+  adr: ADR-031 (proposed), RFC-005 (decided)
+  law_changes:
+  - K5
+  - K7
+  - K8
+  note: TZ-003 WP-05 (CI + AKB-linter). scripts/ci.py orchestrator (import-check/tests/arch-gate/akb-lint
+    blocking; lint/coverage non-blocking). tools/akb_lint.py (YAML parse, ADR<->yaml
+    bijection, RFC transitions, KL forbidden synonyms, evidence_level). pre-commit
+    (.pre-commit-config.yaml + scripts/precommit.py). DORMANT .github/workflows/ci.yml
+    (GitHub Actions, activates on remote). ADR-031 + RFC-005. adrs.yaml +ADR-031.
+    Full CI GREEN in 32.6s (<=5min target).
+- date: '2026-08-02'
+  commit: wp06-context-map-sync
+  adr: '-'
+  law_changes:
+  - K7
+  note: 'TZ-003 WP-06 (Auto-sync PROJECT_CONTEXT_MAP). tools/context_map_sync.py regenerates
+    AUTO-GENERATED block from real runs (tests=768, gate=14, ADR=31, open=0). Markers
+    added to PROJECT_CONTEXT_MAP.md. Idempotent verified (regen -> empty git diff).
+    CI drift check: hand-edited numbers -> git diff --exit-code fails.'
+- id: WP-07
+  tz: TZ-003
+  date: '2026-08-02'
+  status: done
+  summary: Container-path de-deprecated. Literal removal aborted due to R2 (17 tests
+    failed via snapshotable resolution). Container kept as K3-compliant Composition
+    Root factory. Deprecated API count = 0.
+- id: WP-08
+  tz: TZ-003
+  date: '2026-08-02'
+  status: done
+  summary: 'ADR-026..029 accepted. evidence_level: III added to all 31 ADR. F6 warn
+    closed (akb-lint green). PROJECT_CONTEXT_MAP §4 updated.'
+- id: WP-SEC-001-code
+  tz: TZ-SEC-001
+  date: '2026-08-02'
+  status: done
+  summary: 'TZ-SEC-001 CODE phase. WP-01..WP-09: contracts/security ports (8 ports),
+    kernel/security (CapabilityManager RBAC + AuthorizationEngine + ApprovalManager
+    + FileSandbox, K1-clean), services/security (SecretManager mask/redact, AuditLogger
+    checksum-chain, TerminalExecutor blacklist/timeout). Tool.required_capabilities
+    added. 26 security tests (>=95% target). Full suite 794 passed, gate 14 passed,
+    K1 verified.'
+- id: WP-MULTI-001-design
+  tz: TZ-MULTI-001
+  date: '2026-08-02'
+  status: done
+  summary: 'TZ-MULTI-001 Design phase. RFC-007 (under_review) + ADR-035 (proposed,
+    evidence III). Spec saved to docs/specifications/TZ-MULTI-001.md. Baseline re-verified:
+    kernel/tenant absent, runtime has no tenant_id, services tenant-free, suite 794/gate
+    14. Code WP-01..WP-09 pending K5-approval.'
