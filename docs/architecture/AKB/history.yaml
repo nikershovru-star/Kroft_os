@@ -287,3 +287,9 @@ history:
     RLock, AKBSyncAdapter bidirectional, ADRAutoLinker regex+heuristic, EvidenceLinker
     test->ADR, QueryInterface+CLI, MOCExporter). 32 graph tests. Suite 844 passed,
     gate 14, K8 verified (no kernel/runtime imports).'
+- id: WP-AGENT-001-design
+  tz: TZ-AGENT-001
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-AGENT-001 design: RFC-009 (under_review) + ADR-037 (proposed). Multi-agent
+    orchestration + runtime self-analysis as KROFT-native components (reuse substrate).'

@@ -516,3 +516,15 @@ adrs:
   - K5
   - K6
   - K8
+- id: ADR-037
+  title: Agent Orchestration & Self-Analysis Architecture
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-AGENT-001
+  - RFC-009
+  - ADR-014
+  - ADR-021
+  - ADR-035
+  - ADR-036

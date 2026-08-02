@@ -68,3 +68,7 @@ rfcs:
   - TZ-SEC-001
   - TZ-MULTI-001
   evidence_level: III
+- id: RFC-009
+  title: Multi-Agent Orchestration & Self-Analysis
+  status: under_review
+  date: '2026-08-02'
