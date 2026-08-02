@@ -339,6 +339,25 @@ class ReasoningStep:
 
 
 @dataclass(frozen=True)
+class PredictedState:
+    """A predicted future world state projected by the World Model (ТЗ-WM-01).
+
+    The World Model is an ADVISOR over WorldState (ADR-047): it projects the outcome
+    of an action / plan horizon steps ahead. Confidence MUST fall with the horizon
+    (further projection = more uncertain) — that is the whole point of prediction.
+    The CausalMark is taken from the node's shared Lamport clock (ТЗ-RE-01 flag 1),
+    so predicted states share one causal order with kernel events + world facts.
+    """
+    id: str
+    horizon: int                               # how many steps ahead this projection is
+    projected_facts: Dict[str, str] = field(default_factory=dict)
+    confidence: ConfidenceScore = field(
+        default_factory=lambda: ConfidenceScore(0.5, ProvenanceType.RULE_INFERENCE)
+    )
+    causal: CausalMark = field(default_factory=lambda: CausalMark("local", 0))
+
+
+@dataclass(frozen=True)
 class WorldState:
     """Local node single source of truth snapshot (ADR-054 I-07).
 
