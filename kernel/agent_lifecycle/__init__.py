@@ -14,6 +14,7 @@ from contracts.agent_orchestration import (
     AgentState,
     IAgentLifecycle,
 )
+from contracts.i_event_bus import IEventBus
 from contracts.tenant import TenantId
 
 
@@ -49,13 +50,14 @@ class AgentStateValidator:
 class AgentLifecycleFSM(IAgentLifecycle):
     """In-memory, thread-safe agent lifecycle state machine."""
 
-    def __init__(self) -> None:
+    def __init__(self, bus: Optional[IEventBus] = None) -> None:
         self._states: Dict[str, AgentState] = {}
         self._tenants: Dict[str, str] = {}
         self._roles: Dict[str, str] = {}
         self._goals: Dict[str, str] = {}
         self._history: Dict[str, List[AgentLifecycleEvent]] = {}
         self._lock = RLock()
+        self._bus = bus
 
     def spawn(self, agent_id: str, tenant_id: str, role: str, goal: str) -> AgentState:
         TenantId(tenant_id)  # validates tenant format (contracts.tenant)
@@ -104,7 +106,22 @@ class AgentLifecycleFSM(IAgentLifecycle):
         )
         self._states[agent_id] = to_state
         self._history[agent_id].append(ev)
+        self._publish(agent_id, to_state, reason)
         return ev
+
+    def _publish(self, agent_id: str, to_state: AgentState, reason: str) -> None:
+        if self._bus is None:
+            return
+        if to_state is AgentState.STALE:
+            self._bus.publish_sync("agent.stale", {
+                "agent_id": agent_id, "reason": reason,
+                "tenant_id": self._tenants.get(agent_id, "default"),
+            })
+        elif to_state is AgentState.TERMINATED and reason not in ("", "auto-init ok", "spawn"):
+            self._bus.publish_sync("agent.failure", {
+                "agent_id": agent_id, "error": reason,
+                "tenant_id": self._tenants.get(agent_id, "default"),
+            })
 
     def history(self, agent_id: str) -> List[AgentLifecycleEvent]:
         with self._lock:

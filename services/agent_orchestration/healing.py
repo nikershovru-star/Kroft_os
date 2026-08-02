@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
 
-from contracts.agent_orchestration import AgentState, IAgentLifecycle
+from contracts.agent_orchestration import AgentState, IAgentLifecycle, IAgentRecovery
 from contracts.security import IApprovalManager, IAuditLogger
 from contracts.tenant import TenantId
 
@@ -108,3 +108,39 @@ def _audit_record(agent_id: str, tool: str, arguments: str, result: str, status:
         agent_id=agent_id, tool=tool, arguments=arguments,
         result=result, duration_ms=0.0, status=status,
     )
+
+
+class AgentRecoveryAdapter(IAgentRecovery):
+    """Thin IAgentRecovery adapter over the agent lifecycle FSM (Wave 2 WP-10).
+
+    Lets SupervisorService drive agent recovery through the port (K6) instead
+    of importing healing.py internals. Delegates to IAgentLifecycle + a
+    SelfHealingPolicy for the auto-restart decision (Q2).
+    """
+
+    def __init__(self, lifecycle: IAgentLifecycle, policy: SelfHealingPolicy) -> None:
+        self._lifecycle = lifecycle
+        self._policy = policy
+
+    def restart_agent(self, agent_id: str) -> bool:
+        state = self._lifecycle.get_state(agent_id)
+        if state is None:
+            return False
+        if state is AgentState.STALE:
+            try:
+                self._lifecycle.transition(agent_id, AgentState.RECOVERING, "supervisor restart")
+                self._lifecycle.transition(agent_id, AgentState.RUNNING, "recovered")
+                return True
+            except ValueError:
+                return False
+        return True  # already running/paused -> treat as healthy
+
+    def quarantine_agent(self, agent_id: str) -> bool:
+        try:
+            self._lifecycle.terminate(agent_id, "supervisor quarantine")
+            return True
+        except (ValueError, KeyError):
+            return False
+
+    def get_agent_health(self, agent_id: str) -> AgentState:
+        return self._lifecycle.get_state(agent_id)
