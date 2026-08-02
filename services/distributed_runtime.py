@@ -128,8 +128,20 @@ class SharedContextService(ISharedContext):
         for key, val in world.facts.items():
             if scope in key or scope == "*":
                 mark = world.facts_meta.get(key, CausalMark(world.node_id, 0))
+                # ТЗ-WM-01 flag A sentinel: a CausalMark with the legacy default origin
+                # ("kernel"/"local") means the clock was never wired to node_id. Do NOT
+                # let it silently leak into federation — normalize to this node's id so
+                # the origin is always a real node (and surface the defect via warning).
+                origin = mark.node_origin
+                if origin in ("kernel", "local"):
+                    import warnings
+                    warnings.warn(
+                        f"publish_selective: fact '{key}' carried sentinel origin "
+                        f"'{origin}' (clock not wired to node_id) — normalized to "
+                        f"'{self._node_id}'")
+                    origin = self._node_id
                 out.append({"key": key, "value": val,
-                            "node_origin": mark.node_origin, "lamport": mark.lamport})
+                            "node_origin": origin, "lamport": mark.lamport})
         return out
 
     def merge_remote(self, remote_facts: List[dict],

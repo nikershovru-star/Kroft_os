@@ -257,10 +257,16 @@ class CognitiveKernel(ICognitiveKernel):
                  planner: Callable[[Goal, List["ReasoningStep"]], List[Plan]],
                  clock: Optional["NodeLamportClock"] = None,
                  reason: Optional["IReasoningEngine"] = None) -> None:
-        # ТЗ-RE-01 flag 1: ONE shared Lamport clock per node. World store is wired
-        # to the same clock (see build_kernel), so kernel events + world facts share
-        # one causal order; node_origin = node_id (not the literal "kernel").
-        self._clock = clock if clock is not None else NodeLamportClock("kernel")
+        # ТЗ-WM-01 flag A: default clock MUST derive node_id from the world, never
+        # the literal "kernel" (ТЗ-RE-01 already wired node_origin=node_id when a
+        # clock is injected; this closes the residual default-construction path).
+        if clock is None:
+            try:
+                wnode = world.snapshot().node_id
+            except Exception:
+                wnode = "local"
+            clock = NodeLamportClock(wnode)
+        self._clock = clock
         if isinstance(world, InMemoryWorldState) and world._clock is not self._clock:
             # ensure the world store uses the SAME shared clock instance
             world._clock = self._clock
