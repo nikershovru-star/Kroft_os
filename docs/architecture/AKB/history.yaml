@@ -311,3 +311,12 @@ history:
     GracefulDegradationPolicy (NONE/PARTIAL/MINIMAL, K5-gated), AgentLifecycleFSM<->SupervisorService
     integration via IEventBus + IAgentRecovery port. Facts: supervisor/recovery already
     implemented; gaps = circuit breaker, graceful degradation, agent integration.'
+- id: WP-SUPERVISOR-001-code
+  tz: TZ-AGENT-001
+  date: '2026-08-02'
+  status: accepted
+  summary: 'Wave 2 WP-10 CODE: CircuitBreaker (CLOSED/OPEN/HALF_OPEN, exponential
+    cooldown, trip metrics), GracefulDegradationPolicy (NONE/PARTIAL/MINIMAL, K5-gated
+    via ApprovalManager), AgentLifecycleFSM->EventBus agent.stale/agent.failure, SupervisorService
+    agent integration, IAgentRecovery port + AgentRecoveryAdapter (healing.py thin).
+    19 tests. Suite 904 passed, gate 14, akb-lint PASSED. K1/K8 clean.'
