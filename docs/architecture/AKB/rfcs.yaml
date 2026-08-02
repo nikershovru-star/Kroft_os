@@ -81,3 +81,7 @@ rfcs:
   title: Execution Sandbox — Isolated Tool Runtime for Agents
   status: under_review
   date: '2026-08-02'
+- id: RFC-012
+  title: Observability Platform — Streaming Metrics, Aggregation & Alerting
+  status: under_review
+  date: '2026-08-02'

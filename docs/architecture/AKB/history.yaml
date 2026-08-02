@@ -347,3 +347,14 @@ history:
     -> sandbox (kills os.system injection). ToolRegistry dangerous routing + fail-secure
     RuntimeError + K5 ApprovalManager. composition wires SubprocessSandbox (K3). 12
     tests. Suite 916 passed, gate 14, akb-lint PASSED. K1/K8 clean.'
+- id: WP-OBS-001-design
+  tz: TZ-OBS-001
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-OBS-001 design: RFC-012 (under_review) + ADR-040 (proposed). Fact-check:
+    IMetricsCollector (system) + MetricsService ALREADY exist (reuse, no conflict).
+    New port ITelemetrySink (time-series record/query/snapshot) to avoid clash with
+    IMetricsCollector. AlertEngine (services) subscribes to EventBus; requires emit-points
+    in sources: circuit.open/sandbox.kill/degradation.level/self.drift (AgentLifecycleFSM
+    already emits agent.failure/stale from WP-10). K5: alert-only, no recovery. Code
+    waits K5 go.'

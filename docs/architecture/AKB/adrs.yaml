@@ -553,3 +553,16 @@ adrs:
   - ADR-026
   - Stage-25
   - Stage-31
+- id: ADR-040
+  title: In-Memory Telemetry & Event-Driven Alerting
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-OBS-001
+  - RFC-012
+  - ADR-039
+  - ADR-038
+  - ADR-034
+  - Stage-9
+  - Stage-26
