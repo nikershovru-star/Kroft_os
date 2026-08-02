@@ -73,8 +73,8 @@ class SubprocessSandbox(IExecutionSandbox):
             stdout, stderr = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
             self._terminate(proc)
-            stdout = proc.stdout.read() if proc.stdout else ""
-            stderr = proc.stderr.read() if proc.stderr else ""
+            # communicate() already closed the pipes on timeout; do not re-read.
+            stdout, stderr = "", ""
             killed = True
         finally:
             with self._lock:
@@ -82,7 +82,7 @@ class SubprocessSandbox(IExecutionSandbox):
 
         duration_ms = (time.monotonic() - start) * 1000
         return ExecutionResult(
-            returncode=proc.returncode if proc.returncode is not None else (-9 if killed else 0),
+            returncode=-9 if killed else (proc.returncode or 0),
             stdout=stdout or "",
             stderr=stderr or "",
             handle=handle,
