@@ -421,3 +421,46 @@ adrs:
   note: 'TZ-003 WP-05. Local CI (scripts/ci.py) + AKB linter (tools/akb_lint.py). Stages: import-check,
     lint(non-block), tests, arch-gate, akb-lint, coverage(non-block). Pre-commit hook + dormant GitHub
     Actions. evidence_level non-blocking WARN until WP-08 (TZ-002 Wave 2).'
+- id: ADR-032
+  title: Security Architecture (Capability Boundary)
+  status: proposed
+  evidence_level: III
+  relates_to:
+  - ADR-028
+  - ADR-029
+  - ADR-033
+  - ADR-034
+  - RFC-006
+  laws_affected:
+  - K1
+  - K3
+  - K5
+  - K8
+  note: 'TZ-SEC-001 (Design, Critical). Proposed, awaiting K5 approval. K1-compliant: kernel/security
+    depends only on contracts.'
+- id: ADR-033
+  title: Capability Model (RBAC + Tool Requirements)
+  status: proposed
+  evidence_level: III
+  relates_to:
+  - ADR-032
+  - ADR-034
+  - RFC-006
+  laws_affected:
+  - K1
+  - K5
+  - K6
+  note: 'TZ-SEC-001 (Design, Critical). Proposed, awaiting K5 approval. K1-compliant: kernel/security
+    depends only on contracts.'
+- id: ADR-034
+  title: Approval Workflow (Human-in-loop)
+  status: proposed
+  evidence_level: III
+  relates_to:
+  - ADR-032
+  - ADR-033
+  - RFC-006
+  laws_affected:
+  - K5
+  note: 'TZ-SEC-001 (Design, Critical). Proposed, awaiting K5 approval. K1-compliant: kernel/security
+    depends only on contracts.'

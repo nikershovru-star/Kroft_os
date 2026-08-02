@@ -140,3 +140,9 @@ history:
     date: "2026-08-02"
     status: done
     summary: "ADR-026..029 accepted. evidence_level: III added to all 31 ADR. F6 warn closed (akb-lint green). PROJECT_CONTEXT_MAP §4 updated."
+
+  - id: WP-SEC-001-design
+    tz: TZ-SEC-001
+    date: "2026-08-02"
+    status: design
+    summary: "TZ-SEC-001 Design phase. RFC-006 (under_review) + ADR-032/033/034 (proposed) created. AKB registered (rfcs.yaml +ADR-032/033/034, total 34 ADR). K1-compliant 3-layer security architecture. Code blocked until K5 approval of ADRs."

@@ -1,41 +1,42 @@
-# KROFT OS — RFC Index (machine-readable, RFC Layer v1.0)
-# RFC = обсуждаемое предложение (ДО принятия). ADR = принятое решение.
-# Rejected RFC сохраняются (organisational memory: почему НЕ выбрали X).
-# status: draft | under_review | decided | rejected | superseded
-
 rfcs:
-  - id: RFC-001
-    title: "Введение RFC-слоя между Research и ADR"
-    author: "Hermes (principal-review пользователя)"
-    date: "2026-08-01"
-    status: decided
-    evidence_level: II
-    became_adr: "ADR-025 (планируется мета-ADR о процессе)"
-    note: "Конвейер Research→Experiment→RFC→ADR→Implementation принят как стандарт."
-
-  - id: RFC-002
-    title: "KES/KEH как MOC-навигация, не энциклопедии"
-    author: "Hermes (principal-review пользователя)"
-    date: "2026-08-01"
-    status: decided
-    evidence_level: V
-    became_adr: "ADR-025 (реструктуризация)"
-    note: "KES/KEH разбиваются на под-документы; верхний уровень = навигация."
-
-  - id: RFC-003
-    title: "Отказ от P1–P10 / L1–L18 как primary names"
-    author: "Hermes (principal-review пользователя)"
-    date: "2026-08-01"
-    status: decided
-    evidence_level: V
-    became_adr: "ADR-025"
-    note: "Смысловые названия (Research Platform...) как primary; коды — внутренние."
-
-  - id: RFC-004
-    title: "KERA Views (адаптированный 4+1)"
-    author: "Hermes (principal-review пользователя)"
-    date: "2026-08-01"
-    status: under_review
-    evidence_level: II
-    became_adr: null
-    note: "KERA остаётся компактной; Views — отдельные документы (Logical/Runtime/Deployment/Knowledge/Security/Evolution)."
+- id: RFC-001
+  title: Введение RFC-слоя между Research и ADR
+  author: Hermes (principal-review пользователя)
+  date: '2026-08-01'
+  status: decided
+  evidence_level: II
+  became_adr: ADR-025 (планируется мета-ADR о процессе)
+  note: Конвейер Research→Experiment→RFC→ADR→Implementation принят как стандарт.
+- id: RFC-002
+  title: KES/KEH как MOC-навигация, не энциклопедии
+  author: Hermes (principal-review пользователя)
+  date: '2026-08-01'
+  status: decided
+  evidence_level: V
+  became_adr: ADR-025 (реструктуризация)
+  note: KES/KEH разбиваются на под-документы; верхний уровень = навигация.
+- id: RFC-003
+  title: Отказ от P1–P10 / L1–L18 как primary names
+  author: Hermes (principal-review пользователя)
+  date: '2026-08-01'
+  status: decided
+  evidence_level: V
+  became_adr: ADR-025
+  note: Смысловые названия (Research Platform...) как primary; коды — внутренние.
+- id: RFC-004
+  title: KERA Views (адаптированный 4+1)
+  author: Hermes (principal-review пользователя)
+  date: '2026-08-01'
+  status: under_review
+  evidence_level: II
+  became_adr: null
+  note: KERA остаётся компактной; Views — отдельные документы (Logical/Runtime/Deployment/Knowledge/Security/Evolution).
+- id: RFC-006
+  title: Secure Runtime & Capability System
+  author: Hermes (TZ-SEC-001)
+  date: '2026-08-02'
+  status: under_review
+  evidence_level: III
+  became_adr: ADR-032, ADR-033, ADR-034 (proposed)
+  note: 'Capability boundary: agent authorized by Kernel. Covers TZ-SEC-001 WP-01..WP-10. K1-compliant
+    3-layer (contracts/security ports, kernel/security clean, services/security IO).'
