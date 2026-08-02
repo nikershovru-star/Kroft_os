@@ -1,0 +1,11 @@
+complements:
+- id: ADR-054
+  title: Cognitive Kernel Constitution — v2.0 immutable invariants
+  type: constitution
+  status: accepted
+  date: '2026-08-02'
+  related:
+  - ADR-055
+  - TZ-015
+  - TZ-023
+  - Wave-3

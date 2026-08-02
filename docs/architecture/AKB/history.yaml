@@ -530,3 +530,18 @@ history:
     Cluster->Plugin Ecosystem->Models. All design ad-hoc 8/8 PASS, gate 14, akb-lint
     PASSED, no regressions. Code deferred (K5 go per TZ). Reuse WP-14 + TZ-AGENT-001
     + TZ-OBS-001 + ADR-042.'
+- id: adr-054-constitution
+  tz: ADR-054
+  date: '2026-08-02'
+  status: accepted
+  summary: 'ADR-054 Cognitive Kernel Constitution ACCEPTED (architecture consolidation
+    before code-phase). 20 invariants I-01..I-20: Cognitive FSM primary (not module
+    tree), Executive=transition controller (not phase), Decision=det deterministic
+    selector, Intent source, Attention selector (separate from ResourceManager per
+    K3), WorldState SSOT, SharedContext=federated projection, LLM-free core (system-1/2),
+    Contract Boundary, Hard>Soft (ValueSystem two-layer), ConfidenceScore unified,
+    Provenance, Learning via Policy+Commit, dual Reflection circuits, Event Semantics,
+    frozen Domain Model, Self-Evolving within immutable invariants. ADR-055 ConfidenceScore
+    contract derived (I-12). Supersedes ADR-053 (now subordinate). Reuse WP-14 CrdtGraphEngine/TcpEventBus.
+    K1/K3/K5/K6/K8 enforced. Research: OODA/Cognitive Decision Loop XMPro 2026, Event
+    Sourcing Fowler, GWT Anthropic 2026.'
