@@ -278,3 +278,12 @@ history:
   summary: 'TZ-MULTI-001 Code WP-01..WP-08: contracts/tenant, kernel/tenant (context+isolation),
     services/tenant (manager/isolator/onboarding), FileSandbox tenant-prefix, AuthorizationEngine
     cross-tenant deny, SecretManager.get_for, 28 tests. WP-09 docs v1.5.'
+- id: WP-KNOW-001-code
+  tz: TZ-KNOW-001
+  date: '2026-08-02'
+  status: done
+  summary: 'TZ-KNOW-001 CODE phase. WP-01..WP-09: contracts/knowledge_graph (NodeType
+    x8, EdgeType x8, IGraphEngine, IGraphSync), services/knowledge_graph (InMemoryGraphEngine
+    RLock, AKBSyncAdapter bidirectional, ADRAutoLinker regex+heuristic, EvidenceLinker
+    test->ADR, QueryInterface+CLI, MOCExporter). 32 graph tests. Suite 844 passed,
+    gate 14, K8 verified (no kernel/runtime imports).'

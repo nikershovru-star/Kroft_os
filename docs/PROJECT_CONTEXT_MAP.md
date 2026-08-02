@@ -84,6 +84,7 @@ KROFT_OS/                    ← единый git-репозиторий (Varian
 ├── kernel/tenant/     ← tenant context carrier (TZ-MULTI-001, K1-clean: contracts-only)
 ├── services/security/  ← secret/audit/terminal IO (TZ-SEC-001, contracts-only)
 ├── services/tenant/    ← tenant manager/isolator/onboarding IO (TZ-MULTI-001, contracts-only)
+├── services/knowledge_graph/  ← graph engine, AKB sync, auto-linker (TZ-KNOW-001, K8 meta-layer)
 ├── composition/   ← Composition Root (слой сборки, K3)
 ├── cli/  infrastructure/  plugins/  policies/  tests/  main.py  bootstrap_v2.py
 ```
@@ -168,6 +169,7 @@ KROFT_OS/                    ← единый git-репозиторий (Varian
 | ADR-033 | Capability Model (RBAC + Tool Requirements) | proposed | K1, K5, K6 |
 | ADR-034 | Approval Workflow (Human-in-loop) | accepted | K5 |
 | ADR-035 | Tenant Isolation Architecture | accepted | K1, K3, K5, K6, K8 | TZ-MULTI-001 |
+| ADR-036 | Knowledge Graph v2 Architecture | accepted | K8 |
 
 > Примечание: ADR-007 существует в двух редакциях (`ADR-007 Policy Platform — Design (superseded draft).md` и `ADR-007 Policy Platform — Superseded by ADR-009.md`). Обе помечены superseded; итоговый — ADR-009. ADR-008 (Knowledge Platform) переименован в ADR-011 (см. AKB/adrs.yaml). Индекс ADR-001..034 — **без пропусков** (ADR-007 двойной, ADR-008 → ADR-011).
 
@@ -252,10 +254,10 @@ ADR-034 Approval Workflow (Human-in-loop)
 - [x] **Architecture Gate — РАБОТАЕТ** (ловит K1/K3/K6/K8 + F1/F4 автоматически)
 
 ### 🔢 Метрики (реальный прогон 2026-08-02)
-- **Tests:** `812 passed, 19 skipped, 0 failed` (вкл. `tests/security/` 26 и `tests/tenant/` 28 тестов)
+- **Tests:** `844 passed, 19 skipped, 0 failed` (вкл. `tests/security/` 26, `tests/tenant/` 28, `tests/knowledge_graph/` 32)
 - **Arch-gate:** `14 passed` (8 positive + 6 negative, proof-of-fire)
 - **ADR:** 36 (ADR-001..036), из них ADR-025 — proposed (PHASE 6), ADR-026..029 — **accepted** (WP-08 TZ-003), ADR-030 — proposed, ADR-031 — proposed (CI, WP-05), ADR-032/033/034 — **accepted** (Security, TZ-SEC-001), ADR-035 — **accepted** (Tenant, TZ-MULTI-001), ADR-036 — **accepted** (Knowledge Graph, TZ-KNOW-001); ADR-007 — двойной файл (superseded, логически один)
-- **RFC:** 7 (RFC-001..004 + RFC-006 under_review Secure Runtime + RFC-007 under_review Tenant + RFC-008 under_review Knowledge Graph; примечание: «RFC-005» НЕ существует — CI Pipeline это ADR-031, не RFC)
+- **RFC:** 8 (RFC-001..004 + RFC-006/007/008 under_review; примечание: «RFC-005» НЕ существует — CI Pipeline это ADR-031, не RFC)
 - **Security layer:** `kernel/security/` (capability/approval/sandbox, K1-clean) + `services/security/` (secret/audit/terminal, contracts-only)
 - **Tenant layer:** `kernel/tenant/` (context provider, K1-clean) + `services/tenant/` (manager/isolator/onboarding, contracts-only)
 - **Import matrix:** `AKB/import_matrix.yaml` (single source)
@@ -267,6 +269,7 @@ ADR-034 Approval Workflow (Human-in-loop)
 - [x] CI/CD pipeline (WP-05 TZ-003) — DONE
 - [x] **TZ-SEC-001** (Secure Runtime & Capability System) — DONE (ADR-032/033/034 accepted; WP-01..WP-09 + 26 tests)
 - [x] **TZ-MULTI-001** (Multi-User Isolation & Tenant Model) — DONE (ADR-035 accepted; WP-01..WP-09: ports, context provider, manager/isolator, sandbox-tenant, memory-isolation, cross-tenant authz, onboarding, 28 tests; WP-10 docs)
+- [x] **TZ-KNOW-001** (Knowledge Graph v2) — DONE (ADR-036 accepted; WP-01..WP-09: graph engine, AKB sync, auto-linker, evidence, query, MOC, 32 tests; docs)
 - [ ] Knowledge Graph v2 (связи между ADR/Component/Experiment)
 - [ ] Architecture Intelligence (Hermes v2.0) — частично (ADR-021/023/024)
 - [ ] Runtime self-analysis
@@ -280,7 +283,7 @@ ADR-034 Approval Workflow (Human-in-loop)
 > Этот блок генерируется `tools/context_map_sync.py` из фактических прогонов.
 > Ручное изменение чисел здесь → CI падает (drift detection).
 
-- **Tests:** 822 passed (run `python scripts/ci.py`)
+- **Tests:** 854 passed (run `python scripts/ci.py`)
 - **Arch-gate:** 14 passed (8 positive + 6 negative)
 - **ADR:** 36 (ADR-001..036)
 - **Open violations:** 0
@@ -400,4 +403,4 @@ ADR-034 Approval Workflow (Human-in-loop)
 
 > **Запомни:** KROFT_OS строит не только код. Она строит организационную память. Код можно переписать. Потерянное знание «почему сделали так» — нет.
 >
-> **v1.5 changelog:** TZ-MULTI-001 Code DONE (WP-01..WP-09). Tenant layer: `contracts/tenant/` (TenantId, ITenantManager, ITenantIsolator, ITenantContext) + `kernel/tenant/` (TenantContext, TenantContextProvider thread/async-safe, DefaultTenantContext, isolation helpers — K1-clean) + `services/tenant/` (InMemoryTenantManager soft-delete, JsonlTenantManager, TenantIsolator, TenantOnboardingWorkflow — K1-clean). FileSandbox tenant-prefix + '../' block; AuthorizationEngine.authorize_cross_tenant always deny (R6); SecretManager.get_for tenant scope (R10). 28 tenant tests, suite 812 passed, gate 14 passed. ADR-035 accepted. RFC-007 under_review. Метрики: 812 passed, 0 failed, 0 open violations.
+> **v1.6 changelog:** TZ-KNOW-001 Code DONE (WP-01..WP-09). Knowledge Graph v2: `contracts/knowledge_graph/` (NodeType×8, EdgeType×8, IGraphEngine, IGraphSync) + `services/knowledge_graph/` (InMemoryGraphEngine RLock, AKBSyncAdapter bidirectional, ADRAutoLinker regex+heuristic, EvidenceLinker test→ADR, QueryInterface+CLI, MOCExporter Obsidian wiki-links). 32 graph tests. Suite 844 passed, gate 14, akb-lint PASSED. ADR-036 accepted. RFC-008 under_review.
