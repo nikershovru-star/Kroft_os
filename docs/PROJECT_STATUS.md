@@ -97,7 +97,11 @@ purpose: >
 ## 5. Stage Audit (2026-08-02)
 
 - **Stage 22** — НЕ пропущен. Упоминается в CHANGELOG («без --auth сервер ведёт себя как Stage 22»); это был HTTP server / auth stage, влился в последующие.
-- **Stage 47 / 48** — ДЕЙСТВИТЕЛЬНО ОТСУТСТВУЮТ в CHANGELOG (после Stage 46 сразу Stage 49). **Intentionally skipped / не зафиксированы**: не потерян критичный слой (graph visualization и real-time collaboration присутствуют как composition/CLI features, не как отдельные Stage). Задокументировано как gap в нумерации, не как технический долг.
+- **Stage 47 / 48** — ДЕЙСТВИТЕЛЬНО ОТСУТСТВУЮТ в CHANGELOG (Stage 46 v5.9.0 → Stage 49 v5.12.0; версии v5.10.0/v5.11.0 пропущены) и в README. **Решение: intentionally skipped (не технический долг).**
+  - *Audit evidence (2026-08-02):* Graph visualization — Stage 23 дал export DOT/JSON/GEXF, НЕТ interactive renderer; real-time collaboration — НЕ реализовано; plugin marketplace — Stage 25/40 дали loader, НЕТ marketplace/dep-management; LLM-based agent — НЕ реализовано (Hermes v2 = Wave 3).
+  - *Гипотезы содержимого:* Stage 47 ≈ Graph Visualization / Interactive Renderer (gap после analytics Stage 46); Stage 48 ≈ Real-time Collaboration / Multi-user ИЛИ Plugin Marketplace.
+  - *Почему skipped:* не блокируют core functionality; покрываются roadmap Wave 3 (ADR-025 multimodal, Distributed Runtime Phase G); могут быть отдельными ТЗ позже.
+  - *Статус:* documented as skipped placeholder (graph-viz + real-time-collab / plugin-marketplace).
 - **ADR-025** (PHASE 6 Multimodal) — status `proposed`. K5-решение (accept/defer) отложено до Wave 3 (см. roadmap пользователя).
 
 > **v1.0 changelog:** создан в рамках TZ-002 (D2). Зафиксирован V1/V2/V3 CLOSED, No High Architectural Debt, метрики 768 passed / 0 failed / 0 open violations.

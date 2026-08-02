@@ -329,3 +329,11 @@ history:
     ToolRegistry dangerous routing, DesktopAdapter.open_app os.system->sandbox, Tool.dangerous
     flag. Fact-checked: os.system injection confirmed in desktop_adapter.py:78; FileSandbox
     (kernel/security) does NOT conflict (file vs process sandbox). Code waits K5 go.'
+- id: AUDIT-STAGE-47-48
+  date: '2026-08-02'
+  status: closed
+  summary: 'Stage 47/48 audit: CONFIRMED absent in CHANGELOG (Stage 46 v5.9.0 -> Stage
+    49 v5.12.0; v5.10/v5.11 skipped) and README. Decision: INTENTIONALLY SKIPPED (not
+    technical debt). Hypotheses: 47=GraphViz interactive renderer (Stage 23 export-only),
+    48=Real-time collab/multi-user OR plugin marketplace. Not blocking core; covered
+    by Wave 3 (ADR-025, Phase G). Documented in PROJECT_STATUS.md §5.'
