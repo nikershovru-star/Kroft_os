@@ -16,6 +16,7 @@ This is an integration test of the COGNITIVE contract, not a stub exercise.
 """
 
 import pytest
+from typing import Optional
 
 from contracts.cognitive_domain import (
     AggregationRule,
@@ -31,8 +32,10 @@ from contracts.cognitive_domain import (
     Observation,
     Plan,
     Policy,
+    PolicyLifecycle,
     Provenance,
     ProvenanceType,
+    SemanticFact,
     WorldState,
     aggregate_confidence,
 )
@@ -137,6 +140,7 @@ class InMemoryLayeredMemory(ILayeredMemory):
     def __init__(self) -> None:
         self._episodes: list = []
         self._normative: list = []
+        self._semantic: list = []
 
     def record_episode(self, episode: Episode) -> None:
         self._episodes.append(episode)
@@ -146,6 +150,25 @@ class InMemoryLayeredMemory(ILayeredMemory):
 
     def get_episodes(self) -> list:
         return list(self._episodes)
+
+    def commit_semantic(self, fact: SemanticFact) -> None:
+        self._semantic.append(fact)
+
+    def get_semantic(self) -> list:
+        return list(self._semantic)
+
+    def get_normative(self) -> list:
+        return list(self._normative)
+
+    def deprecate_normative(self, policy_id: str,
+                            superseded_by: Optional[str] = None) -> None:
+        for p in self._normative:
+            if p.id == policy_id:
+                if p.layer == "hard":
+                    # O1 guard: HARD layer is immutable from experience
+                    raise RuntimeError(f"cannot deprecate HARD policy {policy_id} (O1)")
+                new_lc = PolicyLifecycle.SUPERSEDED if superseded_by else PolicyLifecycle.DEPRECATED
+                object.__setattr__(p, "lifecycle", new_lc)
 
 
 # --------------------------------------------------------------------------

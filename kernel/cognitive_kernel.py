@@ -23,14 +23,17 @@ from contracts.cognitive_domain import (
     CognitiveState,
     ConfidenceScore,
     Decision,
+    Episode,
     Goal,
     Intent,
     NodeLamportClock,
     Observation,
     Plan,
     Policy,
+    PolicyLifecycle,
     Provenance,
     ProvenanceType,
+    SemanticFact,
     WorldState,
 )
 from contracts.i_cognitive_kernel import (
@@ -43,12 +46,16 @@ from contracts.i_cognitive_kernel import (
     IWorldState,
     IAttention,
     IReasoningEngine,
+    ILayeredMemory,
 )
 from contracts.i_world_model import IWorldModel
 from contracts.i_planner import IPlanner
+from contracts.i_memory_evolution import IMemoryEvolution
 from kernel.reasoning import ReferenceReasoningEngine
 from kernel.world_model import ReferenceWorldModel
 from kernel.planning import ReferencePlanner
+from kernel.memory_evolution import ReferenceMemoryEvolution
+from kernel.memory_store import InMemoryLayeredMemory
 
 
 def _uid(prefix: str) -> str:
@@ -261,7 +268,9 @@ class CognitiveKernel(ICognitiveKernel):
                  planner: "IPlanner",
                  clock: Optional["NodeLamportClock"] = None,
                  reason: Optional["IReasoningEngine"] = None,
-                 world_model: Optional["IWorldModel"] = None) -> None:
+                 world_model: Optional["IWorldModel"] = None,
+                 memory_evolution: Optional["IMemoryEvolution"] = None,
+                 memory: Optional["ILayeredMemory"] = None) -> None:
         # ТЗ-WM-01 flag A: default clock MUST derive node_id from the world, never
         # the literal "kernel" (ТЗ-RE-01 already wired node_origin=node_id when a
         # clock is injected; this closes the residual default-construction path).
@@ -291,6 +300,11 @@ class CognitiveKernel(ICognitiveKernel):
         # ТЗ-WM-01: World Model is an ADVISOR to reasoning/decision. If none is
         # injected, reasoning falls back to the word-overlap heuristic.
         self._world_model = world_model
+        # ТЗ-ME-01: Memory Evolution is the Learn-phase mechanism of Self-Evolving.
+        # It reads episodes from the layered memory and proposes SOFT-layer evolution
+        # (semantic facts), guarded by the O1 invariant (HARD layer never evolves).
+        self._memory_evolution = memory_evolution
+        self._memory = memory
         self._state = CognitiveState.IDLE
         self._goal: Optional[Goal] = None
         self._events: list = []
@@ -377,9 +391,36 @@ class CognitiveKernel(ICognitiveKernel):
         # Learn
         if not self._transition(CognitiveState.LEARN):
             return self._state
+        # legacy ILearningPolicy propose/accepts (kept for backward compatibility)
         proposal = self._learning.propose([decision.id])
         if proposal and self._learning.accepts(proposal):
             self._emit(CognitiveEventType.POLICY_UPDATED, proposal.id, proposal.confidence)
+        # ТЗ-ME-01: Memory Evolution — turn THIS decision into an episode, then
+        # consolidate repeated high-confidence experience into SOFT semantic facts
+        # (guarded by the Self-Evolving invariant: HARD layer never evolves).
+        if self._memory_evolution is not None and self._memory is not None:
+            from contracts.i_cognitive_kernel import IValueSystem
+            episode = Episode(
+                id=decision.id, summary=f"decided:{intent.text}",
+                confidence=decision.confidence,
+                provenance=Provenance(source="learn", actor="kernel"),
+            )
+            self._memory.record_episode(episode)
+            facts, soft_policies = self._memory_evolution.consolidate(
+                self._memory.get_episodes())
+            for f in facts:
+                # Self-Evolving guard (O1): never evolve HARD; check hard_violations
+                # before committing any normative/soft proposal. Semantic facts are
+                # SOFT by construction, but we still re-assert the guard here.
+                if self._values is not None and self._values.hard_violations(f):
+                    continue  # reject — would violate a KROFT Law
+                self._memory.commit_semantic(f)
+                self._emit(CognitiveEventType.SEMANTIC_CONSOLIDATED, f.id, f.confidence)
+            # forgetting: deprecate low-confidence / stale episodes
+            deprecated = self._memory_evolution.forget(self._memory.get_episodes())
+            if deprecated:
+                self._emit(CognitiveEventType.NORMATIVE_DEPRECATED, deprecated[0],
+                           ConfidenceScore(0.1, ProvenanceType.OBSERVATION))
         # back to Idle
         self._transition(CognitiveState.IDLE)
         return self._state
@@ -445,6 +486,12 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     # (lookahead via simulate), and ranks by PREDICTED VALUE-AWARE utility (flag 2).
     # The planner only ranks; the deterministic Decision makes the final pick (I-03).
     planner = ReferencePlanner(shared_clock, world_model=world_model, values=val)
+    # ТЗ-ME-01: Memory Evolution — Learn-phase mechanism of Self-Evolving.
+    # SOFT-layer consolidation (semantic facts) from repeated high-confidence episodes;
+    # HARD layer is immutable from experience (O1 guard).
+    memory = InMemoryLayeredMemory()
+    memory_evolution = ReferenceMemoryEvolution(shared_clock)
 
     return CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner,
-                           clock=shared_clock, reason=reason, world_model=world_model)
+                           clock=shared_clock, reason=reason, world_model=world_model,
+                           memory_evolution=memory_evolution, memory=memory)
