@@ -569,3 +569,14 @@ adrs:
   - ADR-034
   - Stage-9
   - Stage-26
+- id: ADR-041
+  title: Wave 3 Master Plan — Multimodal, Distributed Runtime, Hermes v2
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-MULTIMODAL-001
+  - ADR-025
+  - TZ-AGENT-001
+  - TZ-OBS-001
+  - Wave-2
