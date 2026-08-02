@@ -100,8 +100,8 @@ class ReferenceWorldModel(IWorldModel):
             st = self.predict(roll_world, action, horizon=horizon + step - 1)
             states.append(st)
             # feed the projection forward as the next rollout world
-            roll_world = WorldState(node_id=world.node_id, facts=dict(st.projected_facts))
-            roll_world.confidence = st.confidence
+            roll_world = WorldState(node_id=world.node_id, facts=dict(st.projected_facts),
+                                    confidence=st.confidence)
         return states
 
     def evaluate(self, predicted: PredictedState, intent: Intent,

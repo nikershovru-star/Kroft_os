@@ -69,10 +69,13 @@ class ReferenceReasoningEngine(IReasoningEngine):
         else the legacy word-overlap heuristic (backward compatible)."""
         content = world.facts.get(key, "")
         if self._world_model is not None:
+            # isolate this fact so predicted utility reflects THIS step's grounding,
+            # not the carry-over of all other world facts into projected_facts.
+            isolated = WorldState(node_id=world.node_id, facts={key: content})
             action = Action(id=f"rsn-act:{key}", kind="rule", payload=content,
                             confidence=ConfidenceScore(0.5, ProvenanceType.RULE_INFERENCE),
                             provenance=Provenance(source="reasoning", actor="kernel"))
-            predicted = self._world_model.predict(world, action, horizon=1)
+            predicted = self._world_model.predict(isolated, action, horizon=1)
             util = self._world_model.evaluate(predicted, intent)
             return ConfidenceScore(util, ProvenanceType.RULE_INFERENCE)
         intent_words = set(intent.text.lower().split())
