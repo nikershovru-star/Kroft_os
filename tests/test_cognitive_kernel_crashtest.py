@@ -208,7 +208,7 @@ def test_contract_gap_federation_now_has_causal_mark():
     assert hasattr(ev, "timestamp")
     assert hasattr(ev, "causal")
     assert isinstance(ev.causal, CausalMark)
-    assert ev.causal.node_origin and ev.causal.seq >= 0
+    assert ev.causal.node_origin and ev.causal.lamport >= 0
     # WorldState facts carry causal metadata too
     snap = kb._world.snapshot()
     assert any(hasattr(v, "node_origin") for v in snap.facts_meta.values()) if snap.facts_meta else True

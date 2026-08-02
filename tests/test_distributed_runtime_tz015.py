@@ -61,7 +61,7 @@ def test_shared_context_publish_selective_emits_causal():
     w.facts_meta["b"] = CausalMark("n1", 3)
     sel = svc.publish_selective(w, "scope:x")
     assert [d["key"] for d in sel] == ["scope:x"]
-    assert sel[0]["node_origin"] == "n1" and sel[0]["seq"] == 2
+    assert sel[0]["node_origin"] == "n1" and sel[0]["seq"] == 2  # seq key carries lamport
 
 
 def test_shared_context_merge_remote_is_causal_not_wallclock():
