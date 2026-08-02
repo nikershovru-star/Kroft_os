@@ -72,3 +72,8 @@ rfcs:
   title: Multi-Agent Orchestration & Self-Analysis
   status: under_review
   date: '2026-08-02'
+- id: RFC-010
+  title: Supervisor & Recovery Extension (Circuit Breaker + Graceful Degradation +
+    Agent Integration)
+  status: under_review
+  date: '2026-08-02'

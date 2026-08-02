@@ -528,3 +528,16 @@ adrs:
   - ADR-021
   - ADR-035
   - ADR-036
+- id: ADR-038
+  title: Circuit Breaker & Graceful Degradation for Agent Runtime
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-AGENT-001
+  - RFC-010
+  - ADR-014
+  - ADR-021
+  - ADR-034
+  - ADR-035
+  - ADR-036

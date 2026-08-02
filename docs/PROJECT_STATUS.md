@@ -18,7 +18,7 @@ purpose: >
 
 **Статус платформы:** архитектурно стабильна (Clean/Hexagonal соблюдён), готова к функциональному развитию (Supervisor & Recovery, Distributed Runtime, Marketplace).
 
-**Git-режим:** единый репозиторий (Variant A), финализирован в WP-04. `.gitignore` исключает `data/`, `*.exe`, `.hermes/`, `archive/KnowledgeOS-v5/`, `recovery_journal.jsonl`, `stubs/`, `.venv/`, `cache/`. Local git remote ОТСУТСТВУЕТ — `git push` запрещён (LAW K5).
+**Git-режим:** единый репозиторий (Variant A). Remote `origin` = github.com/nikershovru-star/Kroft_os (K5 push разрешён пользователем 2026-08-02).
 
 ---
 
@@ -65,9 +65,9 @@ purpose: >
 
 ## 3. Метрики (реальный прогон 2026-08-02)
 
-- **Tests:** `768 passed, 19 skipped, 0 failed`
-- **Arch-gate:** `8 passed` (positive) + `6 passed` (negative)
-- **ADR:** 31 (ADR-001..031; ADR-007 — двойной файл, логически один)
+- **Tests:** `885 passed, 19 skipped, 0 failed` (реальный прогон 2026-08-02; включает TZ-MULTI/KNOW/AGENT)
+- **Arch-gate:** `14 passed` (8 positive + 6 negative)
+- **ADR:** 38 (ADR-001..038; ADR-007 — двойной файл, логически один)
 - **Laws:** 8 (K1–K8)
 - **Forbidden patterns:** 6 (F1–F6)
 - **Open violations:** **0**
@@ -81,7 +81,7 @@ purpose: >
 |-------|---------------------|--------|
 | Wave 0 | WP-01 (V3), WP-02 (gate), WP-03 (docs) | ✅ WP-01, ✅ WP-02, ✅ WP-03 |
 | Wave 1 | WP-04 (repo), WP-05 (CI), WP-06 (sync), WP-07 (deprecated), WP-08 (ADR lifecycle) | ✅ WP-04, ✅ WP-05, ✅ WP-06, ✅ WP-07, ✅ WP-08 |
-| Wave 2 | WP-09 (KG v2), WP-10 (Supervisor/Recovery), WP-11 (self-analysis) | ⏸ pending |
+| Wave 2 | WP-09 (KG v2 ✅ TZ-KNOW-001), WP-10 (Supervisor/Recovery ⏸ design RFC-010/ADR-038), WP-11 (self-analysis ✅ TZ-AGENT-001) | WP-10 design DONE, code ждёт K5 |
 | Wave 3 | WP-12 (Arch Intelligence), WP-13 (Multimodal) | ⏸ pending |
 
 ### Функциональные этапы (после стабилизации)
@@ -91,5 +91,12 @@ purpose: >
 - Phase G — Distributed Runtime
 
 ---
+
+
+## 5. Stage Audit (2026-08-02)
+
+- **Stage 22** — НЕ пропущен. Упоминается в CHANGELOG («без --auth сервер ведёт себя как Stage 22»); это был HTTP server / auth stage, влился в последующие.
+- **Stage 47 / 48** — ДЕЙСТВИТЕЛЬНО ОТСУТСТВУЮТ в CHANGELOG (после Stage 46 сразу Stage 49). **Intentionally skipped / не зафиксированы**: не потерян критичный слой (graph visualization и real-time collaboration присутствуют как composition/CLI features, не как отдельные Stage). Задокументировано как gap в нумерации, не как технический долг.
+- **ADR-025** (PHASE 6 Multimodal) — status `proposed`. K5-решение (accept/defer) отложено до Wave 3 (см. roadmap пользователя).
 
 > **v1.0 changelog:** создан в рамках TZ-002 (D2). Зафиксирован V1/V2/V3 CLOSED, No High Architectural Debt, метрики 768 passed / 0 failed / 0 open violations.

@@ -302,3 +302,12 @@ history:
     pool+capability, messenger EventBus+tenant boundary, healing K5-gated, recorder
     EXPERIMENT nodes), services/self_analysis (health+drift K8). 31 agent tests. Suite
     883 passed, gate 14, K1/K8 verified.'
+- id: WP-SUPERVISOR-001-design
+  tz: TZ-AGENT-001
+  date: '2026-08-02'
+  status: accepted
+  summary: 'Wave 2 WP-10 design: RFC-010 (under_review) + ADR-038 (proposed). Extends
+    existing runtime/supervisor (Phase 4): adds CircuitBreaker (CLOSED/OPEN/HALF_OPEN),
+    GracefulDegradationPolicy (NONE/PARTIAL/MINIMAL, K5-gated), AgentLifecycleFSM<->SupervisorService
+    integration via IEventBus + IAgentRecovery port. Facts: supervisor/recovery already
+    implemented; gaps = circuit breaker, graceful degradation, agent integration.'
