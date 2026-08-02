@@ -386,3 +386,14 @@ history:
     YtDlpTranscriptAdapter (optional lazy import), FrameAnalyzer (ffmpeg via IExecutionSandbox).
     MediaIntelligenceService orchestrates ASR+VLM+blend->LLM->VIDEO_NODE in KG v2.
     K1/K5(optional deps)/K6/K8. Code waits K5 go.'
+- id: WP-MULTIMODAL-001-code
+  tz: TZ-MULTIMODAL-001
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-MULTIMODAL-001 CODE: IMultimodalParser port + MediaSource/MediaKnowledge/MediaSegment
+    (contracts). NodeType VIDEO/AUDIO/IMAGE + EdgeType CONTAINS (contracts/kg). OllamaVisionAdapter(IMultimodalParser)
+    extends Qwen2.5-VL, optional lazy ollama, ffmpeg frames via IExecutionSandbox.
+    YtDlpTranscriptAdapter(IMultimodalParser) yt-dlp+whisper optional lazy. MediaIntelligenceService
+    orchestrates ASR+VLM+blend->VIDEO/AUDIO/IMAGE node in KG v2. composition wires
+    IGraphEngine+adapters+service (K3). 13 tests. Suite 940 passed, gate 14, akb-lint
+    PASSED. Optional deps graceful (CI green without them). K1/K6/K8 clean.'
