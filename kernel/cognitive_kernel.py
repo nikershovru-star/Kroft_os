@@ -58,11 +58,23 @@ class InMemoryWorldState(IWorldState):
         self._node_id = node_id
         self._facts: Dict[str, str] = {}
         self._facts_meta: Dict[str, CausalMark] = {}
-        self._seq = 0
+        # Lamport logical clock (ТЗ-CAUSAL-01): advanced on every local write and
+        # on every receive of a remote mark, so federation merges are causal.
+        self._clock = CausalMark(self._node_id, 0)
 
     def update(self, observation: Observation, causal: Optional[CausalMark] = None) -> WorldState:
-        self._seq += 1
-        mark = causal or CausalMark(self._node_id, self._seq)
+        # Advance the LOCAL Lamport clock. If a causal mark was supplied (federation
+        # receive), fold it in via `receive` — this is the Lamport receive-rule that
+        # makes concurrent distant writes merge causally instead of by operation count.
+        # NOTE: the node's OWN clock advances, but the stored fact mark PRESERVES the
+        # original (remote) origin so future merges compare logical time, not node B's
+        # counter — this is what keeps replicas convergent (ТЗ-CAUSAL-01).
+        if causal is not None:
+            self._clock = self._clock.receive(causal)
+            mark = causal
+        else:
+            self._clock = self._clock.tick()
+            mark = self._clock
         self._facts[observation.id] = observation.content
         self._facts_meta[observation.id] = mark
         return self.snapshot()
@@ -252,14 +264,21 @@ class CognitiveKernel(ICognitiveKernel):
         self._events: list = []
         self._subscribers: list = []
         self._last_decision = None  # introspection
+        # Lamport logical clock for emitted CognitiveEvents (ТЗ-CAUSAL-01): every
+        # local tick/event advances it, so events carry causal order, not wall-clock.
+        self._clock = CausalMark("kernel", 0)
 
     # -- event emission (I-17) -------------------------------------------------
     def _emit(self, etype: CognitiveEventType, ref_id: str,
               confidence: ConfidenceScore, actor: str = "kernel") -> None:
+        # every local event advances the Lamport clock (ТЗ-CAUSAL-01) so emitted
+        # CognitiveEvents carry a causally-ordered mark, not a wall-clock timestamp.
+        self._clock = self._clock.tick()
         ev = CognitiveEvent(
             type=etype, ref_id=ref_id,
             provenance=Provenance(source=etype.value, actor=actor),
             confidence=confidence,
+            causal=self._clock,
         )
         self._events.append(ev)
         payload = ev.to_bus()

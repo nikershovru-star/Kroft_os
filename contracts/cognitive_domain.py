@@ -130,25 +130,37 @@ class CognitiveEventType(str, Enum):
 
 
 # -------------------------------------------------------------------------
-# Causal mark (gate C, TZ-015 federation) — CRDT merge/dedup needs causality
+# Causal mark (gate C, TZ-015 federation) — Lamport logical clock (ТЗ-CAUSAL-01)
 # -------------------------------------------------------------------------
 @dataclass(frozen=True)
 class CausalMark:
-    """Per-node causal label for CRDT merge/dedup across federated nodes (ADR-054 I-08/I-17).
+    """Lamport logical clock for causal merge/dedup across federated nodes (ADR-054 I-08/I-17).
 
-    Single-writer-per-node causal order: (node_origin, seq) uniquely identifies an
-    event/fact and gives a total order for merge. Wall-clock `timestamp` is NOT
-    sufficient (node clocks drift). Vector clocks can layer on top later without
-    breaking this shape.
+    A Lamport clock gives a TOTAL causal order WITHOUT trusting wall-clock time
+    (node clocks drift). CRITICAL: the clock is updated on every RECEIVE
+    (`receive`) as well as on every local event (`tick`). A per-node seq that is
+    only compared across nodes (never advanced on receive) would mean "whoever
+    did more operations wins" — which is NOT causal order. This is exactly the
+    ТЗ-CAUSAL-01 defect that is closed here.
+
+    Merge rule (LWW): the GREATER mark wins; tiebreak by node_origin so concurrent
+    writes to one key converge deterministically on every replica.
     """
-    node_origin: str                       # originating node id
-    seq: int                               # monotonic per-node sequence number
+    node_origin: str                       # originating node id (tiebreak)
+    lamport: int = 0                       # Lamport logical clock value
+
+    def tick(self) -> "CausalMark":
+        """Local event: advance own clock by 1."""
+        return CausalMark(self.node_origin, self.lamport + 1)
+
+    def receive(self, remote: "CausalMark") -> "CausalMark":
+        """Receive event: clock = max(local, remote) + 1 (Lamport rule)."""
+        return CausalMark(self.node_origin, max(self.lamport, remote.lamport) + 1)
 
     def __lt__(self, other: "CausalMark") -> bool:
-        # PRIMARY order = seq (per-node monotonic counter); node_origin is only a
-        # tiebreak. This makes the GREATER seq win the merge, not the lexicographically
-        # greater node name (which would let "B,seq=1" beat "A,seq=10" — wrong).
-        return (self.seq, self.node_origin) < (other.seq, other.node_origin)
+        # PRIMARY order = lamport (logical clock); node_origin is the deterministic
+        # tiebreak so concurrent writes converge identically on every replica.
+        return (self.lamport, self.node_origin) < (other.lamport, other.node_origin)
 
 
 @dataclass(frozen=True)
@@ -173,7 +185,7 @@ class CognitiveEvent:
             "provenance_type": self.confidence.provenance.value,
             "timestamp": self.timestamp,
             "causal_node": self.causal.node_origin,
-            "causal_seq": self.causal.seq,
+            "causal_lamport": self.causal.lamport,
         }
 
 

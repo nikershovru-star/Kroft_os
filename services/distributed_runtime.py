@@ -109,12 +109,16 @@ class SharedContextService(ISharedContext):
 
     publish_selective: emit only facts in `scope` as {key, value, causal} dicts.
     merge_remote: for each remote fact, keep the one with the GREATER CausalMark
-    (lexicographic node_origin, seq). Wall-clock `updated_at` is NOT used for
-    ordering (node clocks drift) — this is exactly the gate-C gap that was closed.
+    (lamport, node_origin tiebreak). Wall-clock `updated_at` is NOT used for
+    ordering (node clocks drift). On EVERY receive the LOCAL Lamport clock is
+    advanced via `CausalMark.receive` — this is the ТЗ-CAUSAL-01 fix that makes
+    merge causal instead of "whoever did more operations wins".
     """
 
     def __init__(self, self_node_id: str) -> None:
         self._node_id = self_node_id
+        # local Lamport clock for this node's federation service (ТЗ-CAUSAL-01)
+        self._clock = CausalMark(self_node_id, 0)
 
     def publish_selective(self, world: WorldState, scope: str) -> List[dict]:
         out: List[dict] = []
@@ -122,7 +126,7 @@ class SharedContextService(ISharedContext):
             if scope in key or scope == "*":
                 mark = world.facts_meta.get(key, CausalMark(world.node_id, 0))
                 out.append({"key": key, "value": val,
-                            "node_origin": mark.node_origin, "seq": mark.seq})
+                            "node_origin": mark.node_origin, "seq": mark.lamport})
         return out
 
     def merge_remote(self, remote_facts: List[dict],
@@ -132,15 +136,28 @@ class SharedContextService(ISharedContext):
         A remote fact wins only if its CausalMark is GREATER than the local one (or
         local absent). Wall-clock `updated_at` is intentionally NOT used (gate C).
         Local facts survive unless overridden by a greater remote mark.
+
+        ТЗ-CAUSAL-01: the node's OWN Lamport clock is advanced on receive
+        (clock = max(local, received) + 1). Without this, Lamport degenerates into
+        a per-node counter that picks "talkative" nodes — not causal order.
         """
         merged: Dict[str, str] = dict(local_world.facts)
         meta: Dict[str, CausalMark] = dict(local_world.facts_meta)
+        # track the highest remote mark seen in THIS delivery
+        max_remote = CausalMark(self._node_id, 0)
         for rf in remote_facts:
             key = rf["key"]
             remote_mark = CausalMark(rf["node_origin"], rf["seq"])
+            if remote_mark > max_remote:
+                max_remote = remote_mark
             if key not in meta or remote_mark > meta[key]:
                 merged[key] = rf["value"]
                 meta[key] = remote_mark
+        # advance local federation clock only if we observed a causally-NEWER remote
+        # mark (ТЗ-CAUSAL-01 receive-rule). Duplicate delivery of the same message
+        # does NOT keep inflating the clock — that is what makes replay idempotent.
+        if max_remote.lamport > self._clock.lamport:
+            self._clock = CausalMark(self._node_id, max_remote.lamport + 1)
         return WorldState(node_id=self._node_id, facts=merged, facts_meta=meta,
                           confidence=ConfidenceScore(1.0, ProvenanceType.OBSERVATION))
 
