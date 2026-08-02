@@ -604,3 +604,16 @@ adrs:
   - ADR-038
   - TZ-AGENT-001
   - Wave-3
+- id: ADR-044
+  title: Distributed Runtime Implementation — TZ-015 (full 9 components)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-015
+  - ADR-043
+  - RFC-014
+  - WP-14
+  - TZ-AGENT-001
+  - TZ-OBS-001
+  - Wave-3

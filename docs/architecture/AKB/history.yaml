@@ -430,3 +430,13 @@ history:
     drop-in (MediaIntelligenceService unchanged), wires elector/failover, TcpEventBus
     factory optional. 15 tests. Suite 966 passed, gate 14, akb-lint PASSED. K1/K6/K8
     clean.'
+- id: TZ-015-design
+  tz: TZ-015
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-015 Distributed Runtime Implementation design (research-first). 9 components:
+    CRDT Graph + Distributed EventBus + Leader Election (WP-14 done) + NEW Node Discovery
+    (SWIM gossip), Cluster Registry (CRDT-map), Remote Agent Exec (msg-pass via EventBus
+    reuse IAgentPlatform), Shared Context (CRDT KG), Network Supervisor (Raft-lite
+    + gossip + WP-10 recovery), Cluster Metrics (reuse ITelemetrySink). ADR-044 +
+    RFC-015. Code deferred (K5 go pending). K1/K3/K5/K6/K8.'

@@ -93,3 +93,7 @@ rfcs:
   title: Distributed Runtime — CRDT KG + Raft-lite Supervisor + Distributed EventBus
   status: under_review
   date: '2026-08-02'
+- id: RFC-015
+  title: Distributed Runtime Implementation — 9 components (TZ-015)
+  status: under_review
+  date: '2026-08-02'
