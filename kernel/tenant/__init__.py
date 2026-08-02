@@ -5,6 +5,14 @@ tenant carrier (TenantContext, TenantContextProvider, DefaultTenantContext).
 Heavy IO (tenant persistence, approval) lives in services/tenant/ (K1 boundary).
 """
 from .context import TenantContext
+from .isolation import TenantKnowledgeBoundary, TenantMemoryNamespace, TenantRAGFilter
 from .provider import DefaultTenantContext, TenantContextProvider
 
-__all__ = ["TenantContext", "DefaultTenantContext", "TenantContextProvider"]
+__all__ = [
+    "TenantContext",
+    "DefaultTenantContext",
+    "TenantContextProvider",
+    "TenantMemoryNamespace",
+    "TenantRAGFilter",
+    "TenantKnowledgeBoundary",
+]
