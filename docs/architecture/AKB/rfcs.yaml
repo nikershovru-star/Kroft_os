@@ -77,3 +77,7 @@ rfcs:
     Agent Integration)
   status: under_review
   date: '2026-08-02'
+- id: RFC-011
+  title: Execution Sandbox — Isolated Tool Runtime for Agents
+  status: under_review
+  date: '2026-08-02'

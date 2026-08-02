@@ -530,7 +530,7 @@ adrs:
   - ADR-036
 - id: ADR-038
   title: Circuit Breaker & Graceful Degradation for Agent Runtime
-  status: proposed
+  status: accepted
   evidence_level: III
   date: '2026-08-02'
   related:
@@ -541,3 +541,15 @@ adrs:
   - ADR-034
   - ADR-035
   - ADR-036
+- id: ADR-039
+  title: Subprocess-based Execution Sandbox (IExecutionSandbox)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-EXECUTION-001
+  - RFC-011
+  - ADR-034
+  - ADR-026
+  - Stage-25
+  - Stage-31

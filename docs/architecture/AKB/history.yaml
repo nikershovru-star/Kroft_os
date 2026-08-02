@@ -320,3 +320,12 @@ history:
     via ApprovalManager), AgentLifecycleFSM->EventBus agent.stale/agent.failure, SupervisorService
     agent integration, IAgentRecovery port + AgentRecoveryAdapter (healing.py thin).
     19 tests. Suite 904 passed, gate 14, akb-lint PASSED. K1/K8 clean.'
+- id: WP-EXECUTION-001-design
+  tz: TZ-EXECUTION-001
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-EXECUTION-001 design: RFC-011 (under_review) + ADR-039 (proposed).
+    IExecutionSandbox port (contracts/) + SubprocessSandbox adapter (adapters/). Integration:
+    ToolRegistry dangerous routing, DesktopAdapter.open_app os.system->sandbox, Tool.dangerous
+    flag. Fact-checked: os.system injection confirmed in desktop_adapter.py:78; FileSandbox
+    (kernel/security) does NOT conflict (file vs process sandbox). Code waits K5 go.'
