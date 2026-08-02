@@ -5,6 +5,39 @@ Format: `commit-range | scope | summary`.
 
 ---
 
+## 2026-08-03 — ТЗ-ME-01 (Long-Term Memory Evolution, Self-Evolving) — DONE
+
+`dce8d96 fe13fbd d9adde6 bb7b20b <docs>`
+
+- **Контракт Memory Evolution.** `contracts/i_memory_evolution.py`: `IMemoryEvolution`
+  (consolidate/forget/supersede). `contracts/cognitive_domain.py`: `SemanticFact` (frozen;
+  aggregated ConfidenceScore + CausalMark + source_episodes), `PolicyLifecycle` (Enum
+  ACTIVE/DEPRECATED/SUPERSEDED), `Policy.lifecycle` поле. `ILayeredMemory` расширен
+  (commit_semantic/get_semantic/get_normative/deprecate_normative; HARD deprecation -> raise).
+- **Reference impl (LLM-free, I-09).** `kernel/memory_evolution.py`: `ReferenceMemoryEvolution`
+  — повторяющийся high-conf опыт (conf>порога, повтор>=N) -> SemanticFact (confidence
+  агрегируется через `aggregate_confidence`/MIN, не наивный max); low-conf -> forgetting;
+  supersede. HARD-политики НЕ производятся (O1). `kernel/memory_store.py`:
+  `InMemoryLayeredMemory` (semantic layer + lifecycle, O1 guard).
+- **Интеграция + SELF-EVOLVING GUARD (O1).** `CognitiveKernel` принимает `IMemoryEvolution`
+  + `ILayeredMemory`; Learn-фаза `tick` записывает episode и зовёт consolidate/forget с
+  guard: `values.hard_violations` ДО commit — hard-violating факты НЕ попадают в SOFT-слой.
+  `build_kernel` проводит `ReferenceMemoryEvolution` (shared clock) + `InMemoryLayeredMemory`.
+  `CognitiveEventType` + SEMANTIC_CONSOLIDATED / NORMATIVE_DEPRECATED.
+- **Тесты (K8).** `tests/test_memory_evolution.py` (+10): consolidation (repeated high-conf
+  -> SemanticFact, aggregated conf + CausalMark node_origin); forgetting (low-conf ->
+  deprecated); norm lifecycle (supersede); **O1 guard**: HARD policy deprecation raises,
+  hard-violating consolidated fact rejected before commit (kernel + unit); negative: no
+  consolidation below threshold / single / engine never emits HARD policy. crashtest-B
+  `InMemoryLayeredMemory` обновлён под новый `ILayeredMemory`.
+- **Docs.** `ADR-059` (accepted) — Memory Evolution + Self-Evolving guard; AKB (adrs/issues);
+  CHANGELOG; PROJECT_STATUS.
+
+**Verification:** full suite `1042 passed, 19 skipped, 1 xpassed, 0 failed`;
+arch-gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## 2026-08-03 — ТЗ-PL-01 (Autonomous Planner, value-aware lookahead) — DONE
 
 `21b1da1 a0373f7 9c460e8 539a015 ec984f3 <docs>`

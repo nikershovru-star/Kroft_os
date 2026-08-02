@@ -774,6 +774,19 @@ adrs:
   - FLAGD
   - FLAG3
   - WM-01-GAP-CLOSED
+- id: ADR-059
+  title: Long-Term Memory Evolution — consolidation / forgetting / lifecycle (ТЗ-ME-01 / ADR-046)
+  status: accepted
+  evidence_level: V
+  date: '2026-08-03'
+  decision_score: 0.87
+  confidence: high
+  risk: low
+  related: [ADR-046, ADR-054, ADR-055, ADR-056, ADR-057, ADR-058]
+  addresses:
+  - TZ-ME-01
+  - O1
+  - I-14
 - id: ADR-058
   title: Autonomous Planner — value-aware lookahead over World Model (ТЗ-PL-01 / ADR-045)
   status: accepted

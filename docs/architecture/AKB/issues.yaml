@@ -136,3 +136,35 @@ issues:
   - ADR-057
   - TZ-WM-01
   - FLAGA
+- id: PL-01-GAP-CLOSED
+  title: 'ТЗ-PL-01: Autonomous Planner — value-aware lookahead поверх WorldModel'
+  severity: info
+  status: closed
+  introduced_by: 'раунд 1 (Deliberate: Planning phase) / ТЗ-PL-01'
+  closed_by: 'ТЗ-PL-01 (ReferencePlanner + value-aware evaluate)'
+  addresses:
+  - TZ-PL-01
+  - FLAG2
+  - FLAG3
+  evidence:
+    contracts: contracts/i_planner.py (IPlanner)
+    impl: kernel/planning.py (ReferencePlanner)
+    integration: kernel/cognitive_kernel.py (planner.plan в tick)
+    tests: tests/test_autonomous_planner.py (+9), tests/test_world_model.py (+3 value-aware)
+  notes: 'Коммиты 21b1da1, a0373f7, 9c460e8, 539a015, ec984f3, docs(ADR-058). Full suite 1032 passed, gate 14/14, akb-lint PASSED.'
+- id: ME-01-GAP-CLOSED
+  title: 'ТЗ-ME-01: Long-Term Memory Evolution — консолидация / forgetting / lifecycle'
+  severity: info
+  status: closed
+  introduced_by: 'раунд 1 (Memory: Working/Episodic/Semantic/Normative + lifecycle); SimpleLearningPolicy stub'
+  closed_by: 'ТЗ-ME-01 (ReferenceMemoryEvolution + InMemoryLayeredMemory + Self-Evolving guard)'
+  addresses:
+  - TZ-ME-01
+  - O1
+  - I-14
+  evidence:
+    contracts: contracts/i_memory_evolution.py (IMemoryEvolution), contracts/cognitive_domain.py (SemanticFact, PolicyLifecycle)
+    impl: kernel/memory_evolution.py (ReferenceMemoryEvolution), kernel/memory_store.py (InMemoryLayeredMemory)
+    integration: kernel/cognitive_kernel.py (Learn phase + guard)
+    tests: tests/test_memory_evolution.py (+10, включая O1 guard negative)
+  notes: 'Коммиты dce8d96, fe13fbd, d9adde6, bb7b20b, docs(ADR-059). Full suite 1042 passed, gate 14/14, akb-lint PASSED. O1: HARD layer immutable, hard-violating facts rejected before commit.'

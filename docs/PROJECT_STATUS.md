@@ -65,9 +65,9 @@ purpose: >
 
 ## 3. Метрики (реальный прогон 2026-08-02)
 
-- **Tests:** `1032 passed, 19 skipped, 1 xpassed, 0 failed` (реальный прогон 2026-08-03; +ТЗ-CAUSAL-01: +9 тестов Lamport; +ТЗ-RE-01: +8 тестов Reasoning; +ТЗ-WM-01: +10 тестов World Model; +ТЗ-PL-01: +9 тестов Planner +3 value-aware WM; WP14-RACE xfail'd)
+- **Tests:** `1042 passed, 19 skipped, 1 xpassed, 0 failed` (реальный прогон 2026-08-03; +ТЗ-CAUSAL-01: +9 тестов Lamport; +ТЗ-RE-01: +8 тестов Reasoning; +ТЗ-WM-01: +10 тестов World Model; +ТЗ-PL-01: +9 тестов Planner +3 value-aware WM; +ТЗ-ME-01: +10 тестов Memory Evolution; WP14-RACE xfail'd)
 - **Arch-gate:** `14 passed` (8 positive + 6 negative)
-- **ADR:** 58 (ADR-001..058; ADR-055 accepted + Lamport amendment; ADR-056 accepted — Reasoning Engine; ADR-057 accepted — World Model; ADR-058 accepted — Autonomous Planner; ADR-007 — двойной файл, логически один)
+- **ADR:** 59 (ADR-001..059; ADR-055 accepted + Lamport amendment; ADR-056 accepted — Reasoning Engine; ADR-057 accepted — World Model; ADR-058 accepted — Autonomous Planner; ADR-059 accepted — Memory Evolution; ADR-007 — двойной файл, логически один)
 - **Laws:** 8 (K1–K8)
 - **Forbidden patterns:** 6 (F1–F6)
 - **Open violations:** **0**
@@ -152,3 +152,5 @@ WorldState-управляемого) как самостоятельного м�
 > **ТЗ-WM-01 (2026-08-02, DONE — code):** World Model как предиктивный советник поверх WorldState (ADR-047). Контракт IWorldModel (predict/simulate/evaluate) + frozen PredictedState; ReferenceWorldModel (LLM-free, confidence падает с horizon, no-fact=low); интеграция в Reasoning (confidence = predicted utility). flag A: default clock из world.node_id (без "kernel"), sentinel-origin normalize в publish. 6 атомарных коммитов (b0523d6, f26eb7e, 07d7730, 66043a4, f33c5fc, docs/ADR-057). Full suite 1020 passed, gate 14/14, akb-lint PASSED. ADR-057 accepted; issues WM-01-GAP-CLOSED.
 
 > **ТЗ-PL-01 (2026-08-03, DONE — code):** Autonomous Planner как выделенный компонент фазы Deliberate (ADR-045/054). Контракт IPlanner.plan(goal, steps, world, budget, intent) -> List[Plan] ранжированный по predicted value-aware utility; ReferencePlanner (LLM-free) прогоняет каждый candidate через WorldModel.simulate (lookahead) и evaluate(values) — hard violation -> utility 0 (veto), soft utility re-ranks; Planner РАНЖИРУЕТ, Decision ВЫБИРАЕТ (I-03/I-09). Флаг 2 закрыт: evaluate стал value-aware (values живой параметр). 6 атомарных коммитов (21b1da1, a0373f7, 9c460e8, 539a015, ec984f3, docs/ADR-058). Full suite 1032 passed, gate 14/14, akb-lint PASSED. ADR-058 accepted + ADR-057 amended (value-aware evaluate, transition=stub честно); issues PL-01-GAP-CLOSED.
+
+> **ТЗ-ME-01 (2026-08-03, DONE — code):** Long-Term Memory Evolution (механизм Self-Evolving, ADR-046). Контракт IMemoryEvolution (consolidate/forget/supersede) + SemanticFact + PolicyLifecycle; ILayeredMemory расширен (semantic layer + lifecycle). ReferenceMemoryEvolution (LLM-free): повторяющийся high-conf опыт -> SemanticFact (агрегированная ConfidenceScore + CausalMark), forgetting low-conf, supersede. Интеграция в Learn-фазу kernel с SELF-EVOLVING GUARD (O1): hard_violations ДО commit, HARD-слой неизменен. 5 атомарных коммитов (dce8d96, fe13fbd, d9adde6, bb7b20b, docs/ADR-059). Full suite 1042 passed, gate 14/14, akb-lint PASSED. ADR-059 accepted; issues ME-01-GAP-CLOSED / PL-01-GAP-CLOSED.
