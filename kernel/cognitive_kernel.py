@@ -44,7 +44,9 @@ from contracts.i_cognitive_kernel import (
     IAttention,
     IReasoningEngine,
 )
+from contracts.i_world_model import IWorldModel
 from kernel.reasoning import ReferenceReasoningEngine
+from kernel.world_model import ReferenceWorldModel
 
 
 def _uid(prefix: str) -> str:
@@ -256,7 +258,8 @@ class CognitiveKernel(ICognitiveKernel):
                  learning: ILearningPolicy,
                  planner: Callable[[Goal, List["ReasoningStep"]], List[Plan]],
                  clock: Optional["NodeLamportClock"] = None,
-                 reason: Optional["IReasoningEngine"] = None) -> None:
+                 reason: Optional["IReasoningEngine"] = None,
+                 world_model: Optional["IWorldModel"] = None) -> None:
         # ТЗ-WM-01 flag A: default clock MUST derive node_id from the world, never
         # the literal "kernel" (ТЗ-RE-01 already wired node_origin=node_id when a
         # clock is injected; this closes the residual default-construction path).
@@ -283,6 +286,9 @@ class CognitiveKernel(ICognitiveKernel):
         # is injected, the kernel has no reasoning step (still legal — Planning runs
         # with empty steps). build_kernel always wires ReferenceReasoningEngine.
         self._reason = reason
+        # ТЗ-WM-01: World Model is an ADVISOR to reasoning/decision. If none is
+        # injected, reasoning falls back to the word-overlap heuristic.
+        self._world_model = world_model
         self._state = CognitiveState.IDLE
         self._goal: Optional[Goal] = None
         self._events: list = []
@@ -428,6 +434,11 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     # ТЗ-RE-01: Reasoning Engine wired with the SAME shared node clock (flag 1) so
     # reasoning steps carry the node's causal order + node_origin = node_id.
     reason = ReferenceReasoningEngine(shared_clock, attn)
+    # ТЗ-WM-01: World Model is an ADVISOR over world state, sharing the same clock.
+    # Wired into the Reasoning Engine so grounded steps are ranked by PREDICTED
+    # utility (not word overlap). The deterministic Decision still makes the final pick.
+    world_model = ReferenceWorldModel(shared_clock)
+    reason = ReferenceReasoningEngine(shared_clock, attn, world_model=world_model)
 
     def planner(goal: Goal, steps: list) -> List[Plan]:
         # deterministic candidate generator: one candidate per reasoning step
@@ -447,4 +458,4 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
         return cands
 
     return CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner,
-                           clock=shared_clock, reason=reason)
+                           clock=shared_clock, reason=reason, world_model=world_model)
