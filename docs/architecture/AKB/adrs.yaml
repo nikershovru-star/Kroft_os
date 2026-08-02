@@ -629,3 +629,14 @@ adrs:
   - RFC-015
   - WP-14
   - Wave-3
+- id: ADR-046
+  title: Long-Term Memory Evolution — self-developing memory (TZ-017)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-017
+  - ADR-045
+  - TZ-AGENT-001
+  - WP-14
+  - Wave-3

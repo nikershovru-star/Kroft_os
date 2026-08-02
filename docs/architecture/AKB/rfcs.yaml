@@ -101,3 +101,7 @@ rfcs:
   title: Autonomous Planner — Goal→Task DAG→Execution (TZ-016)
   status: under_review
   date: '2026-08-02'
+- id: RFC-017
+  title: Long-Term Memory Evolution — self-developing memory (TZ-017)
+  status: under_review
+  date: '2026-08-02'
