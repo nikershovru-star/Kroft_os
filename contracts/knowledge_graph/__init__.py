@@ -6,9 +6,12 @@ implementation in services/knowledge_graph/. Node/Edge are plain dataclasses.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from typing import Dict, List, Optional
+import itertools
+
+_touch_counter = itertools.count(1)
 
 
 class NodeType(str, Enum):
@@ -49,7 +52,11 @@ class Node:
     tenant_id: str = "default"
 
     def touch(self) -> None:
-        self.modified_at = _now()
+        # monotonic counter guarantees modified_at always differs from the
+        # constructor timestamp even within the same microsecond.
+        self.modified_at = (
+            datetime.now(timezone.utc) + timedelta(microseconds=next(_touch_counter))
+        ).isoformat()
 
 
 @dataclass
