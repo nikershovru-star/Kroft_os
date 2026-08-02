@@ -36,6 +36,9 @@ from adapters.in_memory_telemetry import InMemoryTelemetrySink
 from adapters.ollama_vision import OllamaVisionAdapter
 from adapters.yt_dlp_transcript import YtDlpTranscriptAdapter
 from services.media_intelligence import MediaIntelligenceService
+from services.architecture_intelligence import (
+    ArchitectureSimulator, TechDebtEngine, EvolutionEngine,
+)
 from kernel.security.approval_manager import ApprovalManager
 from services.alert_engine import AlertEngine
 
@@ -88,6 +91,15 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
             llm=None,  # LLM not wired in build_container; _blend degrades to raw blend
             telemetry=telemetry,
         ),
+    )
+    # WP-12 / ADR-042: Architecture Intelligence (L5/L6/L7) on AKB + telemetry.
+    akb_path = _os.path.join(vault_path, "docs", "architecture", "AKB")
+    c.register_factory("ArchitectureSimulator", lambda: ArchitectureSimulator(sandbox=sandbox))
+    c.register_factory("TechDebtEngine", lambda: TechDebtEngine(akb_path=akb_path, telemetry=telemetry))
+    c.register_factory(
+        "EvolutionEngine",
+        lambda: EvolutionEngine(akb_path=akb_path, telemetry=telemetry,
+                                debt_engine=c.resolve("TechDebtEngine")),
     )
     if desktop_adapter == "pyautogui":
         from adapters.desktop_adapter import PyAutoGUIAdapter
