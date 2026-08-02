@@ -76,6 +76,9 @@ class MediaIntelligenceService:
         return self._vision.parse(source)
 
     def _ingest_video(self, source: MediaSource) -> MediaKnowledge:
+        if (self._transcript is None or not self._transcript.available) and \
+           (self._vision is None or not self._vision.available):
+            raise RuntimeError("No vision/transcript adapter available for video source.")
         segments: List[MediaSegment] = []
         # 1) audio -> speech text (if transcript adapter available)
         if self._transcript is not None and self._transcript.available and (source.path or source.url):
@@ -130,4 +133,4 @@ class MediaIntelligenceService:
             seg_id = f"{node_id}#seg{i}"
             self._graph.add_node(Node(id=seg_id, type=NodeType.EXPERIMENT,
                                       label=f"segment {i}", metadata={"text": seg.text[:200]}))
-            self._graph.add_edge(Edge(src=node_id, dst=seg_id, type=EdgeType.CONTAINS))
+            self._graph.add_edge(Edge(source_id=node_id, target_id=seg_id, type=EdgeType.CONTAINS))

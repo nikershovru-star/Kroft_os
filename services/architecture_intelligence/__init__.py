@@ -33,6 +33,16 @@ from contracts.i_telemetry import ITelemetrySink
 _AKB_LAYER_RE = re.compile(r"^\s*(?:from|import)\s+([a-zA-Z_][\w.]*)")
 
 
+def _package_of(path: str) -> str:
+    """Best-effort layer guess from a file path (kernel/ runtime/ services/ ...)."""
+    p = Path(path).as_posix().lower()
+    for layer in ("kernel", "runtime", "services", "adapters", "infrastructure",
+                 "policies", "composition", "contracts", "plugins", "cli"):
+        if f"/{layer}/" in p or p.startswith(f"{layer}/"):
+            return layer
+    return "unknown"
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
