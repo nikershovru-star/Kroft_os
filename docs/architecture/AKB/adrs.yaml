@@ -491,3 +491,28 @@ adrs:
   - K5
   - K6
   - K8
+- id: ADR-036
+  title: Knowledge Graph v2 Architecture
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  decision_score: 0.9
+  confidence: high
+  risk: low
+  relates_to:
+  - TZ-KNOW-001
+  - RFC-008
+  - ADR-011
+  - ADR-012
+  - ADR-021
+  - ADR-022
+  - ADR-025
+  - TZ-SEC-001
+  - TZ-MULTI-001
+  law:
+  - K1
+  - K3
+  - K4
+  - K5
+  - K6
+  - K8

@@ -262,3 +262,12 @@ history:
     evidence III). Spec saved to docs/specifications/TZ-MULTI-001.md. Baseline re-verified:
     kernel/tenant absent, runtime has no tenant_id, services tenant-free, suite 794/gate
     14. Code WP-01..WP-09 pending K5-approval.'
+- id: WP-KNOW-001-design
+  tz: TZ-KNOW-001
+  date: '2026-08-02'
+  status: done
+  summary: 'TZ-KNOW-001 Design phase. RFC-008 (under_review) + ADR-036 (proposed,
+    evidence III). Spec saved. Baseline re-verified: IGraphBuilder exists but is runtime-graph
+    (infrastructure/), NOT reused for architecture graph (K8); services/ has only
+    security/ (no knowledge/memory pkg); AKB has no edges field; MOCs/ absent. Code
+    WP-01..WP-08 pending K5-approval.'

@@ -53,3 +53,18 @@ rfcs:
   - ADR-033
   - ADR-034
   evidence_level: III
+- id: RFC-008
+  title: Knowledge Graph v2 — Linked Architecture Intelligence
+  status: under_review
+  date: '2026-08-02'
+  related:
+  - TZ-KNOW-001
+  - ADR-036
+  - ADR-011
+  - ADR-012
+  - ADR-021
+  - ADR-022
+  - ADR-025
+  - TZ-SEC-001
+  - TZ-MULTI-001
+  evidence_level: III
