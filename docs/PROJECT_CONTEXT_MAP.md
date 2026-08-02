@@ -74,7 +74,7 @@ KROFT_OS/                    ← единый git-репозиторий (Varian
 ├── docs/
 │   ├── architecture/
 │   │   ├── KP/  KRM/  KERA/  KEH/  KES/  KL/  RFC/  AKB/   ← 8 подпапок (см. §1)
-│   │   ├── ADR-001.md .. ADR-030.md                     ← плоские файлы (имена с пробелами)
+│   │   ├── ADR-001.md .. ADR-034.md                     ← плоские файлы (имена с пробелами)
 │   │   ├── ARCHITECTURE_MAP.md                          ← handoff-карта
 │   │   └── PROJECT_CONTEXT_MAP.md                       ← этот паспорт
 │   ├── PROJECT_STATUS.md                                ← статус арх-долга (см. D2)
@@ -130,7 +130,7 @@ KROFT_OS/                    ← единый git-репозиторий (Varian
 
 ---
 
-## 4. Ключевые ADR (ADR-001..030, без пропусков)
+## 4. Ключевые ADR (ADR-001..034, без пропусков)
 
 Источник: `docs/architecture/ADR-*.md` + `AKB/adrs.yaml`. Полный индекс ниже (D9).
 
@@ -159,8 +159,12 @@ KROFT_OS/                    ← единый git-репозиторий (Varian
 | ADR-028 | Kernel Purity (no infra imports) | accepted | III | TZ-001 WP-11 |
 | ADR-029 | Composition Root Pattern | accepted | III | TZ-001 WP-12 |
 | ADR-030 | Policy Boundary (Phase C) | proposed | K6 |
+| ADR-031 | CI Pipeline & AKB Linter | proposed | K5, K7, K8 |
+| ADR-032 | Security Architecture (Capability Boundary) | proposed | K1, K3, K5, K8 |
+| ADR-033 | Capability Model (RBAC + Tool Requirements) | proposed | K1, K5, K6 |
+| ADR-034 | Approval Workflow (Human-in-loop) | proposed | K5 |
 
-> Примечание: ADR-007 существует в двух редакциях (`ADR-007 Policy Platform — Design (superseded draft).md` и `ADR-007 Policy Platform — Superseded by ADR-009.md`). Обе помечены superseded; итоговый — ADR-009. ADR-008 (Knowledge Platform) переименован в ADR-011 (см. AKB/adrs.yaml). Индекс ADR-001..030 — **без пропусков** (ADR-007 двойной, ADR-008 → ADR-011).
+> Примечание: ADR-007 существует в двух редакциях (`ADR-007 Policy Platform — Design (superseded draft).md` и `ADR-007 Policy Platform — Superseded by ADR-009.md`). Обе помечены superseded; итоговый — ADR-009. ADR-008 (Knowledge Platform) переименован в ADR-011 (см. AKB/adrs.yaml). Индекс ADR-001..034 — **без пропусков** (ADR-007 двойной, ADR-008 → ADR-011).
 
 ### Полный индекс ADR (D9)
 
@@ -196,9 +200,12 @@ ADR-028 Kernel Purity
 ADR-029 Bootstrap Lifecycle
 ADR-030 Policy Boundary
 ADR-031 CI Pipeline & AKB Linter
+ADR-032 Security Architecture (Capability Boundary)
+ADR-033 Capability Model (RBAC + Tool Requirements)
+ADR-034 Approval Workflow (Human-in-loop)
 ```
 
-> Примечание: ADR-007 существует в двух редакциях (`ADR-007 Policy Platform — Design (superseded draft).md` и `ADR-007 Policy Platform — Superseded by ADR-009.md`). Обе помечены superseded; итоговый — ADR-009. ADR-008 (Knowledge Platform) переименован в ADR-011 (см. AKB/adrs.yaml). Индекс ADR-001..031 — **без пропусков** (ADR-007 двойной, ADR-008 → ADR-011).
+> Примечание: ADR-007 существует в двух редакциях (`ADR-007 Policy Platform — Design (superseded draft).md` и `ADR-007 Policy Platform — Superseded by ADR-009.md`). Обе помечены superseded; итоговый — ADR-009. ADR-008 (Knowledge Platform) переименован в ADR-011 (см. AKB/adrs.yaml). Индекс ADR-001..034 — **без пропусков** (ADR-007 двойной, ADR-008 → ADR-011).
 
 ## 5. Убиквитарный язык (KL) — ключевые термины
 
@@ -241,18 +248,20 @@ ADR-031 CI Pipeline & AKB Linter
 
 ### 🔢 Метрики (реальный прогон 2026-08-02)
 - **Tests:** `768 passed, 19 skipped, 0 failed`
-- **Arch-gate:** `8 passed` (positive) + `6 passed` (negative, proof-of-fire)
-- **ADR:** 31 (ADR-001..031), из них ADR-025 — proposed (PHASE 6), ADR-026..029 — **accepted** (WP-08 TZ-003), ADR-030 — proposed, ADR-031 — proposed (CI, WP-05); ADR-007 — двойной файл (superseded, логически один)
+- **Arch-gate:** `14 passed` (8 positive + 6 negative, proof-of-fire)
+- **ADR:** 34 (ADR-001..034), из них ADR-025 — proposed (PHASE 6), ADR-026..029 — **accepted** (WP-08 TZ-003), ADR-030 — proposed, ADR-031 — proposed (CI, WP-05), ADR-032/033/034 — proposed (Security, TZ-SEC-001); ADR-007 — двойной файл (superseded, логически один)
+- **RFC:** 6 (RFC-001..006; RFC-005 decided CI, RFC-006 under_review Secure Runtime)
 - **Import matrix:** `AKB/import_matrix.yaml` (single source)
 - **Gate coverage:** `AKB/gate_coverage.md`
 - **Открытые нарушения:** **0** (V1/V2 закрыты в Phase B; V3 закрыт в Phase C)
 
 ### 🔜 Впереди
-- [ ] WP-03 остаток (диаграммы, ADR Index в отдельном файле, AKB validation)
+- [x] **TZ-003 Wave 1** — WP-04..WP-08 (repo/CI/sync/deprecated/ADR-lifecycle) DONE
+- [x] CI/CD pipeline (WP-05 TZ-003) — DONE
+- [ ] **TZ-SEC-001** (Secure Runtime & Capability System) — Design DONE (RFC-006 + ADR-032/033/034 proposed); КОД заблокирован до K5-approval ADR
 - [ ] Knowledge Graph v2 (связи между ADR/Component/Experiment)
 - [ ] Architecture Intelligence (Hermes v2.0) — частично (ADR-021/023/024)
 - [ ] Runtime self-analysis
-- [ ] CI/CD pipeline (WP-05 TZ-002)
 - [ ] **ADR-025 → accepted** (PHASE 6 Multimodal: код MK-001..005 ещё не написан)
 
 ---
@@ -265,7 +274,7 @@ ADR-031 CI Pipeline & AKB Linter
 
 - **Tests:** 768 passed (run `python scripts/ci.py`)
 - **Arch-gate:** 14 passed (8 positive + 6 negative)
-- **ADR:** 31 (ADR-001..031)
+- **ADR:** 34 (ADR-001..034)
 - **Open violations:** 0
 <!-- AUTO-GENERATED-END -->
 
@@ -312,7 +321,7 @@ ADR-031 CI Pipeline & AKB Linter
 | Файл | Назначение |
 |------|-----------|
 | `laws.yaml` | LAW K1–K8 |
-| `adrs.yaml` | ADR-001..031 (decision, status, evidence_level) |
+| `adrs.yaml` | ADR-001..034 (decision, status, evidence_level) |
 | `patterns/forbidden.yaml` | F1–F6 (enforcement статусы) |
 | `patterns/allowed.yaml` | разрешённые паттерны |
 | `import_matrix.yaml` | **матрица разрешённых импортов (WP-02, single source для гейта)** |
@@ -320,7 +329,7 @@ ADR-031 CI Pipeline & AKB Linter
 | `standards/coding.yaml` | стандарты кода |
 | `standards/interfaces.yaml` | стандарты интерфейсов |
 | `glossary.yaml` | KL термины |
-| `rfcs.yaml` | RFC-001..004 |
+| `rfcs.yaml` | RFC-001..006 |
 | `evidence_levels.yaml` | уровни доказательств I–V |
 | `tech_catalog.yaml` | каталог технологий |
 | `history.yaml` | история изменений (включая WP-02, TZ-002) |
@@ -383,4 +392,4 @@ ADR-031 CI Pipeline & AKB Linter
 
 > **Запомни:** KROFT_OS строит не только код. Она строит организационную память. Код можно переписать. Потерянное знание «почему сделали так» — нет.
 >
-> **v1.2 changelog:** синхронизация с реальностью после Phase B/C + WP-01/WP-02. Variant A DONE (единый repo, docs в git). Composition Root = `composition/` (НЕ `bootstrap_v2`). V3 CLOSED (ADR-030). ADR-001..030 (было 025). Arch-gate 8 positive + 6 negative (было 3). Добавлены §Architecture Gate (D6), §AKB Structure (D7), полный ADR Index (D9). Метрики: 768 passed, 0 failed, 0 open violations.
+> **v1.3 changelog:** синхронизация с реальностью после TZ-003 (WP-04..WP-08) + TZ-SEC-001 (Design). ADR-001..034 (было 030: добавлены 031 CI, 032/033/034 Security). Arch-gate 14 passed (8 positive + 6 negative, WP-02). RFC-001..006 (RFC-005 CI decided, RFC-006 Secure under_review). TZ-003 Wave 1 DONE (WP-04..08). TZ-SEC-001 Design DONE (RFC-006 + ADR-032/033/034 proposed, код заблокирован до K5). Метрики: 768 passed, 0 failed, 0 open violations.
