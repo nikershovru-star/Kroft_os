@@ -50,8 +50,27 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
     c.register_instance("IEventBus", InMemoryEventBus())
     c.register_instance("IGraphBuilder", InMemoryGraphBuilder())
     # TZ-MULTIMODAL-001 / ADR-041: Knowledge Graph v2 engine (VIDEO_NODE sink).
-    from services.knowledge_graph.engine import InMemoryGraphEngine
-    c.register_instance("IGraphEngine", InMemoryGraphEngine())
+    from adapters.crdt_graph import CrdtGraphEngine
+    c.register_instance("IGraphEngine", CrdtGraphEngine(node_id="local"))  # WP-14 CRDT drop-in
+    # WP-14 distributed runtime ports/adapters.
+    from contracts.i_leader_elector import ILeaderElector
+    from contracts.i_distributed_event_bus import IDistributedEventBus
+    from adapters.raft_lite import RaftLiteElector
+    from adapters.tcp_event_bus import TcpEventBus
+    from services.supervisor_failover import SupervisorFailover
+    c.register_factory("ILeaderElector", lambda: RaftLiteElector(bus))
+    # TcpEventBus factory kept optional (opens localhost port only when join() called).
+    c.register_factory("IDistributedEventBus",
+                       lambda: TcpEventBus(node_id="local", port=8765))
+    c.register_factory(
+        "SupervisorFailover",
+        lambda: SupervisorFailover(
+            elector=c.resolve("ILeaderElector"),
+            graph=c.resolve("IGraphEngine"),
+            bus=bus,
+            recover_cb=None,  # wire WP-10 SupervisorService.recover here when available
+        ),
+    )
     c.register_instance("ICapabilityRegistry", CapabilityRegistry())
     # Phase B.3: state repository (IStateRepository impl) wired here.
     from infrastructure.state_repository import StateRepository
