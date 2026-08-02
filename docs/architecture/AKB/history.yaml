@@ -488,3 +488,13 @@ history:
     IPolicyEvolution (Goodhart guard), ILearningLoop, SelfImprovementService. Research:
     Self-Evolving Survey arxiv 2507.21046, GEPA ICLR2026, Darwin Godel Machine Goodhart
     trap. ADR-049 + RFC-020. Code deferred (K5 go pending). K1/K3/K5/K6/K8.'
+- id: TZ-021-design
+  tz: TZ-021
+  date: '2026-08-02'
+  status: accepted
+  summary: 'TZ-021 AI Marketplace design (research-first). 8 comps: IPackageRegistry,
+    IPluginRegistry, IAgentRegistry (reuse TZ-AGENT), IWorkflowRegistry (reuse ADR-045
+    TaskGraph), IMemoryPackage/IKnowledgePackage (reuse ADR-047), IVersioning (SemVer
+    2.0), ICompatibility, MarketplaceService. Research: AI Agent Marketplace 2026,
+    Skilldex arxiv 2604, VS Code plugin arch, SemVer 2.0. ADR-050 + RFC-021. Code
+    deferred (K5 go pending). K1/K3/K5/K6/K8.'

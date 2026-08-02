@@ -673,3 +673,15 @@ adrs:
   - ADR-045
   - TZ-AGENT-001
   - Wave-3
+- id: ADR-050
+  title: AI Marketplace — registries, packages, versioning, compatibility (TZ-021)
+  status: proposed
+  evidence_level: III
+  date: '2026-08-02'
+  related:
+  - TZ-021
+  - TZ-AGENT-001
+  - ADR-045
+  - ADR-047
+  - WP-14
+  - Wave-3
