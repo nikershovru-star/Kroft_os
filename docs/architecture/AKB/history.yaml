@@ -141,8 +141,8 @@ history:
     status: done
     summary: "ADR-026..029 accepted. evidence_level: III added to all 31 ADR. F6 warn closed (akb-lint green). PROJECT_CONTEXT_MAP §4 updated."
 
-  - id: WP-SEC-001-accept
+  - id: WP-SEC-001-code
     tz: TZ-SEC-001
     date: "2026-08-02"
     status: done
-    summary: "TZ-SEC-001 ADR-032/033/034 accepted (K5 via user go). RFC-006 remains under_review. Code phase WP-01..WP-10 authorized to start."
+    summary: "TZ-SEC-001 CODE phase. WP-01..WP-09: contracts/security ports (8 ports), kernel/security (CapabilityManager RBAC + AuthorizationEngine + ApprovalManager + FileSandbox, K1-clean), services/security (SecretManager mask/redact, AuditLogger checksum-chain, TerminalExecutor blacklist/timeout). Tool.required_capabilities added. 26 security tests (>=95% target). Full suite 794 passed, gate 14 passed, K1 verified."

@@ -80,6 +80,8 @@ KROFT_OS/                    ← единый git-репозиторий (Varian
 │   ├── PROJECT_STATUS.md                                ← статус арх-долга (см. D2)
 │   └── README-overview.md
 ├── kernel/  contracts/  runtime/  services/  adapters/
+├── kernel/security/   ← capability boundary core (TZ-SEC-001, K1-clean: contracts-only)
+├── services/security/  ← secret/audit/terminal IO (TZ-SEC-001, contracts-only)
 ├── composition/   ← Composition Root (слой сборки, K3)
 ├── cli/  infrastructure/  plugins/  policies/  tests/  main.py  bootstrap_v2.py
 ```
@@ -247,10 +249,11 @@ ADR-034 Approval Workflow (Human-in-loop)
 - [x] **Architecture Gate — РАБОТАЕТ** (ловит K1/K3/K6/K8 + F1/F4 автоматически)
 
 ### 🔢 Метрики (реальный прогон 2026-08-02)
-- **Tests:** `768 passed, 19 skipped, 0 failed`
+- **Tests:** `794 passed, 19 skipped, 0 failed` (вкл. `tests/security/` 26 тестов)
 - **Arch-gate:** `14 passed` (8 positive + 6 negative, proof-of-fire)
-- **ADR:** 34 (ADR-001..034), из них ADR-025 — proposed (PHASE 6), ADR-026..029 — **accepted** (WP-08 TZ-003), ADR-030 — proposed, ADR-031 — proposed (CI, WP-05), ADR-032/033/034 — proposed (Security, TZ-SEC-001); ADR-007 — двойной файл (superseded, логически один)
+- **ADR:** 34 (ADR-001..034), из них ADR-025 — proposed (PHASE 6), ADR-026..029 — **accepted** (WP-08 TZ-003), ADR-030 — proposed, ADR-031 — proposed (CI, WP-05), ADR-032/033/034 — **accepted** (Security, TZ-SEC-001); ADR-007 — двойной файл (superseded, логически один)
 - **RFC:** 5 (RFC-001..004 + RFC-006 under_review Secure Runtime; примечание: «RFC-005» НЕ существует — CI Pipeline это ADR-031, не RFC)
+- **Security layer:** `kernel/security/` (capability/approval/sandbox, K1-clean) + `services/security/` (secret/audit/terminal, contracts-only)
 - **Import matrix:** `AKB/import_matrix.yaml` (single source)
 - **Gate coverage:** `AKB/gate_coverage.md`
 - **Открытые нарушения:** **0** (V1/V2 закрыты в Phase B; V3 закрыт в Phase C)
@@ -258,7 +261,7 @@ ADR-034 Approval Workflow (Human-in-loop)
 ### 🔜 Впереди
 - [x] **TZ-003 Wave 1** — WP-04..WP-08 (repo/CI/sync/deprecated/ADR-lifecycle) DONE
 - [x] CI/CD pipeline (WP-05 TZ-003) — DONE
-- [ ] **TZ-SEC-001** (Secure Runtime & Capability System) — Design DONE (RFC-006 + ADR-032/033/034 proposed); КОД заблокирован до K5-approval ADR
+- [x] **TZ-SEC-001** (Secure Runtime & Capability System) — DONE (ADR-032/033/034 accepted; WP-01..WP-09: capability/RBAC/authz/secret/terminal/sandbox/audit/approval + 26 tests; WP-10 docs)
 - [ ] Knowledge Graph v2 (связи между ADR/Component/Experiment)
 - [ ] Architecture Intelligence (Hermes v2.0) — частично (ADR-021/023/024)
 - [ ] Runtime self-analysis
@@ -392,4 +395,4 @@ ADR-034 Approval Workflow (Human-in-loop)
 
 > **Запомни:** KROFT_OS строит не только код. Она строит организационную память. Код можно переписать. Потерянное знание «почему сделали так» — нет.
 >
-> **v1.3 changelog:** синхронизация с реальностью после TZ-003 (WP-04..WP-08) + TZ-SEC-001 (Design). ADR-001..034 (добавлены 031 CI, 032/033/034 Security). Arch-gate 14 passed (8 positive + 6 negative, WP-02). RFC-001..004 + RFC-006 (under_review Secure); примечание: «RFC-005» НЕ существует — CI Pipeline зафиксирован как ADR-031, не RFC. TZ-003 Wave 1 DONE (WP-04..08). TZ-SEC-001 Design DONE (RFC-006 + ADR-032/033/034 proposed, код заблокирован до K5). Метрики: 768 passed, 0 failed, 0 open violations.
+> **v1.4 changelog:** TZ-SEC-001 Code DONE (WP-01..WP-09). Security layer: `contracts/security/` (8 ports) + `kernel/security/` (CapabilityManager RBAC, AuthorizationEngine, ApprovalManager, FileSandbox — K1-clean) + `services/security/` (SecretManager, AuditLogger checksum-chain, TerminalExecutor). Tool.required_capabilities. 26 security tests, suite 794 passed, gate 14 passed. ADR-032/033/034 accepted. RFC-006 under_review. Метрики: 794 passed, 0 failed, 0 open violations.
