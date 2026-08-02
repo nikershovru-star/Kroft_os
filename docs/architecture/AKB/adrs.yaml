@@ -606,7 +606,7 @@ adrs:
   - Wave-3
 - id: ADR-044
   title: Distributed Runtime Implementation — TZ-015 (full 9 components)
-  status: proposed
+  status: in_progress
   evidence_level: III
   date: '2026-08-02'
   related:
@@ -617,6 +617,8 @@ adrs:
   - TZ-AGENT-001
   - TZ-OBS-001
   - Wave-3
+  code_progress: ports+services scaffolded, causal contract extended (gate C); replication/partition
+    TODO
 - id: ADR-045
   title: Autonomous Planner — Goal→Task DAG→Execution (TZ-016)
   status: proposed

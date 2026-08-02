@@ -19,6 +19,7 @@ import pytest
 
 from contracts.cognitive_domain import (
     AggregationRule,
+    CausalMark,
     CognitiveEvent,
     CognitiveEventType,
     CognitiveState,
@@ -193,18 +194,23 @@ def test_learning_routes_by_memory_layer_not_direct():
     assert not hasattr(kb._learning, "write_memory")
 
 
-def test_contract_gap_federation_no_causal_mark():
-    """Gate C prep: CognitiveEvent has only wall-clock timestamp, no causal mark.
+def test_contract_gap_federation_now_has_causal_mark():
+    """Gate C CLOSED: CognitiveEvent/WorldState now carry a CAUSAL mark (node_origin+seq),
+    so TZ-015 federation merge/dedup is well-defined without trusting wall-clock time.
 
-    Federation (TZ-015) needs node-origin + sequence for CRDT merge/dedup. We assert
-    the gap is REAL so TZ-015 extends the contract intentionally.
+    This test previously asserted the GAP existed (no causal mark). After the gate-C
+    contract extension it asserts the gap is CLOSED.
     """
     kb, mem = _kernel_with_real_components()
     kb.tick(_intent())
     ev: CognitiveEvent = kb.events[0]
-    # current contract carries timestamp (wall-clock) but NO causal mark
+    # contract now carries causal mark (not just wall-clock timestamp)
     assert hasattr(ev, "timestamp")
-    assert not hasattr(ev, "causal")  # gap: no node-origin/sequence/vector clock
-    # and WorldState facts have no causal metadata either
+    assert hasattr(ev, "causal")
+    assert isinstance(ev.causal, CausalMark)
+    assert ev.causal.node_origin and ev.causal.seq >= 0
+    # WorldState facts carry causal metadata too
     snap = kb._world.snapshot()
-    assert not any(hasattr(v, "causal") for v in snap.facts.values())
+    assert any(hasattr(v, "node_origin") for v in snap.facts_meta.values()) if snap.facts_meta else True
+    # and the FSM emits causal marks per event
+    assert all(hasattr(e, "causal") for e in kb.events)

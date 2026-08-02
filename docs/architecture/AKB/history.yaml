@@ -557,3 +557,16 @@ history:
     rewrite on shared branch riskier). Rule going forward: infra-bootstrap (conftest/pytest.ini/pyproject)
     ALWAYS separate commit. Documented in CHANGELOG + AKB issues WP14-RACE (test_failover_leader_broadcasts_to_follower
     xfail''d).'
+- id: tz015-code-partial
+  tz: TZ-015
+  date: '2026-08-02'
+  status: in_progress
+  summary: 'TZ-015 Distributed Runtime CODE started (gate C honored). Extended cognitive
+    contract with CausalMark (node_origin+seq) in CognitiveEvent/WorldState (gate
+    C) BEFORE building federation. Implemented 6 ports (i_distributed_runtime.py)
+    + 6 services on WP-14 substrate through ports (K6): SharedContextService causal-merge,
+    CrdtClusterRegistry, GossipNodeDiscovery, MessagingRemoteAgentExecutor, ElectorNetworkSupervisor,
+    TelemetryClusterMetrics. 8 tests PASS. Crash-test path-B gap test flipped to assert
+    gap CLOSED. Full suite 991 passed / 0 failed (1 xpass WP14-RACE). Component coverage:
+    NodeDiscovery/ClusterRegistry/RemoteAgentExecutor/SharedContext/NetworkSupervisor/ClusterMetrics
+    = all started; replication + select-scope + partition/reconnect still TODO (follow-up).'

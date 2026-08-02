@@ -4,6 +4,19 @@
   import name changed — no `knowledgeos` package existed).
 - Historical entries below are preserved verbatim.
 
+## [Unreleased] — TZ-015 Distributed Runtime (gate C) + cognitive contract causal extension
+- **Gate C honored:** extended cognitive contract with `CausalMark` (node_origin+seq)
+  in `CognitiveEvent` + `WorldState.facts_meta` BEFORE building federation — so CRDT
+  merge/dedup is causal, not wall-clock (closes the gap surfaced by crash-test path B).
+- `contracts/i_distributed_runtime.py`: 6 ports (INodeDiscovery, IClusterRegistry,
+  IRemoteAgentExecutor, ISharedContext, INetworkSupervisor, IClusterMetrics).
+- `services/distributed_runtime.py`: 6 impls on WP-14 substrate through PORTS (K6/K8):
+  `SharedContextService` (causal merge), `CrdtClusterRegistry`, `GossipNodeDiscovery`,
+  `MessagingRemoteAgentExecutor`, `ElectorNetworkSupervisor`, `TelemetryClusterMetrics`.
+- `aggregate_confidence` (ADR-055) + `ILayeredMemory` (I-14) added (path B contract test).
+- Tests: `test_distributed_runtime_tz015.py` (8) + crash-test path B (3, gap now CLOSED).
+- ADR-044 → in_progress; AKB issues/WP14-RACE tracked.
+
 ## [Unreleased] — Cognitive Kernel Foundation (ADR-054) + test-infra fix
 > **NOTE (atomicity flag, 2026-08-02):** commit `8832f1d` contains TWO orthogonal
 > changes that should be reverted independently if needed:
