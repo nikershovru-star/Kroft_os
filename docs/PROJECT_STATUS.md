@@ -102,6 +102,6 @@ purpose: >
   - *Гипотезы содержимого:* Stage 47 ≈ Graph Visualization / Interactive Renderer (gap после analytics Stage 46); Stage 48 ≈ Real-time Collaboration / Multi-user ИЛИ Plugin Marketplace.
   - *Почему skipped:* не блокируют core functionality; покрываются roadmap Wave 3 (ADR-025 multimodal, Distributed Runtime Phase G); могут быть отдельными ТЗ позже.
   - *Статус:* documented as skipped placeholder (graph-viz + real-time-collab / plugin-marketplace).
-- **ADR-025** (PHASE 6 Multimodal) — status `deferred` (K5 decision 2026-08-02: defer to Wave 3; no IMultimodalParser port, heavy deps need optional adapters).
+- **ADR-025** (PHASE 6 Multimodal) — status `proposed`, K5 decision **defer to Wave 3** (no IMultimodalParser port; heavy deps need optional adapters per K8; not blocking).
 
 > **v1.0 changelog:** создан в рамках TZ-002 (D2). Зафиксирован V1/V2/V3 CLOSED, No High Architectural Debt, метрики 768 passed / 0 failed / 0 open violations.
