@@ -80,6 +80,17 @@ class CapabilityContext:
     granted: List[Capability] = field(default_factory=list)
 
 
+class ICapabilityContext(abc.ABC):
+    """Port for the authorization context (ADR-033 WP-01)."""
+
+    agent_id: str
+    role: Role
+    granted: List[Capability]
+
+    @abc.abstractmethod
+    def has(self, cap: Capability) -> bool: ...
+
+
 @dataclass
 class AuthDecision:
     allowed: bool
