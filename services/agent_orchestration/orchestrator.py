@@ -91,6 +91,7 @@ class AgentOrchestrator(IAgentOrchestrator):
         self._pool = AgentPool(max_per_tenant)
         self._allow_auto_spawn = allow_auto_spawn
         self._agent_role: Dict[str, Role] = {}
+        self._busy: set = set()
 
     # -- IAgentOrchestrator ------------------------------------------------
 
@@ -100,12 +101,15 @@ class AgentOrchestrator(IAgentOrchestrator):
         TenantId(tenant_id)  # validate tenant format (contracts.tenant)
         required = [Capability.parse(c) for c in required_capabilities]
 
-        # 1. select a matching agent from THIS tenant's pool only
+        # 1. select a FREE matching agent from THIS tenant's pool only
         for agent_id in self._pool.members(tenant_id):
+            if agent_id in self._busy:
+                continue
             if self._agent_satisfies(agent_id, required):
+                self._busy.add(agent_id)
                 return [self._run(agent_id, goal, required_capabilities)]
 
-        # 2. no match -> optionally spawn a new agent in this tenant
+        # 2. no free match -> optionally spawn a new agent in this tenant
         if self._allow_auto_spawn and not self._pool.is_full(tenant_id):
             role = self._role_for(required)
             if role is None:
@@ -114,12 +118,13 @@ class AgentOrchestrator(IAgentOrchestrator):
             self._lifecycle.spawn(agent_id, tenant_id, role.value, goal)
             self._agent_role[agent_id] = role
             self._pool.add(tenant_id, agent_id)
+            self._busy.add(agent_id)
             if self._agent_satisfies(agent_id, required):
                 return [self._run(agent_id, goal, required_capabilities)]
             # spawned but still cannot satisfy (shouldn't happen) -> deny
             return []
 
-        # 3. pool full or auto-spawn disabled and no match -> deny
+        # 3. pool full / all busy / auto-spawn disabled and no match -> deny
         return []
 
     def get_pool(self, tenant_id: str) -> List[str]:

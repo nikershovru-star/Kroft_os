@@ -63,7 +63,7 @@ class AgentMessenger(IAgentMessenger):
             return False
 
         # K6: publish only over the EventBus (never direct agent-to-agent call).
-        self._bus.publish(f"agent.{msg.recipient_id}", asdict(msg))
+        self._bus.publish_sync(f"agent.{msg.recipient_id}", asdict(msg))
         return True
 
     def receive(self, agent_id: str) -> List[AgentMessage]:

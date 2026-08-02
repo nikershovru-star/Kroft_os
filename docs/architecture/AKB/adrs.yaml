@@ -518,7 +518,7 @@ adrs:
   - K8
 - id: ADR-037
   title: Agent Orchestration & Self-Analysis Architecture
-  status: proposed
+  status: accepted
   evidence_level: III
   date: '2026-08-02'
   related:
