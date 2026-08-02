@@ -121,6 +121,23 @@ class IAgentMessenger(ABC):
     def receive(self, agent_id: str) -> List[AgentMessage]: ...
 
 
+class IAgentRecovery(ABC):
+    """Agent recovery authority port (Wave 2 WP-10, ADR-038, K6).
+
+    The Supervisor drives agent recovery ONLY through this port — never by
+    importing services/agent_orchestration/healing.py directly (K6).
+    """
+
+    @abstractmethod
+    def restart_agent(self, agent_id: str) -> bool: ...
+
+    @abstractmethod
+    def quarantine_agent(self, agent_id: str) -> bool: ...
+
+    @abstractmethod
+    def get_agent_health(self, agent_id: str) -> Optional[AgentState]: ...
+
+
 class ISelfAnalyzer(ABC):
     """Runtime self-analysis port (WP-05, K8 meta-layer)."""
 
