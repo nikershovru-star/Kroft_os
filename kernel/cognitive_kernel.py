@@ -249,8 +249,9 @@ class CognitiveKernel(ICognitiveKernel):
         self._planner = planner
         self._state = CognitiveState.IDLE
         self._goal: Optional[Goal] = None
-        self._events: List[CognitiveEvent] = []
-        self._subscribers: List[Callable[[dict], None]] = []
+        self._events: list = []
+        self._subscribers: list = []
+        self._last_decision = None  # introspection
 
     # -- event emission (I-17) -------------------------------------------------
     def _emit(self, etype: CognitiveEventType, ref_id: str,
@@ -293,6 +294,7 @@ class CognitiveKernel(ICognitiveKernel):
         for p in candidates:
             self._emit(CognitiveEventType.PLAN_GENERATED, p.id, p.confidence)
         decision = self._decision.select(goal, candidates, self._values)
+        self._last_decision = decision  # introspection (K1-clean)
         if decision.selected_plan_id:
             self._emit(CognitiveEventType.DECISION_ACCEPTED, decision.id, decision.confidence)
         else:

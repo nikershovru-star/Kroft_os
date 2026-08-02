@@ -126,14 +126,18 @@ class SharedContextService(ISharedContext):
         return out
 
     def merge_remote(self, remote_facts: List[dict],
-                     remote_marks: Dict[str, CausalMark]) -> WorldState:
-        merged: Dict[str, str] = {}
-        meta: Dict[str, CausalMark] = {}
+                     local_world: WorldState) -> WorldState:
+        """Causal merge of REMOTE facts into LOCAL world state.
+
+        A remote fact wins only if its CausalMark is GREATER than the local one (or
+        local absent). Wall-clock `updated_at` is intentionally NOT used (gate C).
+        Local facts survive unless overridden by a greater remote mark.
+        """
+        merged: Dict[str, str] = dict(local_world.facts)
+        meta: Dict[str, CausalMark] = dict(local_world.facts_meta)
         for rf in remote_facts:
             key = rf["key"]
             remote_mark = CausalMark(rf["node_origin"], rf["seq"])
-            # keep remote fact only if its causal mark is GREATER (or no local yet).
-            # wall-clock updated_at is intentionally NOT used (gate C).
             if key not in meta or remote_mark > meta[key]:
                 merged[key] = rf["value"]
                 meta[key] = remote_mark

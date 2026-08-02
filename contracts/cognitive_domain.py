@@ -145,8 +145,10 @@ class CausalMark:
     seq: int                               # monotonic per-node sequence number
 
     def __lt__(self, other: "CausalMark") -> bool:
-        # lexicographic (node_origin, seq) total order
-        return (self.node_origin, self.seq) < (other.node_origin, other.seq)
+        # PRIMARY order = seq (per-node monotonic counter); node_origin is only a
+        # tiebreak. This makes the GREATER seq win the merge, not the lexicographically
+        # greater node name (which would let "B,seq=1" beat "A,seq=10" — wrong).
+        return (self.seq, self.node_origin) < (other.seq, other.node_origin)
 
 
 @dataclass(frozen=True)
