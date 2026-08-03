@@ -140,35 +140,65 @@ def test_tcp_bus_peers():
 
 # ---------- SupervisorFailover + partition/reconnect ----------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason="WP-14 leader/follower race on wall-clock timing (heartbeat 0.05s / "
-           "election_timeout 0.15s / sleep 0.5s). Latent-broken under pre-fix "
-           "Interrupted collection; surfaced after test-infra fix. Issue KROFT-OS#WP14-RACE. "
-           "Fix = determinize broadcast via logical clock/barrier, not wall-clock sleep.",
-)
 def test_failover_leader_broadcasts_to_follower():
+    # ТЗ-NW-01 commit 1: determinize WP14-RACE. Replace wall-clock time.sleep polling
+    # with explicit leader-election barriers (RaftLiteElector.wait_leader) so the test
+    # wakes on the actual leadership event, not on timing luck.
     bus = InMemoryEventBus()
     leader_g = CrdtGraphEngine("leader")
     follower_g = CrdtGraphEngine("follower")
-    # separate electors: one becomes leader, one stays follower
     el_leader = RaftLiteElector(bus, heartbeat_sec=0.05, election_timeout_sec=0.15)
     el_leader.start("leader", ["follower"])
     el_follower = RaftLiteElector(bus, heartbeat_sec=0.05, election_timeout_sec=0.15)
     el_follower.start("follower", ["leader"])
     fo = SupervisorFailover(el_follower, follower_g, bus=bus)
     fo.attach()
-    time.sleep(0.5)
+    # deterministic barrier: wait until leadership is decided (no sleep race)
+    leader_id = el_leader.wait_leader(timeout=2.0)
+    assert leader_id == "leader"
     assert el_leader.is_leader() and not el_follower.is_leader()
     # leader adds node, broadcasts via raft.sync
     leader_g.add_node(Node(id="shared", type=NodeType.COMPONENT, label="synced"))
     from contracts.i_crdt_graph import CrdtOp
     ops = leader_g.export_ops()
     bus.publish_sync("raft.sync", {"ops": [o.__dict__ for o in ops]})
-    time.sleep(0.3)
+    # deterministic barrier: wait until follower applies the synced node
+    follower_g.wait_node("shared", timeout=2.0)
     assert follower_g.get_node("shared") is not None
     fo.detach()
     el_leader.stop(); el_follower.stop()
+
+
+def test_raft_single_leader_elected():
+    bus, els = _cluster(3)
+    # determinic barrier instead of fixed sleep (WP14-RACE fix)
+    leader = els[0].wait_leader(timeout=2.0)
+    assert leader is not None
+    leaders = [e for e in els if e.is_leader()]
+    assert len(leaders) == 1
+    for e in els:
+        assert e.current_leader() == leaders[0].current_leader()
+    for e in els:
+        e.stop()
+
+
+def test_raft_leader_failover():
+    bus, els = _cluster(3)
+    els[0].wait_leader(timeout=2.0)
+    leader = next(e for e in els if e.is_leader())
+    leader.stop()  # leader down
+    # deterministic barrier: wait for a NEW leader to be elected among the rest
+    new_leader = None
+    for e in els:
+        if e is not leader:
+            new_leader = e.wait_leader(timeout=2.0)
+            if new_leader:
+                break
+    assert new_leader is not None
+    new_leaders = [e for e in els if e.is_leader()]
+    assert len(new_leaders) == 1
+    for e in els:
+        e.stop()
 
 
 def test_network_partition_reconnect_consistent():

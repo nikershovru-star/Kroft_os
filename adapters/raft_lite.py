@@ -77,6 +77,30 @@ class RaftLiteElector(ILeaderElector):
     def on_leader_change(self, cb: Callable[[str], None]) -> None:
         self._cb = cb
 
+    def wait_leader(self, timeout: float = 2.0) -> Optional[str]:
+        """Deterministic barrier: block until a leader is known (or timeout).
+
+        Replaces wall-clock ``time.sleep`` polling in tests, which is the source of
+        WP14-RACE. Wakes immediately on the ``on_leader_change`` event — no timing luck.
+        """
+        ev = threading.Event()
+
+        def _cb(leader_id: str) -> None:
+            ev.set()
+
+        with self._lock:
+            if self._leader is not None:
+                return self._leader
+            prev = self._cb
+            self._cb = _cb
+        try:
+            ev.wait(timeout)
+        finally:
+            with self._lock:
+                self._cb = prev
+        with self._lock:
+            return self._leader
+
     # --- internals ---
     def _schedule_election_check(self) -> None:
         with self._lock:

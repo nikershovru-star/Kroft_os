@@ -8,7 +8,7 @@ and apply_ops() are idempotent.
 from __future__ import annotations
 
 import threading
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from contracts.i_crdt_graph import CrdtOp, ICrdtGraph
 from contracts.knowledge_graph import Edge, IGraphEngine, Node, NodeType
@@ -31,6 +31,7 @@ class CrdtGraphEngine(ICrdtGraph):
         # (src, dst, type) -> (Edge, (lamport, origin))
         self._edges: Dict[Tuple[str, str, str], Tuple[Edge, Tuple[int, str]]] = {}
         self._ops: List[CrdtOp] = []
+        self._node_waiters: Dict[str, List[Callable[[], None]]] = {}
 
     # --- Lamport ---
     def tick(self) -> int:
@@ -55,6 +56,30 @@ class CrdtGraphEngine(ICrdtGraph):
         with self._lock:
             entry = self._nodes.get(id)
             return entry[0] if entry else None
+
+    def wait_node(self, id: str, timeout: float = 2.0) -> bool:
+        """Deterministic barrier: block until a node with ``id`` appears (or timeout).
+
+        Replaces wall-clock polling in tests (WP14-RACE source). Wakes on the lock,
+        not on timing luck. Returns True if the node is present.
+        """
+        ev = threading.Event()
+
+        def _wake() -> None:
+            ev.set()
+
+        with self._lock:
+            if id in self._nodes:
+                return True
+            # hook into the add path via a one-shot callback list
+            self._node_waiters.setdefault(id, []).append(_wake)
+        try:
+            return ev.wait(timeout)
+        finally:
+            with self._lock:
+                waiters = self._node_waiters.get(id, [])
+                if _wake in waiters:
+                    waiters.remove(_wake)
 
     def add_edge(self, e: Edge) -> Edge:
         with self._lock:
@@ -126,6 +151,9 @@ class CrdtGraphEngine(ICrdtGraph):
         existing = self._nodes.get(n.id)
         if existing is None or _lww(existing[1], key):
             self._nodes[n.id] = (n, key)
+            # wake any deterministic wait_node() barriers
+            for w in self._node_waiters.pop(n.id, []):
+                w()
 
     def _put_edge(self, e: Edge, lamport: int, origin: str) -> None:
         key = (e.source_id, e.target_id, str(e.type))
