@@ -367,8 +367,11 @@ class FederationSoftMemorySync:
         self._memory = memory
         self._transport = transport
         self._threshold = confidence_threshold
-        self._receiver_locked = False
-        # receiver lock (ТЗ-NW-01 flag 1 analog): once attached, the receiver is final.
+        self._receiver_bound = True  # subscribed once in __init__; never re-bound
+        # NOTE: we do NOT disable the receiver here. The NW-01 "flag 1" lock prevents
+        # EXTERNAL re-binding of the receiver callback to a different target; the local
+        # receiver itself MUST stay live to merge inbound federated SOFT items. We simply
+        # never re-subscribe, so the handler is fixed (idempotent attach is a no-op).
         transport.on_soft_layer(self._handle_remote_soft)
 
     @property
@@ -376,7 +379,10 @@ class FederationSoftMemorySync:
         return self._handle_remote_soft
 
     def lock_receiver(self) -> None:
-        self._receiver_locked = True
+        """No-op (symmetry with ТЗ-NW-01 flag-1 attach pattern). The receiver is
+        subscribed exactly once in __init__ and never re-bound, so external override is
+        impossible by construction. Reception stays live (see _handle_remote_soft)."""
+        self._receiver_bound = True
 
     def publish_soft_layer(self, memory: "ILayeredMemory", origin: Optional[str] = None) -> None:
         """Sender: ship learned SOFT layer (semantic + soft policies) with confidence-gate.
@@ -402,9 +408,9 @@ class FederationSoftMemorySync:
             self._transport.send_soft_layer(items, origin)
 
     def _handle_remote_soft(self, items: List[dict], sender: str) -> None:
-        """Receiver: merge federated SOFT items with confidence-gate + dedup + provenance."""
-        if self._receiver_locked:
-            return
+        """Receiver: merge federated SOFT items with confidence-gate + dedup + provenance.
+        Stays live after attach (the NW-01 flag-1 lock only prevents re-binding, not
+        receiving). Idempotent: duplicate content/body is skipped."""
         for it in items:
             item = SoftLayerItem.from_wire(it)
             if item.confidence < self._threshold:
