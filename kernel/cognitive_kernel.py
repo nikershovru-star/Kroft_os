@@ -337,6 +337,7 @@ class CognitiveKernel(ICognitiveKernel):
         self._last_decision = None  # introspection
         self._last_selected_plan = None  # introspection (semantic cognitive-value proof)
         self._federation = None  # ТЗ-NW-01: set by attach_federation
+        self._soft_sync = None   # ТЗ-FSE-01: set by attach_soft_memory_sync
 
     # -- event emission (I-17) -------------------------------------------------
     def _emit(self, etype: CognitiveEventType, ref_id: str,
@@ -545,6 +546,14 @@ class CognitiveKernel(ICognitiveKernel):
             if deprecated:
                 self._emit(CognitiveEventType.NORMATIVE_DEPRECATED, deprecated[0],
                            ConfidenceScore(0.1, ProvenanceType.OBSERVATION))
+            # ТЗ-FSE-01: replicate the EVOLVED SOFT layer to peers after local learning.
+            # Inbound federated items merge into ILayeredMemory (receiver side of
+            # FederationSoftMemorySync) and influence the NEXT Decision via the SE-01
+            # read-side (MemorySoftPolicySource / KnowledgeAwareReasoning). HARD is never
+            # shipped (O1, enforced inside publish_soft_layer). Optional: no-op without
+            # a wired sync.
+            if self._soft_sync is not None and self._memory is not None:
+                self._soft_sync.publish_soft_layer(self._memory, self._node_id)
         # back to Idle
         self._transition(CognitiveState.IDLE)
         return self._state
@@ -609,6 +618,24 @@ class CognitiveKernel(ICognitiveKernel):
                  and recv.__self__ is self)
         assert wired, "attach_federation: receiver callback not wired to kernel SSOT fold"
         assert federation.has_receiver, "attach_federation: receiver callback missing"
+
+    def attach_soft_memory_sync(self, sync: "object") -> None:
+        """ТЗ-FSE-01: wire a FederationSoftMemorySync so the EVOLVED SOFT layer (semantic
+        facts + soft policies) is replicated to peers after local learning, and inbound
+        federated SOFT items merge into the local ILayeredMemory (influencing the NEXT
+        Decision via the SE-01 read-side).
+
+        Idempotent: re-attaching the same sync is a no-op. The receiver is locked after
+        bind (ТЗ-NW-01 flag 1 analog) so a later override cannot silently drop the merge.
+        """
+        if self._soft_sync is sync:
+            return  # idempotent: already wired
+        self._soft_sync = sync
+        # the sync already subscribed its receiver to transport.on_soft_layer in __init__;
+        # lock it so external override is ignored (flag 1)
+        locker = getattr(sync, "lock_receiver", None)
+        if locker is not None:
+            locker()
 
     def attach_executor(self, executor: "object") -> None:
         """ТЗ-EX-01: wire a real execution backend (IExecutor).
