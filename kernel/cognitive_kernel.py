@@ -17,6 +17,7 @@ import uuid
 from typing import Callable, Dict, List, Optional
 
 from contracts.cognitive_domain import (
+    Action,
     CausalMark,
     CognitiveEvent,
     CognitiveEventType,
@@ -335,6 +336,8 @@ class CognitiveKernel(ICognitiveKernel):
         # the O1 Self-Evolving guard. Reflection never writes memory itself.
         self._reflection_engine = reflection_engine
         self._outcomes: list = []
+        # ТЗ-EX-01: real execution backend (None => proxy fallback, backward compat).
+        self._executor = None
         self._last_reflection_report = None
         self._state = CognitiveState.IDLE
         self._goal: Optional[Goal] = None
@@ -421,18 +424,39 @@ class CognitiveKernel(ICognitiveKernel):
             return self._state
         self._emit(CognitiveEventType.EXECUTION_STARTED, decision.selected_plan_id,
                    decision.confidence)
+        # ТЗ-EX-01: REAL execution (closes RF-01 ФЛАГ 2 outcome-proxy).
+        if self._executor is not None:
+            # chosen Plan -> Action routed to the execution environment
+            plan = self._last_selected_plan
+            payload = "\n".join(plan.steps) if plan is not None else decision.selected_plan_id
+            action = Action(
+                id=f"act-{decision.selected_plan_id}",
+                kind="execute_plan",
+                payload=payload,
+                confidence=decision.confidence,
+                provenance=Provenance(source="decision", actor="kernel"),
+            )
+            result = self._executor.execute(action)
+            # REAL outcome built FROM the raw ExecutionResult (not a proxy).
+            outcome = ExecutionOutcome(
+                episode_id=decision.id,
+                success=result.success,
+                utility=result.reward,
+                confidence=result.confidence,
+                causal=result.causal,
+            )
+        else:
+            # ТЗ-RF-01 proxy fallback (backward compatible): success = decision
+            # accepted; utility = decision confidence. Used when no executor wired.
+            outcome = ExecutionOutcome(
+                episode_id=decision.id,
+                success=bool(decision.selected_plan_id),
+                utility=decision.confidence.value,
+                confidence=decision.confidence,
+                causal=self._clock.tick(),
+            )
         self._emit(CognitiveEventType.EXECUTION_FINISHED, decision.selected_plan_id,
                    decision.confidence)
-        # ТЗ-RF-01: record the execution OUTCOME (ФЛАГ 1 feedback proxy). success =
-        # decision accepted & executed; utility = decision confidence (or predicted
-        # utility). Real environment reward is future.
-        outcome = ExecutionOutcome(
-            episode_id=decision.id,
-            success=bool(decision.selected_plan_id),
-            utility=decision.confidence.value,
-            confidence=decision.confidence,
-            causal=self._clock.tick(),
-        )
         self._outcomes.append(outcome)
         # Evaluate
         if not self._transition(CognitiveState.EVALUATE):
@@ -570,6 +594,16 @@ class CognitiveKernel(ICognitiveKernel):
                  and recv.__self__ is self)
         assert wired, "attach_federation: receiver callback not wired to kernel SSOT fold"
         assert federation.has_receiver, "attach_federation: receiver callback missing"
+
+    def attach_executor(self, executor: "object") -> None:
+        """ТЗ-EX-01: wire a real execution backend (IExecutor).
+
+        When set, the Execute-phase runs the chosen plan through `executor.execute`
+        and records the REAL ExecutionResult as the Reflection Outcome (closing the
+        RF-01 outcome-proxy). When None, the kernel falls back to the proxy outcome
+        (backward compatible — existing tests without an executor keep working).
+        """
+        self._executor = executor
 
     def _on_federated_world(self, merged: "WorldState") -> None:
         """Receiver hook: fold a causally-merged remote WorldState into the local SSOT."""
