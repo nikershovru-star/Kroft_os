@@ -775,27 +775,42 @@ adrs:
   - FLAG3
   - WM-01-GAP-CLOSED
 - id: ADR-059
-  title: Long-Term Memory Evolution — consolidation / forgetting / lifecycle (ТЗ-ME-01 / ADR-046)
+  title: Long-Term Memory Evolution — consolidation / forgetting / lifecycle (ТЗ-ME-01
+    / ADR-046)
   status: accepted
   evidence_level: V
   date: '2026-08-03'
   decision_score: 0.87
   confidence: high
   risk: low
-  related: [ADR-046, ADR-054, ADR-055, ADR-056, ADR-057, ADR-058]
+  related:
+  - ADR-046
+  - ADR-054
+  - ADR-055
+  - ADR-056
+  - ADR-057
+  - ADR-058
   addresses:
   - TZ-ME-01
   - O1
   - I-14
 - id: ADR-060
-  title: Reflection Engine — metacognitive outcome-based loop closing Self-Evolving (ТЗ-RF-01 / TZ-COG-005)
+  title: Reflection Engine — metacognitive outcome-based loop closing Self-Evolving
+    (ТЗ-RF-01 / TZ-COG-005)
   status: accepted
   evidence_level: V
   date: '2026-08-03'
   decision_score: 0.88
   confidence: high
   risk: low
-  related: [ADR-046, ADR-054, ADR-055, ADR-056, ADR-057, ADR-058, ADR-059]
+  related:
+  - ADR-046
+  - ADR-054
+  - ADR-055
+  - ADR-056
+  - ADR-057
+  - ADR-058
+  - ADR-059
   addresses:
   - TZ-RF-01
   - FLAG1
@@ -808,7 +823,12 @@ adrs:
   decision_score: 0.85
   confidence: high
   risk: low
-  related: [ADR-045, ADR-047, ADR-054, ADR-056, ADR-057]
+  related:
+  - ADR-045
+  - ADR-047
+  - ADR-054
+  - ADR-056
+  - ADR-057
   addresses:
   - TZ-PL-01
   - FLAG2
@@ -828,4 +848,22 @@ adrs:
   - TZ-WM-01
   - FLAGA
   supersedes: []
-
+- id: ADR-061
+  title: Real Network Federation — cognitive-kernel federation (ТЗ-NW-01)
+  status: accepted
+  relates_to:
+  - ADR-054
+  - ADR-055
+  - ADR-056
+  - ADR-057
+  - ADR-058
+  - ADR-059
+  - ADR-060
+  - TZ-015
+  ports_added:
+  - INetworkTransport
+  laws_affected:
+  - K1
+  - K6
+  - K8
+  evidence_level: V

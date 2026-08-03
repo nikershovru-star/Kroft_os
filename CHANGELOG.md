@@ -38,6 +38,44 @@ Format: `commit-range | scope | summary`.
 **Verification:** full suite `1053 passed, 19 skipped, 1 xpassed, 0 failed`;
 arch-gate `14 passed`; akb-lint PASSED.
 
+
+## 2026-08-03 — ТЗ-NW-01 (Real Network Federation) — DONE
+
+`b4d513e 4644d72 960d422 067e87c 7d46632 e4523df <docs>`
+
+- **Commit 0 — фикс флага 1 (integration, ТЗ-RF-01).** Reflection больше НЕ коммитит
+  semantic; ME-01 — единственный writer SOFT-слоя; дедупликация против уже
+  закоммиченных `get_semantic()` (не только внутри тика). Один опыт → ровно 1 факт.
+- **Commit 1 — детерминизация WP14-RACE.** `RaftLiteElector.wait_leader` /
+  `CrdtGraphEngine.wait_node` — барьеры (`threading.Event`), просыпаются на событии
+  выбора лидера, НЕ на `time.sleep`. xfail снят. ФЛАГ 2 (ADR-061): `RaftLiteElector` —
+  упрощённый Raft (нет self-election в 2-узловой паре, split-brain при симметричном
+  старте); кластерные тесты → 3+ узла или assert «ровно один лидер».
+- **Commit 2 — контракт.** `contracts/i_network_transport.py`: `INetworkTransport`.
+  `contracts/i_distributed_runtime.py`: `ISharedContext.replicate_to` (non-abstract).
+- **Commit 3 — impl (K6).** `adapters/network_transport.py`: `NetworkTransport`
+  (поверх `TcpEventBus`, background retry + `ensure_connected` барьер). K5-поймал:
+  `ISharedContext` в `i_distributed_runtime.py` (не `i_shared_context.py`);
+  `CognitiveEvent.from_bus` не существовал; `CalibrationType` без `'MODEL'`.
+  `services/distributed_runtime.py`: `SharedContextService.replicate_to` (real) +
+  `NetworkFederationService` (receiver-side causal merge, K6: только через порт).
+- **Commit 4 — интеграция ядер.** `kernel/cognitive_kernel.py`: `InMemoryWorldState.apply_remote`
+  (causal merge в SSOT) + `CognitiveKernel.attach_federation` (идемпотентный, проверяемый).
+- **Commit 5 (CONT) — закрыть ФЛАГ 1 (блокер).** `attach_federation` проверяет wiring
+  (receiver → `_on_federated_world` по `__func__`/`__self__`), receiver lock после bind
+  (пост-attach override игнорируется). `NetworkFederationService.receiver`/`has_receiver`/
+  `lock_receiver`.
+- **Tests (K8).** `tests/test_network_federation.py` (+10): реальная репликация
+  CognitiveEvent/WorldState через TCP; PARTITION→RECONNECT causal merge (idempotent);
+  ДЕТЕРМИНИЗМ (--count=5); FEDERATION COGNITIVE VALUE (Decision@B меняется от federated
+  факта); ФЛАГ 1 (нет дублей SemanticFact); 3-узловой leader (ровно один).
+- **Docs.** `ADR-061` (accepted) — Real Network Federation + честные ограничения
+  `RaftLiteElector`. `issues.yaml`: WP14-RACE closed, NW-01 added.
+
+**Verification:** ad-hoc `hermes-verify-nw01-flag1.py` `7/7 PASS`; B facts != 0;
+cognitive value доказан (base_plan != fed_plan); gate `14`; full suite 0 failed.
+
+
 ---
 
 ## 2026-08-03 — ТЗ-ME-01 (Long-Term Memory Evolution, Self-Evolving) — DONE

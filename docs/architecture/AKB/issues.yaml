@@ -2,7 +2,7 @@ issues:
 - id: WP14-RACE
   title: WP-14 leader/follower broadcast race on wall-clock timing
   severity: medium
-  status: open
+  status: closed
   introduced_by: latent pre-fix; surfaced by test-infra fix (eager imports, pytest.ini)
   discovered: '2026-08-02'
   root_cause: 'test_failover_leader_broadcasts_to_follower relies on wall-clock sleeps
@@ -24,6 +24,12 @@ issues:
   - ADR-043
   - WP-14
   - commit-8832f1d
+  resolution: 'ТЗ-NW-01 commit 1: determinize via RaftLiteElector.wait_leader / CrdtGraphEngine.wait_node
+    barriers (threading.Event, wake on election event, NOT wall-clock sleep). xfail
+    снят. KNOWN LIMITATION (FLAG 2, ADR-061): RaftLiteElector is simplified Raft —
+    no self-election in 2-node pair, symmetric start -> split-brain; use 3+ nodes
+    or assert ''exactly one leader''.'
+  closed_by: ТЗ-NW-01 commit 1 (4644d72)
 - id: FLAG4-NUM-DRIFT
   title: 'Нумерационный дрейф: карта vs ADR/RFC-трекер vs код'
   severity: medium
@@ -43,22 +49,21 @@ issues:
   - ADR-044
   - FLAG1-INFRA
 - id: CAUSAL-SEQ-LIMIT
-  title: 'CausalMark per-node seq across nodes (gate C.2 / ТЗ-CAUSAL-01)'
+  title: CausalMark per-node seq across nodes (gate C.2 / ТЗ-CAUSAL-01)
   severity: high
   status: closed
   discovered: '2026-08-02'
-  root_cause: >-
-    Интеграционный срез (commit c610da8) выявил: CausalMark.ordering семантически
-    некорректен для реальной федерации — per-node seq сравнивался ACROSS nodes,
-    подменяя causal order на «кто больше операций сделал» (talkative node wins).
-    Без receive-обновления Lamport вырождается в обычный counter — тот же баг.
-  resolution: >-
-    ТЗ-CAUSAL-01: CausalMark заменён на Lamport logical clock (CausalMark.lamport +
-    node_origin tiebreak), методы tick()/receive(). merge_remote и InMemoryWorldState.update
-    делают receive при получении удалённого факта (clock = max(local, received) + 1);
-    локальные события (tick/emit) делают tick(). Stored fact marks сохраняют remote origin
-    для конвергентности. Idempotent replay: clock растёт только при causally-newer mark.
-    Commits 65a3ee2 (contract) + 3724248 (tests). 13/13 ad-hoc PASS, 19 causal-тестов PASS.
+  root_cause: 'Интеграционный срез (commit c610da8) выявил: CausalMark.ordering семантически
+    некорректен для реальной федерации — per-node seq сравнивался ACROSS nodes, подменяя
+    causal order на «кто больше операций сделал» (talkative node wins). Без receive-обновления
+    Lamport вырождается в обычный counter — тот же баг.'
+  resolution: 'ТЗ-CAUSAL-01: CausalMark заменён на Lamport logical clock (CausalMark.lamport
+    + node_origin tiebreak), методы tick()/receive(). merge_remote и InMemoryWorldState.update
+    делают receive при получении удалённого факта (clock = max(local, received) +
+    1); локальные события (tick/emit) делают tick(). Stored fact marks сохраняют remote
+    origin для конвергентности. Idempotent replay: clock растёт только при causally-newer
+    mark. Commits 65a3ee2 (contract) + 3724248 (tests). 13/13 ad-hoc PASS, 19 causal-тестов
+    PASS.'
   related:
   - ADR-054
   - ADR-055
@@ -68,20 +73,23 @@ issues:
   title: 'ТЗ-RE-01 W2-gap: Reasoning Engine + world-aware Decision + single node clock'
   severity: info
   status: closed
-  introduced_by: архитектурное ревью (флаг 4) — dedicated Reasoning Engine отсутствовал как компонент
+  introduced_by: архитектурное ревью (флаг 4) — dedicated Reasoning Engine отсутствовал
+    как компонент
   discovered: '2026-08-02'
-  root_cause: 'В FSM была только фаза Deliberate (Reasoning->Planning->Decision в общем виде).
-    Reasoning не параметризовался Intent и не читал WorldState; IDecisionEngine.select
-    не видел WorldState (bind()-хак); три независимых Lamport-clock с хардкодом
-    node_origin="kernel" ломали causal order + federation tiebreak.'
-  impact: 'Закрыто ТЗ-RE-01 в 6 атомарных коммитах (clock/reasoning/decision/wire/tests/docs).'
+  root_cause: В FSM была только фаза Deliberate (Reasoning->Planning->Decision в общем
+    виде). Reasoning не параметризовался Intent и не читал WorldState; IDecisionEngine.select
+    не видел WorldState (bind()-хак); три независимых Lamport-clock с хардкодом node_origin="kernel"
+    ломали causal order + federation tiebreak.
+  impact: Закрыто ТЗ-RE-01 в 6 атомарных коммитах (clock/reasoning/decision/wire/tests/docs).
   resolution_options:
-  - IReasoningEngine.reason(intent, world, attention_context, budget) -> ReasoningStep[] (LLM-free reference)
-  - IDecisionEngine.select(goal, candidates, values, world, intent) — world-aware через порт
+  - IReasoningEngine.reason(intent, world, attention_context, budget) -> ReasoningStep[]
+    (LLM-free reference)
+  - IDecisionEngine.select(goal, candidates, values, world, intent) — world-aware
+    через порт
   - NodeLamportClock единый на узел, инжект в kernel+world+federation; node_origin=node_id
   - wire-ключ "seq"->"lamport"
-  notes: 'Коммиты 47d96bd, 4ac6ce5, 0f86b9f, 1a66633, cd525df, docs(ADR-056).
-    Full suite 1010 passed, gate 14/14, akb-lint PASSED.'
+  notes: Коммиты 47d96bd, 4ac6ce5, 0f86b9f, 1a66633, cd525df, docs(ADR-056). Full
+    suite 1010 passed, gate 14/14, akb-lint PASSED.
   related:
   - ADR-054
   - ADR-055
@@ -96,7 +104,7 @@ issues:
   severity: info
   status: closed
   introduced_by: 'раунд 1 (Deliberate: Planning phase) / ТЗ-PL-01'
-  closed_by: 'ТЗ-PL-01 (ReferencePlanner + value-aware evaluate)'
+  closed_by: ТЗ-PL-01 (ReferencePlanner + value-aware evaluate)
   addresses:
   - TZ-PL-01
   - FLAG2
@@ -106,30 +114,33 @@ issues:
     impl: kernel/planning.py (ReferencePlanner)
     integration: kernel/cognitive_kernel.py (planner.plan в tick)
     tests: tests/test_autonomous_planner.py (+9), tests/test_world_model.py (+3 value-aware)
-  note: >
-    Planning больше не lambda-stub в build_kernel. Planner РАНЖИРУЕТ по predicted
+  note: 'Planning больше не lambda-stub в build_kernel. Planner РАНЖИРУЕТ по predicted
     value-aware utility (WorldModel.simulate + evaluate с values); Decision ВЫБИРАЕТ.
     Флаг 2 (evaluate мёртвый параметр) закрыт: hard violation -> utility 0 (veto),
     soft utility re-ranks. Флаг 3: relevance по action effect, не carry-over.
 
+    '
 - id: WM-01-GAP-CLOSED
   title: 'ТЗ-WM-01: World Model — предиктивная модель поверх WorldState'
   severity: info
   status: closed
-  introduced_by: раунд 1 (World State vs World Model); Reasoning Engine (ADR-056) был token-overlap заглушкой
+  introduced_by: раунд 1 (World State vs World Model); Reasoning Engine (ADR-056)
+    был token-overlap заглушкой
   discovered: '2026-08-02'
-  root_cause: 'Reasoning ранжировал candidates по совпадению слов, не по predicted utility.
-    World Model отсутствовал как компонент. Residual flag A: дефолтный clock брал
-    node_id="kernel".'
-  impact: 'Закрыто ТЗ-WM-01 в 6 атомарных коммитах (flag-A fix / контракт / impl / интеграция / тесты / docs).'
+  root_cause: 'Reasoning ранжировал candidates по совпадению слов, не по predicted
+    utility. World Model отсутствовал как компонент. Residual flag A: дефолтный clock
+    брал node_id="kernel".'
+  impact: Закрыто ТЗ-WM-01 в 6 атомарных коммитах (flag-A fix / контракт / impl /
+    интеграция / тесты / docs).
   resolution_options:
   - IWorldModel.predict/simulate/evaluate (contracts/i_world_model.py)
   - PredictedState (frozen, horizon + projected_facts + ConfidenceScore + CausalMark)
   - ReferenceWorldModel (LLM-free; confidence падает с horizon; no-fact = low)
   - ReferenceReasoningEngine принимает world_model -> confidence = predicted utility
-  - flag A: default clock из world.snapshot().node_id; sentinel-origin normalize в publish
-  notes: 'Коммиты b0523d6, f26eb7e, 07d7730, 66043a4, f33c5fc, docs(ADR-057).
-    Full suite 1020 passed, gate 14/14, akb-lint PASSED.'
+  - flag A: default clock из world.snapshot().node_id; sentinel-origin normalize в
+      publish
+  notes: Коммиты b0523d6, f26eb7e, 07d7730, 66043a4, f33c5fc, docs(ADR-057). Full
+    suite 1020 passed, gate 14/14, akb-lint PASSED.
   related:
   - ADR-047
   - ADR-056
@@ -140,32 +151,64 @@ issues:
   title: 'ТЗ-ME-01: Long-Term Memory Evolution — консолидация / forgetting / lifecycle'
   severity: info
   status: closed
-  introduced_by: 'раунд 1 (Memory: Working/Episodic/Semantic/Normative + lifecycle); SimpleLearningPolicy stub'
-  closed_by: 'ТЗ-ME-01 (ReferenceMemoryEvolution + InMemoryLayeredMemory + Self-Evolving guard)'
+  introduced_by: 'раунд 1 (Memory: Working/Episodic/Semantic/Normative + lifecycle);
+    SimpleLearningPolicy stub'
+  closed_by: ТЗ-ME-01 (ReferenceMemoryEvolution + InMemoryLayeredMemory + Self-Evolving
+    guard)
   addresses:
   - TZ-ME-01
   - O1
   - I-14
   evidence:
-    contracts: contracts/i_memory_evolution.py (IMemoryEvolution), contracts/cognitive_domain.py (SemanticFact, PolicyLifecycle)
-    impl: kernel/memory_evolution.py (ReferenceMemoryEvolution), kernel/memory_store.py (InMemoryLayeredMemory)
+    contracts: contracts/i_memory_evolution.py (IMemoryEvolution), contracts/cognitive_domain.py
+      (SemanticFact, PolicyLifecycle)
+    impl: kernel/memory_evolution.py (ReferenceMemoryEvolution), kernel/memory_store.py
+      (InMemoryLayeredMemory)
     integration: kernel/cognitive_kernel.py (Learn phase + guard)
     tests: tests/test_memory_evolution.py (+10, включая O1 guard negative)
-  notes: 'Коммиты dce8d96, fe13fbd, d9adde6, bb7b20b, docs(ADR-059). Full suite 1042 passed, gate 14/14, akb-lint PASSED. O1: HARD layer immutable, hard-violating facts rejected before commit.'
+  notes: 'Коммиты dce8d96, fe13fbd, d9adde6, bb7b20b, docs(ADR-059). Full suite 1042
+    passed, gate 14/14, akb-lint PASSED. O1: HARD layer immutable, hard-violating
+    facts rejected before commit.'
 - id: RF-01-GAP-CLOSED
   title: 'ТЗ-RF-01: Reflection Engine — метакогнитивный outcome-based контур'
   severity: info
   status: closed
-  introduced_by: 'раунд 1 (Reflection как фаза контура) / раунд 2 (cognitive reflection); ФЛАГ 1 (консол-я по intent-тексту, не outcome) + ФЛАГ 2 (soft_policies игнорировались) из ТЗ-ME-01'
-  closed_by: 'ТЗ-RF-01 (ReferenceReflectionEngine + ExecutionOutcome + integration)'
+  introduced_by: раунд 1 (Reflection как фаза контура) / раунд 2 (cognitive reflection);
+    ФЛАГ 1 (консол-я по intent-тексту, не outcome) + ФЛАГ 2 (soft_policies игнорировались)
+    из ТЗ-ME-01
+  closed_by: ТЗ-RF-01 (ReferenceReflectionEngine + ExecutionOutcome + integration)
   addresses:
   - TZ-RF-01
   - FLAG1
   - FLAG2
   - O1
   evidence:
-    contracts: contracts/i_reflection.py (IReflectionEngine), contracts/cognitive_domain.py (ReflectionReport, ExecutionOutcome, ProvenanceType.REFLECTION)
+    contracts: contracts/i_reflection.py (IReflectionEngine), contracts/cognitive_domain.py
+      (ReflectionReport, ExecutionOutcome, ProvenanceType.REFLECTION)
     impl: kernel/reflection.py (ReferenceReflectionEngine)
-    integration: kernel/cognitive_kernel.py (ExecutionOutcome запись + Reflection фаза до Learn + guard; фикс флага 2 soft_policies)
+    integration: kernel/cognitive_kernel.py (ExecutionOutcome запись + Reflection
+      фаза до Learn + guard; фикс флага 2 soft_policies)
     tests: tests/test_reflection_engine.py (+11, outcome-based + O1 guard)
-  notes: 'Коммиты 29e1448, a0806f0, 6454bf7, 909618f, 02a5e26, docs(ADR-060). Full suite 1053 passed, gate 14/14, akb-lint PASSED. ФЛАГ 1: outcome-based consolidation/deprecation; ФЛАГ 2: soft_policies коммитятся с O1 guard; O1: hard-violating proposals rejected before commit.'
+  notes: 'Коммиты 29e1448, a0806f0, 6454bf7, 909618f, 02a5e26, docs(ADR-060). Full
+    suite 1053 passed, gate 14/14, akb-lint PASSED. ФЛАГ 1: outcome-based consolidation/deprecation;
+    ФЛАГ 2: soft_policies коммитятся с O1 guard; O1: hard-violating proposals rejected
+    before commit.'
+- id: NW-01
+  title: Real Network Federation — cognitive-kernel federation over real TCP transport
+  severity: high
+  status: closed
+  introduced_by: ТЗ-NW-01 (K5 go)
+  discovered: '2026-08-03'
+  root_cause: Когнитивные ядра не делились опытом; федерация требовала real transport
+    + causal merge + влияние на Decision приёмника.
+  impact: Многопроцессорный KROFT не использовал распределённый интеллект.
+  resolution: 'INetworkTransport + NetworkFederationService (K6: ports only) + CognitiveKernel.attach_federation
+    (idempotent, verified, receiver-locked). Cognitive value доказан (Decision@B меняется
+    от federated факта). ФЛАГ 1 (блокер B facts:0) закрыт в commit e4523df.'
+  closed_by: ТЗ-NW-01-CONT (commits 0-5, ADR-061)
+  related:
+  - ADR-061
+  - TZ-015
+  - CAUSAL-01
+  - RE-01
+  - WP14-RACE
