@@ -65,6 +65,11 @@ from kernel.self_evolution import (
     PolicyAwareValueSystem,
     KnowledgeAwareReasoning,
 )
+from kernel.llm_advisor import (
+    LLMAdvisorReasoning,
+    LLMAdvisorPlanner,
+)
+from contracts.i_llm_advisor import ILLMAdvisor, adapter_for
 from contracts.i_self_evolution import ISoftPolicySource
 
 
@@ -631,7 +636,8 @@ class CognitiveKernel(ICognitiveKernel):
         return list(self._events)
 
 
-def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = None) -> CognitiveKernel:
+def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = None,
+                 llm_client: Optional[object] = None) -> CognitiveKernel:
     """Factory: assemble a deterministic, LLM-free reference kernel (I-09).
 
     ТЗ-RE-01 flag 1: ONE shared Lamport clock per node. The same clock instance is
@@ -670,6 +676,16 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     # (lookahead via simulate), and ranks by PREDICTED VALUE-AWARE utility (flag 2).
     # The planner only ranks; the deterministic Decision makes the final pick (I-03).
     planner = ReferencePlanner(shared_clock, world_model=world_model, values=val)
+    # ТЗ-LLM-01: LLM-as-advisor contract boundary (I-10, kernel purity). The kernel is
+    # LLM-free by construction; an OPTIONAL LLM advisor may re-rank candidates. We wrap
+    # the supplied client (an ILlm model port OR an ILLMAdvisor) behind ILLMAdvisor.
+    # When None, the advisor wrappers degrade to the PURE reference path (no behavior
+    # change vs. the LLM-free build above) — proving the kernel works without a model.
+    advisor: Optional[ILLMAdvisor] = None
+    if llm_client is not None:
+        advisor = llm_client if isinstance(llm_client, ILLMAdvisor) else adapter_for(llm_client)
+    reason = LLMAdvisorReasoning(shared_clock, attn, soft_source, advisor=advisor)
+    planner = LLMAdvisorPlanner(shared_clock, world_model=world_model, values=val, advisor=advisor)
     # ТЗ-RF-01: Reflection Engine — the ANALYTIC half of Self-Evolving. Runs BEFORE
     # Learn; reflects on experience + outcomes, proposing SOFT-layer evolution (outcome-
     # based, ФЛАГ 1). Memory Evolution commits the proposals under the O1 guard.
