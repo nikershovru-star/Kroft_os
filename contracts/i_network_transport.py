@@ -11,6 +11,7 @@ it. Never import concrete adapters here.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 from contracts.cognitive_domain import CognitiveEvent, WorldState
@@ -50,6 +51,56 @@ class INetworkTransport(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def send_soft_layer(self, items: List[dict], sender_node_id: str) -> None:
+        """Ship the EVOLVED SOFT layer (semantic facts + soft policies) for federated
+        self-evolution (ТЗ-FSE-01). Each item is a wire-dict produced by
+        ``SoftLayerItem.to_wire`` (kind/content/confidence/causal/provenance/origin).
+
+        The transport carries the causal order + origin node_id so the receiver can
+        run a causal, provenance-aware merge (ТЗ-FSE-01 confidence-gate + O1: HARD never
+        ships on this channel).
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def on_soft_layer(self, handler: Callable[[List[dict], str], None]) -> None:
+        """Subscribe to inbound SOFT-layer items (items, sender_node_id)."""
+        raise NotImplementedError
+
+    @abstractmethod
     def disconnect(self) -> None:
         """Leave the overlay."""
         raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class SoftLayerItem:
+    """Frozen wire-DTO for one federated SOFT-layer entry (ТЗ-FSE-01, ADR-066).
+
+    NOT a duck-object: every federated adapter MUST emit/accept this exact VO shape.
+    ``kind`` is ``'semantic'`` or ``'soft_policy'``. ``origin`` is the node that learned
+    it (provenance). ``confidence`` is the aggregated value (Receiver confidence-gate).
+    """
+    kind: str            # 'semantic' | 'soft_policy'
+    content: str         # SemanticFact.content | Policy.body
+    confidence: float
+    origin: str          # node_id that learned it
+    causal: Optional[dict] = None     # serialized CausalMark (node_origin, lamport)
+    provenance: Optional[dict] = None  # serialized Provenance
+
+    def to_wire(self) -> dict:
+        return {
+            "kind": self.kind,
+            "content": self.content,
+            "confidence": self.confidence,
+            "origin": self.origin,
+            "causal": self.causal,
+            "provenance": self.provenance,
+        }
+
+    @classmethod
+    def from_wire(cls, d: dict) -> "SoftLayerItem":
+        return cls(
+            kind=d["kind"], content=d["content"], confidence=float(d["confidence"]),
+            origin=d["origin"], causal=d.get("causal"), provenance=d.get("provenance"),
+        )

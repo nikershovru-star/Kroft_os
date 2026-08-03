@@ -33,6 +33,7 @@ class NetworkTransport(INetworkTransport):
         self._bus = TcpEventBus(node_id, port, host)
         self._ev_handlers: List[Callable[[CognitiveEvent], None]] = []
         self._fact_handlers: List[Callable[[List[dict], str], None]] = []
+        self._soft_handlers: List[Callable[[List[dict], str], None]] = []
         self._seeds: List[str] = []
         self._expected_peers = 0
         self._stop = threading.Event()
@@ -40,6 +41,7 @@ class NetworkTransport(INetworkTransport):
         self._connect_timeout: float = 1.0  # SOFT tunable (runtime reflection, O1)
         self._bus.subscribe("cog.event", self._on_wire_event)
         self._bus.subscribe("cog.facts", self._on_wire_facts)
+        self._bus.subscribe("cog.soft", self._on_wire_soft)
 
     # --- INetworkTransport ---
     def connect(self, node_id: str, peers: List[str]) -> None:
@@ -87,6 +89,19 @@ class NetworkTransport(INetworkTransport):
 
     def on_facts(self, handler: Callable[[List[dict], str], None]) -> None:
         self._fact_handlers.append(handler)
+
+    # --- SOFT layer channel (ТЗ-FSE-01) ---
+    def send_soft_layer(self, items: List[dict], sender_node_id: str) -> None:
+        self._bus.publish_sync("cog.soft", {"items": items, "sender": sender_node_id})
+
+    def on_soft_layer(self, handler: Callable[[List[dict], str], None]) -> None:
+        self._soft_handlers.append(handler)
+
+    def _on_wire_soft(self, payload: dict) -> None:
+        items = payload.get("items", [])
+        sender = payload.get("sender", "")
+        for h in self._soft_handlers:
+            h(items, sender)
 
     def disconnect(self) -> None:
         self._stop.set()
