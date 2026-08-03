@@ -935,3 +935,28 @@ adrs:
   - TZ-LLM-01
   - I-10
   - O1
+- id: ADR-066
+  title: Federated Self-Evolution — what of the SOFT layer to federate (ТЗ-FSE-01)
+  status: accepted
+  relates_to:
+  - ADR-044
+  - ADR-054
+  - ADR-062
+  - ADR-063
+  - ADR-064
+  - ADR-065
+  ports_added:
+  - INetworkTransport.send_soft_layer
+  - INetworkTransport.on_soft_layer
+  - FederationSoftMemorySync
+  laws_affected:
+  - K1
+  - K6
+  - K8
+  - O1
+  evidence_level: V
+  addresses:
+  - TZ-FSE-01
+  - I-08
+  - I-10
+  - O1

@@ -257,3 +257,22 @@ issues:
   - I-10
   impact: null
   closed_by: null
+- id: TZ-FSE-01
+  title: Federated Self-Evolution — learned SOFT layer propagates over the network
+  type: feature
+  status: done
+  root_cause: null
+  resolution: 'ADR-066 + FederationSoftMemorySync (services/distributed_runtime.py): второй канал федерации SOFT-слоя (semantic facts + soft policies) через расширенный INetworkTransport (cog.soft). Sender гейтит по confidence + НЕ шлёт HARD; receiver мержит с double confidence-гейтом + dedup + provenance. Capstone: A учит avoid:X -> B (без опыта) ИЗБЕГАЕТ X.'
+  related:
+  - ADR-066
+  - ADR-044
+  - ADR-064
+  - NW-01
+  - SE-01
+  - I-08
+  - O1
+  addresses:
+  - I-08
+  - O1
+  impact: null
+  closed_by: null

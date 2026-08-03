@@ -350,6 +350,40 @@ arch-gate `14 passed`; akb-lint PASSED.
 
 ---
 
+## 2026-08-04 — ТЗ-FSE-01 (Federated Self-Evolution, коллективное обучение) — DONE
+
+Кульминация «локально и в сети»: выученный SOFT-слой (semantic facts + soft policies)
+федерируется и меняет поведение КАЖДОГО узла. Переиспользует NW-01 (NetworkFederationService
++ расширенный INetworkTransport), не изобретая транспорт.
+
+- **Commit 1 — контракт + ADR-066.** `INetworkTransport` расширен вторым каналом:
+  `send_soft_layer(items, sender_node_id)` + `on_soft_layer(handler)` (топик `cog.soft`,
+  зеркально `cog.facts`). `SoftLayerItem` (frozen VO wire-DTO, НЕ duck-object — урок
+  Флага 1 LLM-01): kind/content/confidence/origin/causal/provenance + to_wire/from_wire.
+  ADR-066 ЯВНО фиксирует что федерировать: semantic=ДА; soft policies=ДА с confidence-гейтом
+  + provenance; HARD=НИКОГДА (O1). Гейты двойные (sender+receiver).
+- **Commit 2 — reference impl (LLM-free, K1).** `FederationSoftMemorySync`
+  (services/distributed_runtime.py): sender собирает semantic+soft (conf>=threshold), НЕ
+  ships HARD; receiver мержит с ВТОРЫМ confidence-гейтом, dedup, provenance сохранён.
+  Read-side SE-01 (`MemorySoftPolicySource`/`KnowledgeAwareReasoning`) НЕ меняется.
+- **Commit 3 — интеграция.** `build_kernel` + `attach_soft_memory_sync`: после локальной
+  Learn-фазы learned layer реплицируется; inbound мержится в `ILayeredMemory` и влияет на
+  СЛЕДУЮЩУЮ Decision. HARD не шлётся (O1). Optional: no-op без sync.
+- **Commit 4 — тесты K8 (4 passed, capstone).** A учит avoid:X (repeated FAILURE) ->
+  федерация (реальный NetworkTransport localhost TCP) -> B (БЕЗ опыта) ИЗБЕГАЕТ X.
+  NEGATIVE: без федерации B НЕ избегает (доказывает причину). Confidence-гейт: low lesson
+  НЕ рассылается. O1: HARD НЕ шлётся; provenance origin сохраняется. Тесты нашли баг:
+  `lock_receiver` отключал receiver -> исправлено.
+- **Commit 5 — docs.** ADR-066 + issues + CHANGELOG + PROJECT_STATUS.
+
+Капстоун (доказательство коллективного обучения): узел A наступает на грабли (FAIL по X),
+выучивает avoid:X, рассылает -> узел B, НЕ испытавший неуспеха, начинает ИЗБЕГАТЬ X.
+Ядро LLM-free; федерация знаний, не моделей (I-10).
+
+**Verification:** `1103 passed, 0 failed`; gate `14 passed`; ad-hoc `10/10 PASS`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /
