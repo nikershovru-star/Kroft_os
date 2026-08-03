@@ -230,6 +230,24 @@ class CognitiveEvent:
             "causal_lamport": self.causal.lamport,
         }
 
+    @classmethod
+    def from_bus(cls, payload: dict) -> "CognitiveEvent":
+        """Reconstruct a CognitiveEvent from a wire dict (ТЗ-NW-01 receiver side)."""
+        return cls(
+            type=CognitiveEventType(payload["type"]),
+            ref_id=payload["ref_id"],
+            provenance=Provenance(source=payload.get("source", "unknown"),
+                                  actor=payload.get("actor", "unknown")),
+            confidence=ConfidenceScore(
+                payload["confidence"],
+                calibration=CalibrationType(payload.get("calibration", "EPISTEMIC")),
+                provenance=ProvenanceType(payload.get("provenance_type", "MODEL_INFERENCE")),
+            ),
+            timestamp=payload.get("timestamp", ""),
+            causal=CausalMark(node_origin=payload.get("causal_node", "remote"),
+                             lamport=payload.get("causal_lamport", 0)),
+        )
+
 
 # --------------------------------------------------------------------------
 # First-class domain entities (ADR-054 I-18) — frozen, not dicts

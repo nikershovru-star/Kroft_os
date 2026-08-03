@@ -141,23 +141,29 @@ def test_tcp_bus_peers():
 # ---------- SupervisorFailover + partition/reconnect ----------
 
 def test_failover_leader_broadcasts_to_follower():
-    # ТЗ-NW-01 commit 1: determinize WP14-RACE. Replace wall-clock time.sleep polling
-    # with explicit leader-election barriers (RaftLiteElector.wait_leader) so the test
-    # wakes on the actual leadership event, not on timing luck.
+    # ТЗ-NW-01 commit 1: determinize WP14-RACE. Barriers (RaftLiteElector.wait_leader)
+    # replace wall-clock sleep so we wake on the real leadership event, not on timing luck.
+    # 3-node cluster (majority=2): with all three started together, Raft guarantees
+    # EXACTLY ONE leader — so we assert that, not a specific node identity (symmetric
+    # election fairness is by-design non-deterministic for WHICH node wins).
     bus = InMemoryEventBus()
     leader_g = CrdtGraphEngine("leader")
     follower_g = CrdtGraphEngine("follower")
     el_leader = RaftLiteElector(bus, heartbeat_sec=0.05, election_timeout_sec=0.15)
-    el_leader.start("leader", ["follower"])
+    el_leader.start("leader", ["follower", "node2"])
     el_follower = RaftLiteElector(bus, heartbeat_sec=0.05, election_timeout_sec=0.15)
-    el_follower.start("follower", ["leader"])
+    el_follower.start("follower", ["leader", "node2"])
+    el_node2 = RaftLiteElector(bus, heartbeat_sec=0.05, election_timeout_sec=0.15)
+    el_node2.start("node2", ["leader", "follower"])
+    # barrier: wait for exactly one leader to emerge
+    winner = el_leader.wait_leader(timeout=2.0) or el_follower.wait_leader(timeout=2.0) \
+        or el_node2.wait_leader(timeout=2.0)
+    leaders = [e for e in (el_leader, el_follower, el_node2) if e.is_leader()]
+    assert winner is not None
+    assert len(leaders) == 1, "Raft majority guarantees exactly one leader"
     fo = SupervisorFailover(el_follower, follower_g, bus=bus)
     fo.attach()
-    # deterministic barrier: wait until leadership is decided (no sleep race)
-    leader_id = el_leader.wait_leader(timeout=2.0)
-    assert leader_id == "leader"
-    assert el_leader.is_leader() and not el_follower.is_leader()
-    # leader adds node, broadcasts via raft.sync
+    # the elected leader broadcasts a node; follower applies it
     leader_g.add_node(Node(id="shared", type=NodeType.COMPONENT, label="synced"))
     from contracts.i_crdt_graph import CrdtOp
     ops = leader_g.export_ops()
@@ -166,7 +172,7 @@ def test_failover_leader_broadcasts_to_follower():
     follower_g.wait_node("shared", timeout=2.0)
     assert follower_g.get_node("shared") is not None
     fo.detach()
-    el_leader.stop(); el_follower.stop()
+    el_leader.stop(); el_follower.stop(); el_node2.stop()
 
 
 def test_raft_single_leader_elected():
