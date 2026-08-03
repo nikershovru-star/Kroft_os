@@ -416,6 +416,16 @@ class CognitiveKernel(ICognitiveKernel):
                     continue  # reject — would violate a KROFT Law
                 self._memory.commit_semantic(f)
                 self._emit(CognitiveEventType.SEMANTIC_CONSOLIDATED, f.id, f.confidence)
+            # Флаг 2 fix (ТЗ-RF-01): soft_policies из consolidate больше не игнорируются.
+            # Они коммитятся в НОРМАТИВНЫЙ слой с тем же Self-Evolving guard — HARD
+            # policy отвергается (O1), только SOFT-предложения попадают в normative.
+            for sp in soft_policies:
+                if sp.layer != "soft":
+                    continue  # O1: HARD layer never evolves from experience
+                if self._values is not None and self._values.hard_violations(sp):
+                    continue  # reject — would violate a KROFT Law
+                self._memory.commit_normative(sp)
+                self._emit(CognitiveEventType.POLICY_UPDATED, sp.id, sp.confidence)
             # forgetting: deprecate low-confidence / stale episodes
             deprecated = self._memory_evolution.forget(self._memory.get_episodes())
             if deprecated:
