@@ -128,6 +128,8 @@ class CognitiveEventType(str, Enum):
     EXECUTION_FINISHED = "ExecutionFinished"
     REFLECTION_COMPLETED = "ReflectionCompleted"
     POLICY_UPDATED = "PolicyUpdated"
+    SEMANTIC_CONSOLIDATED = "SemanticConsolidated"
+    NORMATIVE_DEPRECATED = "NormativeDeprecated"
 
 
 # -------------------------------------------------------------------------
@@ -328,6 +330,40 @@ class PolicyLifecycle(Enum):
     ACTIVE = "active"
     DEPRECATED = "deprecated"
     SUPERSEDED = "superseded"
+
+
+@dataclass(frozen=True)
+class ExecutionOutcome:
+    """Outcome of an executed decision — feedback signal for Reflection (ТЗ-RF-01).
+
+    Outcome is a PROXY (ФЛАГ 1): success = decision was accepted/executed, utility =
+    decision confidence (or predicted utility). Real environment feedback (RL/reward)
+    is future. Reflection uses this to drive outcome-based consolidation/deprecation
+    instead of merely repeating intent text.
+    """
+    episode_id: str
+    success: bool
+    utility: float
+    confidence: ConfidenceScore
+    causal: CausalMark
+
+
+@dataclass(frozen=True)
+class ReflectionReport:
+    """Reflection Engine output (ТЗ-RF-01). Analytic part of Self-Evolving: proposes
+    (does NOT write) evolution of the SOFT layer from accumulated experience.
+
+    Carries the node's CausalMark (ТЗ-RE-01 flag 1) so the report is causally ordered.
+    Every candidate carries a ConfidenceScore. Evolution targets only the SOFT layer;
+    HARD is immutable (O1 — Self-Evolving guard, enforced at commit time in Memory
+    Evolution / kernel).
+    """
+    consolidation_candidates: "Tuple[SemanticFact, ...]" = ()
+    deprecation_candidates: "Tuple[str, ...]" = ()   # episode/policy ids to deprecate
+    policy_suggestions: "Tuple[Policy, ...]" = ()     # SOFT-only policy proposals
+    insights: "Tuple[str, ...]" = ()
+    confidence: ConfidenceScore = None
+    causal: CausalMark = None
 
 
 @dataclass(frozen=True)
