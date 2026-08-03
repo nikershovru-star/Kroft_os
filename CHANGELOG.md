@@ -77,7 +77,40 @@ arch-gate `14 passed`; akb-lint PASSED.
 **Verification:** full suite `1063+ passed, 0 failed`; arch-gate `14 passed`;
 akb-lint PASSED; ad-hoc verifier (cognitive-value semantic) `17/17 PASS`.
 
-`b4d513e 4644d72 960d422 067e87c 7d46632 e4523df <docs>`
+---
+
+## 2026-08-03 — ТЗ-EX-01 (Execution Layer + Real Outcome-Feedback, replacement of outcome-proxy) — DONE
+
+`c45ceb1 824011e 6e849d0 403cb11 <docs>`
+
+- **Commit 1 — контракты (K1).** `contracts/i_execution.py`: `IExecutor.execute(action,
+  timeout) -> ExecutionResult`; `IExecutionEnvironment.step(action) -> ExecutionResult`
+  (среда); `IActionAdapter` (опц., маппинг `action.kind` -> backend). `ExecutionResult`
+  (frozen VO) — СЫРОЙ ответ среды (action_id/success/observation/reward/...). НЕ путать
+  с `ExecutionOutcome` (RF-01), который СТРОИТСЯ ИЗ результата.
+- **Commit 2 — reference impl (LLM-free, I-09).** `kernel/execution.py`:
+  `ReferenceExecutionEnvironment` (deterministic rule-map: `choose_blue`->success/0.9,
+  `choose_red`->fail/0.1, unknown->fail/0.0); `ReferenceExecutor` (маршрутизация по kind,
+  без wall-clock sleep).
+- **Commit 3 — интеграция (замена proxy).** `CognitiveKernel.attach_executor(executor)`
+  + Execute-фаза: при executor выбранный Plan -> `Action(kind="execute_plan",
+  payload=steps)` -> `executor.execute` -> `ExecutionResult` -> РЕАЛЬНЫЙ `ExecutionOutcome`
+  (success=result.success, utility=result.reward). Без executor — **proxy fallback**
+  (decision accepted / confidence), backward compat. O1: executor НЕ мутирует HARD/FSM/
+  контракты.
+- **Commit 4 — тесты K8 (9 passed):** execute возвращает реальный ExecutionResult;
+  FAILED action -> success=False ДАЖЕ при принятом decision (negative vs proxy); реальный
+  outcome заменяет proxy; repeated real failures -> RF-01 deprecation; negative (нет
+  executor -> proxy, unknown -> fail); разделение Result/Outcome; O1 (executor без
+  поверхности мутации HARD).
+- **Commit 5 — docs.** `ADR-063` (accepted) — Execution layer + real outcome + разделение
+  Result/Outcome + закрытие RF-01 ФЛАГ 2; AKB (`adrs.yaml` ADR-063, `issues.yaml` EX-01);
+  CHANGELOG; PROJECT_STATUS.
+
+**Verification:** full suite `1077+ passed, 0 failed`; arch-gate `14 passed`;
+akb-lint PASSED; ad-hoc verifier (real vs proxy outcome) подтверждён в тестах.
+
+
 
 - **Commit 0 — фикс флага 1 (integration, ТЗ-RF-01).** Reflection больше НЕ коммитит
   semantic; ME-01 — единственный writer SOFT-слоя; дедупликация против уже

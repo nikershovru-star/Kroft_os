@@ -202,3 +202,22 @@ issues:
   - NW-01
   impact: null
   closed_by: null
+- id: EX-01
+  title: ТЗ-EX-01 Execution layer + real outcome-feedback (замена outcome-proxy)
+  severity: low
+  status: closed
+  introduced_by: roadmap (after RT-01)
+  discovered: '2026-08-03'
+  root_cause: Self-Evolving питался proxy-исходом (success=decision accepted), не настоящим результатом среды
+  resolution: 'ADR-063: Execution layer (IExecutor/IExecutionEnvironment/ExecutionResult) + ReferenceExecutor/ReferenceExecutionEnvironment.
+    Kernel Execute-фаза строит РЕАЛЬНЫЙ ExecutionOutcome из ExecutionResult; proxy fallback сохранён. Закрывает RF-01 ФЛАГ
+    2.'
+  related:
+  - ADR-063
+  - TZ-EX-01
+  - RF-01
+  - O1
+  addresses:
+  - RF-01-FLAG2
+  impact: null
+  closed_by: null
