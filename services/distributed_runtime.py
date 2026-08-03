@@ -21,7 +21,10 @@ from contracts.cognitive_domain import (
     CausalMark,
     ConfidenceScore,
     NodeLamportClock,
+    Policy,
+    Provenance,
     ProvenanceType,
+    SemanticFact,
     WorldState,
 )
 from contracts.i_agent_platform import IAgentPlatform
@@ -36,7 +39,9 @@ from contracts.i_distributed_runtime import (
     ISharedContext,
 )
 from contracts.i_leader_elector import ILeaderElector
-from contracts.i_network_transport import INetworkTransport
+from contracts.i_memory import IMemoryStore
+from contracts.i_network_transport import INetworkTransport, SoftLayerItem
+from contracts.i_cognitive_kernel import ILayeredMemory
 from contracts.i_telemetry import ITelemetrySink
 from contracts.knowledge_graph import Node, NodeType
 
@@ -315,3 +320,114 @@ class NetworkFederationService:
         for facts, sender in self._replay_buffer:
             self._handle_remote_facts(facts, sender)
         self._replay_buffer.clear()
+
+
+# --------------------------------------------------------------------------
+# Federated Soft Memory Sync (ТЗ-FSE-01, ADR-066) — second federation channel
+# --------------------------------------------------------------------------
+def _causal_to_dict(cm) -> Optional[dict]:
+    if cm is None:
+        return None
+    return {"node_origin": getattr(cm, "node_origin", ""), "lamport": getattr(cm, "lamport", 0)}
+
+
+def _causal_from_dict(d) -> Optional["CausalMark"]:
+    if not d:
+        return None
+    return CausalMark(d.get("node_origin", ""), int(d.get("lamport", 0)))
+
+
+def _prov_to_dict(p) -> Optional[dict]:
+    if p is None:
+        return None
+    return {"source": getattr(p, "source", ""), "actor": getattr(p, "actor", "")}
+
+
+class FederationSoftMemorySync:
+    """Federates the EVOLVED SOFT layer for collective self-evolution (ТЗ-FSE-01, ADR-066).
+
+    LLM-free, K1 (services depend on contracts only). Reuses the NW-01
+    ``INetworkTransport`` second channel (``cog.soft``) — does NOT invent a transport.
+
+    Sender (``publish_soft_layer``): collects semantic facts + soft policies that pass
+    the confidence-gate; HARD policies are NEVER shipped (O1). Each entry is a frozen
+    ``SoftLayerItem`` wire-DTO carrying ``origin`` (provenance) so receivers know whose
+    experience they adopt.
+
+    Receiver (``_handle_remote_soft``): merges with a SECOND confidence-gate, dedup by
+    content/body, preserves provenance (origin), and rejects anything that is not a
+    known SOFT kind (HARD can never arrive — double protection).
+
+    Read-side (SE-01: ``MemorySoftPolicySource`` / ``KnowledgeAwareReasoning``) is
+    unchanged — it already reads ``ILayeredMemory``; federation only FILLS that layer.
+    """
+    def __init__(self, self_node_id: str, memory: "ILayeredMemory",
+                 transport: "INetworkTransport", confidence_threshold: float = 0.5) -> None:
+        self._node_id = self_node_id
+        self._memory = memory
+        self._transport = transport
+        self._threshold = confidence_threshold
+        self._receiver_locked = False
+        # receiver lock (ТЗ-NW-01 flag 1 analog): once attached, the receiver is final.
+        transport.on_soft_layer(self._handle_remote_soft)
+
+    @property
+    def receiver(self):
+        return self._handle_remote_soft
+
+    def lock_receiver(self) -> None:
+        self._receiver_locked = True
+
+    def publish_soft_layer(self, memory: "ILayeredMemory", origin: Optional[str] = None) -> None:
+        """Sender: ship learned SOFT layer (semantic + soft policies) with confidence-gate.
+        HARD is NEVER shipped (O1)."""
+        origin = origin or self._node_id
+        items = []
+        for f in memory.get_semantic():
+            if f.confidence.value >= self._threshold:
+                items.append(SoftLayerItem(
+                    kind="semantic", content=f.content, confidence=f.confidence.value,
+                    origin=origin, causal=_causal_to_dict(f.causal),
+                    provenance=_prov_to_dict(f.confidence.provenance),
+                ).to_wire())
+        for p in memory.get_normative():
+            if getattr(p, "layer", None) == "soft" and p.confidence.value >= self._threshold:
+                items.append(SoftLayerItem(
+                    kind="soft_policy", content=p.body, confidence=p.confidence.value,
+                    origin=origin, causal=None,
+                    provenance=_prov_to_dict(p.provenance),
+                ).to_wire())
+            # HARD (layer != 'soft'): skipped — O1, never federated
+        if items:
+            self._transport.send_soft_layer(items, origin)
+
+    def _handle_remote_soft(self, items: List[dict], sender: str) -> None:
+        """Receiver: merge federated SOFT items with confidence-gate + dedup + provenance."""
+        if self._receiver_locked:
+            return
+        for it in items:
+            item = SoftLayerItem.from_wire(it)
+            if item.confidence < self._threshold:
+                continue  # receiver confidence-gate (double protection)
+            if item.kind == "semantic":
+                if any(f.content == item.content for f in self._memory.get_semantic()):
+                    continue  # idempotent dedup
+                self._memory.commit_semantic(SemanticFact(
+                    id=f"fed-{item.origin}-{abs(hash(item.content)) % 10000}",
+                    content=item.content,
+                    confidence=ConfidenceScore(item.confidence, ProvenanceType.AGGREGATION),
+                    causal=_causal_from_dict(item.causal) or CausalMark(item.origin, 0),
+                    source_episodes=(),
+                ))
+            elif item.kind == "soft_policy":
+                if any(p.body == item.content for p in self._memory.get_normative()):
+                    continue  # idempotent dedup
+                self._memory.commit_normative(Policy(
+                    id=f"fed-soft-{item.origin}-{abs(hash(item.content)) % 10000}",
+                    name=item.content,
+                    layer="soft",
+                    body=item.content,
+                    confidence=ConfidenceScore(item.confidence, ProvenanceType.AGGREGATION),
+                    provenance=Provenance(source=f"federated:{item.origin}", actor=item.origin),
+                ))
+            # unknown kind or HARD: ignored (O1 — HARD never federated)
