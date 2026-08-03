@@ -136,22 +136,6 @@ issues:
   - ADR-057
   - TZ-WM-01
   - FLAGA
-- id: PL-01-GAP-CLOSED
-  title: 'ТЗ-PL-01: Autonomous Planner — value-aware lookahead поверх WorldModel'
-  severity: info
-  status: closed
-  introduced_by: 'раунд 1 (Deliberate: Planning phase) / ТЗ-PL-01'
-  closed_by: 'ТЗ-PL-01 (ReferencePlanner + value-aware evaluate)'
-  addresses:
-  - TZ-PL-01
-  - FLAG2
-  - FLAG3
-  evidence:
-    contracts: contracts/i_planner.py (IPlanner)
-    impl: kernel/planning.py (ReferencePlanner)
-    integration: kernel/cognitive_kernel.py (planner.plan в tick)
-    tests: tests/test_autonomous_planner.py (+9), tests/test_world_model.py (+3 value-aware)
-  notes: 'Коммиты 21b1da1, a0373f7, 9c460e8, 539a015, ec984f3, docs(ADR-058). Full suite 1032 passed, gate 14/14, akb-lint PASSED.'
 - id: ME-01-GAP-CLOSED
   title: 'ТЗ-ME-01: Long-Term Memory Evolution — консолидация / forgetting / lifecycle'
   severity: info
@@ -168,3 +152,20 @@ issues:
     integration: kernel/cognitive_kernel.py (Learn phase + guard)
     tests: tests/test_memory_evolution.py (+10, включая O1 guard negative)
   notes: 'Коммиты dce8d96, fe13fbd, d9adde6, bb7b20b, docs(ADR-059). Full suite 1042 passed, gate 14/14, akb-lint PASSED. O1: HARD layer immutable, hard-violating facts rejected before commit.'
+- id: RF-01-GAP-CLOSED
+  title: 'ТЗ-RF-01: Reflection Engine — метакогнитивный outcome-based контур'
+  severity: info
+  status: closed
+  introduced_by: 'раунд 1 (Reflection как фаза контура) / раунд 2 (cognitive reflection); ФЛАГ 1 (консол-я по intent-тексту, не outcome) + ФЛАГ 2 (soft_policies игнорировались) из ТЗ-ME-01'
+  closed_by: 'ТЗ-RF-01 (ReferenceReflectionEngine + ExecutionOutcome + integration)'
+  addresses:
+  - TZ-RF-01
+  - FLAG1
+  - FLAG2
+  - O1
+  evidence:
+    contracts: contracts/i_reflection.py (IReflectionEngine), contracts/cognitive_domain.py (ReflectionReport, ExecutionOutcome, ProvenanceType.REFLECTION)
+    impl: kernel/reflection.py (ReferenceReflectionEngine)
+    integration: kernel/cognitive_kernel.py (ExecutionOutcome запись + Reflection фаза до Learn + guard; фикс флага 2 soft_policies)
+    tests: tests/test_reflection_engine.py (+11, outcome-based + O1 guard)
+  notes: 'Коммиты 29e1448, a0806f0, 6454bf7, 909618f, 02a5e26, docs(ADR-060). Full suite 1053 passed, gate 14/14, akb-lint PASSED. ФЛАГ 1: outcome-based consolidation/deprecation; ФЛАГ 2: soft_policies коммитятся с O1 guard; O1: hard-violating proposals rejected before commit.'

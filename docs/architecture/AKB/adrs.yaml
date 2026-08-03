@@ -787,6 +787,19 @@ adrs:
   - TZ-ME-01
   - O1
   - I-14
+- id: ADR-060
+  title: Reflection Engine — metacognitive outcome-based loop closing Self-Evolving (ТЗ-RF-01 / TZ-COG-005)
+  status: accepted
+  evidence_level: V
+  date: '2026-08-03'
+  decision_score: 0.88
+  confidence: high
+  risk: low
+  related: [ADR-046, ADR-054, ADR-055, ADR-056, ADR-057, ADR-058, ADR-059]
+  addresses:
+  - TZ-RF-01
+  - FLAG1
+  - FLAG2
 - id: ADR-058
   title: Autonomous Planner — value-aware lookahead over World Model (ТЗ-PL-01 / ADR-045)
   status: accepted

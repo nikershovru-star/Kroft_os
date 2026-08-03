@@ -5,6 +5,41 @@ Format: `commit-range | scope | summary`.
 
 ---
 
+## 2026-08-03 — ТЗ-RF-01 (Reflection Engine, outcome-based Self-Evolving) — DONE
+
+`29e1448 a0806f0 6454bf7 909618f 02a5e26 <docs>`
+
+- **Commit 0 — фикс флага 2 (integration).** `CognitiveKernel` Learn-фаза больше не
+  игнорирует `soft_policies` из `IMemoryEvolution.consolidate`: они коммитятся в
+  `normative` с тем же Self-Evolving guard (HARD -> reject, O1; hard_violations ДО commit).
+- **Контракт Reflection Engine.** `contracts/i_reflection.py`: `IReflectionEngine.reflect(
+  memory, world, recent_events, outcomes) -> ReflectionReport` (PROPOSALS, не пишет память).
+  `contracts/cognitive_domain.py`: `ReflectionReport` (consolidation_candidates /
+  deprecation_candidates / policy_suggestions[SOFT-only] / insights + ConfidenceScore +
+  CausalMark), `ExecutionOutcome` (episode_id, success, utility, confidence, causal —
+  ФЛАГ 1 feedback proxy), `ProvenanceType.REFLECTION`.
+- **Reference impl (LLM-free, I-09).** `kernel/reflection.py`: `ReferenceReflectionEngine`
+  — OUTCOME-BASED: повторяющийся УСПЕШНЫЙ опыт (success + utility>=thr, >=N) ->
+  consolidation_candidates (SemanticFact, aggregated conf + CausalMark); повторяющийся
+  НЕУСПЕШНЫЙ -> deprecation_candidates. Без опыта -> пустой report.
+- **Интеграция.** `CognitiveKernel` принимает `IReflectionEngine`; `tick` записывает
+  `ExecutionOutcome` после Execute (proxy), затем REFLECTION-фаза ДО Learn: `reflect()`
+  предлагает, kernel коммитит consolidation_candidates в semantic (O1 guard), deprecation
+  -> Memory Evolution. Reflection — аналитический, Memory Evolution — исполнительный.
+  `build_kernel` проводит `ReferenceReflectionEngine` (shared clock).
+- **Тесты (K8).** `tests/test_reflection_engine.py` (+11): reflect yields report; OUTCOME-
+  BASED (success->consolidation, failure->deprecation, assert по ExecutionOutcome не intent-
+  тексту); O1 guard (report conf+causal, kernel rejects hard-violating, never emits HARD);
+  negative: no experience/outcomes -> empty; ФЛАГ 2 fix (reference emits no policies, kernel
+  commits SOFT with guard); ReflectionReport conf+causal node_origin.
+- **Docs.** `ADR-060` (accepted) — Reflection Engine + outcome-based + ФЛАГ 1/2; AKB;
+  CHANGELOG; PROJECT_STATUS.
+
+**Verification:** full suite `1053 passed, 19 skipped, 1 xpassed, 0 failed`;
+arch-gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## 2026-08-03 — ТЗ-ME-01 (Long-Term Memory Evolution, Self-Evolving) — DONE
 
 `dce8d96 fe13fbd d9adde6 bb7b20b <docs>`
