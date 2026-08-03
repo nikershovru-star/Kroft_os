@@ -24,6 +24,7 @@ from contracts.i_agent_platform import IAgentPlatform
 from contracts.i_crdt_graph import ICrdtGraph
 from contracts.i_distributed_event_bus import IDistributedEventBus
 from contracts.i_leader_elector import ILeaderElector
+from contracts.i_network_transport import INetworkTransport
 from contracts.i_telemetry import ITelemetrySink
 
 
@@ -86,6 +87,15 @@ class ISharedContext(ABC):
     @abstractmethod
     def merge_remote(self, remote_facts: List[dict],
                      remote_marks: Dict[str, CausalMark]) -> WorldState: ...
+
+    def replicate_to(self, transport: "INetworkTransport", scope: str,
+                     world: WorldState) -> None:
+        """ТЗ-NW-01: real-network replication. Publish selective facts and ship them
+        over the transport (wire lamport) to peers. Receiver runs merge_remote on
+        arrival. Default impl raises (subclass must wire transport); kept non-abstract
+        so TZ-015 in-process usage is unaffected.
+        """
+        raise NotImplementedError("replicate_to requires a NetworkFederationService")
 
 
 # --------------------------------------------------------------------------
