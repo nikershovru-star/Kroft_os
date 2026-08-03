@@ -165,14 +165,44 @@ def test_partition_then_reconnect_causal_merge():
 
 
 def test_federation_cognitive_value_changes_decision():
-    """Merged federated fact lands in receiver SSOT AND changes its next Decision."""
+    """Merged federated fact lands in receiver SSOT AND changes its next Decision
+    by SEMANTICS (selected plan STEPS), not by the always-unique plan uuid.
+
+    ФЛАГ 1 NW-01 strengthening (ТЗ-RT-01 commit 0): the original assertion compared
+    plan-IDS (uuid), which are trivially distinct -> proof was vacuous. We inject a
+    world-aware planner so the federated fact `pref:blue` flips the CHOSEN PLAN's
+    steps (choose_red -> choose_blue). Cognitive value = real semantic change.
+    """
+    from contracts.i_planner import IPlanner
+    from contracts.cognitive_domain import Plan
+
+    class WorldAwarePlanPlanner(IPlanner):
+        """Deterministic 2-candidate planner: with `pref:blue` in the world it ranks
+        the BLUE plan first; without it, the RED plan first. Same scores -> Decision
+        picks the first candidate -> the selected plan's STEPS differ by world state."""
+        def plan(self, goal, steps, world, budget, intent=None):
+            facts = world.facts if world is not None else {}
+            blue = Plan(id="plan-blue", goal_id=goal.id, steps=("choose_blue",),
+                        confidence=ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE),
+                        provenance=Provenance(source="test", actor="test"))
+            red = Plan(id="plan-red", goal_id=goal.id, steps=("choose_red",),
+                       confidence=ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE),
+                       provenance=Provenance(source="test", actor="test"))
+            if "pref:blue" in facts:
+                return [blue, red]
+            return [red, blue]
+
     ta, tb, ka, kb, fa, fb = _wire("CA", "CB")
+    # inject the world-aware planner so the decision is driven by world content
+    kb._planner = WorldAwarePlanPlanner()
     intent = Intent(id="i1", text="prefer_blue plan",
                     confidence=ConfidenceScore(0.9, ProvenanceType.OBSERVATION),
                     provenance=Provenance(source="u", actor="u"))
-    # baseline decision WITHOUT federated fact
+    # baseline decision WITHOUT federated fact -> RED plan (by semantics)
     kb.tick(intent)
-    base_plan = kb._last_decision.selected_plan_id
+    base_plan = kb._last_selected_plan
+    assert base_plan is not None, "no selected plan at baseline"
+    base_steps = base_plan.steps
     # A replicates a world fact
     ka._world.update(Observation(
         id="pref:blue", content="prefer_blue",
@@ -183,14 +213,15 @@ def test_federation_cognitive_value_changes_decision():
     assert ok, "federated fact did not reach B SSOT"
     # next tick reads the federated fact through world.snapshot()
     kb.tick(intent)
-    fed_plan = kb._last_decision.selected_plan_id
-    assert bool(fed_plan), "Decision@B has no plan after federation"
-    # cognitive value: the decision reflects the (now world-aware) deliberation.
-    # We assert the fact drove a world-aware grounded reasoning step (proof of influence).
+    fed_plan = kb._last_selected_plan
+    assert fed_plan is not None, "Decision@B has no plan after federation"
     assert "pref:blue" in kb._world.snapshot().facts
-    # plan ids differ when world content differs (world-aware deliberation)
-    assert base_plan != fed_plan or base_plan != "", \
-        "Decision@B unaffected by federated fact (cognitive value not proven)"
+    # cognitive value by SEMANTICS: the federated fact flipped the chosen plan's
+    # STEPS (not just its uuid). This is a non-trivial proof of influence.
+    assert base_steps != fed_plan.steps, \
+        f"cognitive value NOT proven by semantics: base={base_steps} fed={fed_plan.steps}"
+    assert fed_plan.steps == ("choose_blue",), \
+        f"federated fact did not drive BLUE plan: {fed_plan.steps}"
     ta.disconnect(); tb.disconnect()
 
 

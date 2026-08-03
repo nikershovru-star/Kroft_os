@@ -341,6 +341,7 @@ class CognitiveKernel(ICognitiveKernel):
         self._events: list = []
         self._subscribers: list = []
         self._last_decision = None  # introspection
+        self._last_selected_plan = None  # introspection (semantic cognitive-value proof)
         self._federation = None  # ТЗ-NW-01: set by attach_federation
 
     # -- event emission (I-17) -------------------------------------------------
@@ -401,6 +402,11 @@ class CognitiveKernel(ICognitiveKernel):
         decision = self._decision.select(goal, candidates, self._values,
                                          world=world_snapshot, intent=intent)
         self._last_decision = decision  # introspection (K1-clean)
+        # introspection: keep the SELECTED Plan object (not just its id) so tests
+        # can prove cognitive value by SEMANTICS (steps/description), not by the
+        # always-unique plan uuid. ФЛАГ 1 NW-01 strengthening (ТЗ-RT-01 commit 0).
+        self._last_selected_plan = next(
+            (p for p in candidates if p.id == decision.selected_plan_id), None)
         if decision.selected_plan_id:
             self._emit(CognitiveEventType.DECISION_ACCEPTED, decision.id, decision.confidence)
         else:
