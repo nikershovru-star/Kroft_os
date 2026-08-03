@@ -533,10 +533,14 @@ class CognitiveKernel(ICognitiveKernel):
         """Wire a NetworkFederationService so inbound federated WorldState merges into
         the local SSOT and influences the NEXT Decision (FEDERATION COGNITIVE VALUE).
 
-        On every causal merge the federation service calls back into
-        ``_on_federated_world``, which folds the merged world into ``self._world`` — so
-        the next ``tick`` reads the federated facts through ``world.snapshot()``.
+        Idempotent: re-attaching the same service is a no-op. On every causal merge the
+        federation service calls back into ``_on_federated_world``, which folds the
+        merged world into ``self._world`` — so the next ``tick`` reads the federated
+        facts through ``world.snapshot()``. The receiver callback is locked after bind
+        (ТЗ-NW-01 flag 1) so a later override cannot silently drop the SSOT fold.
         """
+        if self._federation is federation:
+            return  # idempotent: already wired
         self._federation = federation
         if hasattr(federation, "set_local_world"):
             federation.set_local_world(self._world.snapshot())
@@ -547,6 +551,19 @@ class CognitiveKernel(ICognitiveKernel):
             setter(self._on_federated_world)
         else:
             object.__setattr__(federation, "_on_world_merged", self._on_federated_world)
+        # finalize: any later override of the receiver is ignored (flag 1)
+        locker = getattr(federation, "lock_receiver", None)
+        if locker is not None:
+            locker()
+        # VERIFY the wiring (flag 1): the federation receiver must be our SSOT fold.
+        # Bound methods are re-created on each attribute access, so compare by
+        # underlying function + bound instance, NOT by identity (`is`).
+        recv = federation.receiver
+        wired = (recv is not None
+                 and recv.__func__ is self._on_federated_world.__func__
+                 and recv.__self__ is self)
+        assert wired, "attach_federation: receiver callback not wired to kernel SSOT fold"
+        assert federation.has_receiver, "attach_federation: receiver callback missing"
 
     def _on_federated_world(self, merged: "WorldState") -> None:
         """Receiver hook: fold a causally-merged remote WorldState into the local SSOT."""

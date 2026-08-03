@@ -230,6 +230,10 @@ class NetworkFederationService:
         self._transport = transport
         self._on_world_merged = on_world_merged
         self._local_world: Optional[WorldState] = None
+        # receiver lock (ТЗ-NW-01 flag 1): once a kernel attaches, the receiver callback
+        # is FINAL. A later external override of on_world_merged would silently drop the
+        # kernel SSOT fold — so the setter is ignored after lock_receiver().
+        self._receiver_locked = False
         # inbound handlers: route transport messages into causal merge
         transport.on_event(self._handle_remote_event)
         transport.on_facts(self._handle_remote_facts)
@@ -237,12 +241,32 @@ class NetworkFederationService:
         # reconnect (FIFO), then idempotent merge discards duplicates.
         self._replay_buffer: List[tuple] = []
 
+    @property
+    def receiver(self) -> "Optional[Callable[[WorldState], None]]":
+        """The callback invoked on every causal merge (read-only, for verification)."""
+        return self._on_world_merged
+
+    @property
+    def has_receiver(self) -> bool:
+        return self._on_world_merged is not None
+
     def set_local_world(self, world: WorldState) -> None:
         self._local_world = world
 
     def on_world_merged(self, cb: "Callable[[WorldState], None]") -> None:
-        """Public hook: set the receiver callback invoked on every causal merge."""
+        """Public hook: set the receiver callback invoked on every causal merge.
+
+        Ignored once the receiver is locked by attach_federation (ТЗ-NW-01 flag 1) —
+        the kernel SSOT fold must not be silently replaced.
+        """
+        if self._receiver_locked:
+            return
         self._on_world_merged = cb
+
+    def lock_receiver(self) -> None:
+        """Finalize the receiver callback. Called by CognitiveKernel.attach_federation
+        right after binding, so subsequent overrides are no-ops (flag 1)."""
+        self._receiver_locked = True
 
     def broadcast_event(self, event) -> None:
         """Ship a CognitiveEvent (carries its CausalMark) to all peers."""
