@@ -24,6 +24,7 @@ from contracts.cognitive_domain import (
     ConfidenceScore,
     Decision,
     Episode,
+    ExecutionOutcome,
     Goal,
     Intent,
     NodeLamportClock,
@@ -51,11 +52,13 @@ from contracts.i_cognitive_kernel import (
 from contracts.i_world_model import IWorldModel
 from contracts.i_planner import IPlanner
 from contracts.i_memory_evolution import IMemoryEvolution
+from contracts.i_reflection import IReflectionEngine
 from kernel.reasoning import ReferenceReasoningEngine
 from kernel.world_model import ReferenceWorldModel
 from kernel.planning import ReferencePlanner
 from kernel.memory_evolution import ReferenceMemoryEvolution
 from kernel.memory_store import InMemoryLayeredMemory
+from kernel.reflection import ReferenceReflectionEngine
 
 
 def _uid(prefix: str) -> str:
@@ -270,7 +273,8 @@ class CognitiveKernel(ICognitiveKernel):
                  reason: Optional["IReasoningEngine"] = None,
                  world_model: Optional["IWorldModel"] = None,
                  memory_evolution: Optional["IMemoryEvolution"] = None,
-                 memory: Optional["ILayeredMemory"] = None) -> None:
+                 memory: Optional["ILayeredMemory"] = None,
+                 reflection_engine: Optional["IReflectionEngine"] = None) -> None:
         # ТЗ-WM-01 flag A: default clock MUST derive node_id from the world, never
         # the literal "kernel" (ТЗ-RE-01 already wired node_origin=node_id when a
         # clock is injected; this closes the residual default-construction path).
@@ -305,6 +309,12 @@ class CognitiveKernel(ICognitiveKernel):
         # (semantic facts), guarded by the O1 invariant (HARD layer never evolves).
         self._memory_evolution = memory_evolution
         self._memory = memory
+        # ТЗ-RF-01: Reflection Engine is the ANALYTIC part of Self-Evolving. It runs
+        # BEFORE Memory Evolution (Learn): reflects on accumulated experience + execution
+        # outcomes and PROPOSES SOFT-layer evolution; Memory Evolution commits it under
+        # the O1 Self-Evolving guard. Reflection never writes memory itself.
+        self._reflection_engine = reflection_engine
+        self._outcomes: list = []
         self._state = CognitiveState.IDLE
         self._goal: Optional[Goal] = None
         self._events: list = []
@@ -385,9 +395,35 @@ class CognitiveKernel(ICognitiveKernel):
                    decision.confidence)
         self._emit(CognitiveEventType.EXECUTION_FINISHED, decision.selected_plan_id,
                    decision.confidence)
+        # ТЗ-RF-01: record the execution OUTCOME (ФЛАГ 1 feedback proxy). success =
+        # decision accepted & executed; utility = decision confidence (or predicted
+        # utility). Real environment reward is future.
+        outcome = ExecutionOutcome(
+            episode_id=decision.id,
+            success=bool(decision.selected_plan_id),
+            utility=decision.confidence.value,
+            confidence=decision.confidence,
+            causal=self._clock.tick(),
+        )
+        self._outcomes.append(outcome)
         # Evaluate
         if not self._transition(CognitiveState.EVALUATE):
             return self._state
+        # ТЗ-RF-01: REFLECTION (analytic) runs BEFORE Learn (executive). It proposes
+        # SOFT-layer evolution from accumulated experience + outcomes; Memory Evolution
+        # (Learn) commits it under the O1 Self-Evolving guard.
+        if self._reflection_engine is not None and self._memory is not None:
+            report = self._reflection_engine.reflect(
+                self._memory, world_snapshot, outcomes=self._outcomes)
+            self._emit(CognitiveEventType.REFLECTION_COMPLETED,
+                       "reflection", report.confidence)
+            # hand the report to Memory Evolution: consolidation candidates become
+            # semantic facts (guarded), deprecation candidates are forgotten.
+            for c in report.consolidation_candidates:
+                if self._values is not None and self._values.hard_violations(c):
+                    continue
+                self._memory.commit_semantic(c)
+                self._emit(CognitiveEventType.SEMANTIC_CONSOLIDATED, c.id, c.confidence)
         # Learn
         if not self._transition(CognitiveState.LEARN):
             return self._state
@@ -501,7 +537,12 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     # HARD layer is immutable from experience (O1 guard).
     memory = InMemoryLayeredMemory()
     memory_evolution = ReferenceMemoryEvolution(shared_clock)
+    # ТЗ-RF-01: Reflection Engine — the ANALYTIC half of Self-Evolving. Runs BEFORE
+    # Learn; reflects on experience + outcomes, proposing SOFT-layer evolution (outcome-
+    # based, ФЛАГ 1). Memory Evolution commits the proposals under the O1 guard.
+    reflection_engine = ReferenceReflectionEngine(shared_clock)
 
     return CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner,
                            clock=shared_clock, reason=reason, world_model=world_model,
-                           memory_evolution=memory_evolution, memory=memory)
+                           memory_evolution=memory_evolution, memory=memory,
+                           reflection_engine=reflection_engine)
