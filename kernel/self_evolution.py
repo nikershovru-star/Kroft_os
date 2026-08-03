@@ -29,7 +29,7 @@ from contracts.cognitive_domain import (
 from contracts.i_cognitive_kernel import IValueSystem
 from contracts.i_self_evolution import ISoftPolicySource, SoftPolicyPreference
 
-from kernel.cognitive_kernel import SimpleValueSystem
+from kernel.value_system import SimpleValueSystem
 from kernel.reasoning import ReferenceReasoningEngine
 
 
@@ -44,16 +44,18 @@ class MemorySoftPolicySource(ISoftPolicySource):
         out: List[str] = []
         for p in self._memory.get_normative():
             if getattr(p, "layer", None) == "soft" and "avoid" not in p.body:
-                out.append(p.body)
-        # also surface successful consolidated facts as recall (see get_recall_facts)
+                # strip a leading 'decided:' / 'prefer:' marker so the pattern matches
+                # raw candidate plan steps (e.g. 'choose_blue')
+                out.append(p.body.split(":", 1)[1] if ":" in p.body else p.body)
         return out
 
     def get_avoid_patterns(self) -> List[str]:
         out: List[str] = []
         for p in self._memory.get_normative():
             if getattr(p, "layer", None) == "soft" and "avoid" in p.body:
-                # body形如 'avoid:<pattern>' -> strip prefix
-                out.append(p.body.split(":", 1)[1] if ":" in p.body else p.body)
+                # body形如 'avoid:decided:X' -> match raw step 'X'
+                body = p.body.split(":", 1)[1] if ":" in p.body else p.body
+                out.append(body.split(":", 1)[1] if body.startswith("decided:") else body)
         return out
 
     def get_recall_facts(self) -> List[str]:

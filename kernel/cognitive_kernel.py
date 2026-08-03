@@ -60,6 +60,12 @@ from kernel.planning import ReferencePlanner
 from kernel.memory_evolution import ReferenceMemoryEvolution
 from kernel.memory_store import InMemoryLayeredMemory
 from kernel.reflection import ReferenceReflectionEngine
+from kernel.self_evolution import (
+    MemorySoftPolicySource,
+    PolicyAwareValueSystem,
+    KnowledgeAwareReasoning,
+)
+from contracts.i_self_evolution import ISoftPolicySource
 
 
 def _uid(prefix: str) -> str:
@@ -164,27 +170,7 @@ class SimpleAttention(IAttention):
         return ConfidenceScore(val, ProvenanceType.RULE_INFERENCE)
 
 
-class SimpleValueSystem(IValueSystem):
-    """Two-layer (I-11/I-19): hard veto from a set of violated-constraint checkers."""
-
-    def __init__(self, hard_checkers: Optional[List[Callable[[object], Optional[str]]]] = None,
-                 weights: Optional[Dict[str, float]] = None) -> None:
-        self._hard = hard_checkers or []
-        self._weights = weights or {"confidence": 1.0, "cost": -0.2, "risk": -0.5}
-
-    def hard_violations(self, candidate: object) -> List[str]:
-        out = []
-        for chk in self._hard:
-            v = chk(candidate)
-            if v:
-                out.append(v)
-        return out
-
-    def score(self, candidate: object) -> float:
-        # soft utility: weighted sum of attributes (confidence/cost/risk)
-        c = getattr(candidate, "confidence", None)
-        base = c.value if isinstance(c, ConfidenceScore) else 0.5
-        return base * self._weights.get("confidence", 1.0)
+from kernel.value_system import SimpleValueSystem  # ТЗ-SE-01: extracted to break import cycle
 
 
 class DeterministicDecisionEngine(IDecisionEngine):
@@ -488,7 +474,7 @@ class CognitiveKernel(ICognitiveKernel):
         if self._memory_evolution is not None and self._memory is not None:
             from contracts.i_cognitive_kernel import IValueSystem
             episode = Episode(
-                id=decision.id, summary=f"decided:{intent.text}",
+                id=decision.id, summary=f"decided:{'|'.join(self._last_selected_plan.steps)}",
                 confidence=decision.confidence,
                 provenance=Provenance(source="learn", actor="kernel"),
             )
@@ -527,6 +513,30 @@ class CognitiveKernel(ICognitiveKernel):
             deprecated = self._memory_evolution.forget(self._memory.get_episodes())
             if self._last_reflection_report is not None:
                 deprecated = deprecated + list(self._last_reflection_report.deprecation_candidates)
+            # ТЗ-SE-01 (ФЛАГ 3 closure): repeated FAILURE -> deprecation_candidates
+            # (e.g. 'decided:X'). Turn each into a SOFT 'avoid:<pattern>' policy so the
+            # next deliberation PENALIZES that candidate (behavior changes, not just
+            # memory). Dedup against already-committed soft policies. O1: layer=='soft'.
+            for d in (self._last_reflection_report.deprecation_candidates
+                      if self._last_reflection_report is not None else ()):
+                avoid_body = f"avoid:{d}"
+                already = any(getattr(p, "layer", None) == "soft" and p.body == avoid_body
+                             for p in self._memory.get_normative())
+                if already:
+                    continue
+                avoid_policy = Policy(
+                    id=f"soft-avoid-{abs(hash(d)) % 10_000}",
+                    name=f"avoid:{d}",
+                    layer="soft",
+                    body=avoid_body,
+                    confidence=ConfidenceScore(0.7, ProvenanceType.REFLECTION),
+                    provenance=Provenance(source="self_evolution", actor="kernel"),
+                )
+                if self._values is not None and self._values.hard_violations(avoid_policy):
+                    continue  # O1: never evolve HARD
+                self._memory.commit_normative(avoid_policy)
+                self._emit(CognitiveEventType.POLICY_UPDATED, avoid_policy.id,
+                           avoid_policy.confidence)
             if deprecated:
                 self._emit(CognitiveEventType.NORMATIVE_DEPRECATED, deprecated[0],
                            ConfidenceScore(0.1, ProvenanceType.OBSERVATION))
@@ -632,13 +642,25 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     world = InMemoryWorldState(node_id, clock=shared_clock)
     res = SimpleResourceManager()
     attn = SimpleAttention(res)
-    val = SimpleValueSystem()
+    # ТЗ-ME-01: Memory Evolution — Learn-phase mechanism of Self-Evolving.
+    # SOFT-layer consolidation (semantic facts) from repeated high-confidence episodes;
+    # HARD layer is immutable from experience (O1 guard). Created BEFORE value/reasoning
+    # so the evolved SOFT layer can be wired into deliberation (ТЗ-SE-01).
+    memory = InMemoryLayeredMemory()
+    memory_evolution = ReferenceMemoryEvolution(shared_clock)
+    # ТЗ-SE-01: behavioral closure of Self-Evolving. The evolved SOFT layer (semantic
+    # facts + soft policies) is exposed to deliberation through ISoftPolicySource so
+    # learning changes BEHAVIOR, not just memory (closes ФЛАГ 3, ТЗ-EX-01).
+    soft_source: ISoftPolicySource = MemorySoftPolicySource(memory)
+    val = PolicyAwareValueSystem(soft_source)
     dec = DeterministicDecisionEngine()
     exec_ = DeterministicExecutive(res)
     learn = SimpleLearningPolicy()
     # ТЗ-RE-01: Reasoning Engine wired with the SAME shared node clock (flag 1) so
     # reasoning steps carry the node's causal order + node_origin = node_id.
-    reason = ReferenceReasoningEngine(shared_clock, attn)
+    # ТЗ-SE-01: KnowledgeAwareReasoning also surfaces consolidated semantic facts
+    # (decided:<action>) as grounded candidate directions.
+    reason = KnowledgeAwareReasoning(shared_clock, attn, soft_source)
     # ТЗ-WM-01: World Model is an ADVISOR over world state, sharing the same clock.
     # Wired into the Reasoning Engine so grounded steps are ranked by PREDICTED
     # utility (not word overlap). The deterministic Decision still makes the final pick.
@@ -648,11 +670,6 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     # (lookahead via simulate), and ranks by PREDICTED VALUE-AWARE utility (flag 2).
     # The planner only ranks; the deterministic Decision makes the final pick (I-03).
     planner = ReferencePlanner(shared_clock, world_model=world_model, values=val)
-    # ТЗ-ME-01: Memory Evolution — Learn-phase mechanism of Self-Evolving.
-    # SOFT-layer consolidation (semantic facts) from repeated high-confidence episodes;
-    # HARD layer is immutable from experience (O1 guard).
-    memory = InMemoryLayeredMemory()
-    memory_evolution = ReferenceMemoryEvolution(shared_clock)
     # ТЗ-RF-01: Reflection Engine — the ANALYTIC half of Self-Evolving. Runs BEFORE
     # Learn; reflects on experience + outcomes, proposing SOFT-layer evolution (outcome-
     # based, ФЛАГ 1). Memory Evolution commits the proposals under the O1 guard.
