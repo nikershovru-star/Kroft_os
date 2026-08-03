@@ -37,6 +37,7 @@ class NetworkTransport(INetworkTransport):
         self._expected_peers = 0
         self._stop = threading.Event()
         self._connector: Optional[threading.Thread] = None
+        self._connect_timeout: float = 1.0  # SOFT tunable (runtime reflection, O1)
         self._bus.subscribe("cog.event", self._on_wire_event)
         self._bus.subscribe("cog.facts", self._on_wire_facts)
 
@@ -60,8 +61,14 @@ class NetworkTransport(INetworkTransport):
                 pass
             self._stop.wait(0.2)
 
-    def ensure_connected(self, timeout: float = 5.0) -> bool:
-        """Deterministic barrier: block until the expected peers are linked."""
+    def ensure_connected(self, timeout: Optional[float] = None) -> bool:
+        """Deterministic barrier: block until the expected peers are linked.
+
+        Uses `timeout` if given, else the SOFT-tunable `self._connect_timeout`
+        (runtime reflection may raise it under poor delivery, O1-guarded).
+        """
+        if timeout is None:
+            timeout = self._connect_timeout
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if len(self._bus.peers()) >= self._expected_peers:
