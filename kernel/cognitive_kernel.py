@@ -103,6 +103,26 @@ class InMemoryWorldState(IWorldState):
     def get(self, key: str) -> Optional[str]:
         return self._facts.get(key)
 
+    def apply_remote(self, remote: "WorldState") -> WorldState:
+        """ТЗ-NW-01: fold a federated (already causally-merged) WorldState into the
+        local SSOT. Causal merge by CausalMark (greater wins); local clock advanced
+        via the Lamport receive-rule so future comparisons use logical time. Idempotent
+        on replay of the same message.
+        """
+        max_remote = CausalMark(self._node_id, 0)
+        for k, rm in remote.facts_meta.items():
+            if rm > max_remote:
+                max_remote = rm
+        for k, v in remote.facts.items():
+            rmark = remote.facts_meta.get(k)
+            lmark = self._facts_meta.get(k)
+            if rmark is not None and (lmark is None or rmark > lmark):
+                self._facts[k] = v
+                self._facts_meta[k] = rmark
+        if max_remote.lamport > self._clock.mark.lamport:
+            self._clock.receive(max_remote)
+        return self.snapshot()
+
 
 class SimpleResourceManager(IResourceManager):
     """Deterministic budget enforcement (I-06)."""
@@ -321,6 +341,7 @@ class CognitiveKernel(ICognitiveKernel):
         self._events: list = []
         self._subscribers: list = []
         self._last_decision = None  # introspection
+        self._federation = None  # ТЗ-NW-01: set by attach_federation
 
     # -- event emission (I-17) -------------------------------------------------
     def _emit(self, etype: CognitiveEventType, ref_id: str,
@@ -506,6 +527,32 @@ class CognitiveKernel(ICognitiveKernel):
 
     def on_event(self, handler: Callable[[dict], None]) -> None:
         self._subscribers.append(handler)
+
+    # -- federation (ТЗ-NW-01) ------------------------------------------------
+    def attach_federation(self, federation: "object") -> None:
+        """Wire a NetworkFederationService so inbound federated WorldState merges into
+        the local SSOT and influences the NEXT Decision (FEDERATION COGNITIVE VALUE).
+
+        On every causal merge the federation service calls back into
+        ``_on_federated_world``, which folds the merged world into ``self._world`` — so
+        the next ``tick`` reads the federated facts through ``world.snapshot()``.
+        """
+        self._federation = federation
+        if hasattr(federation, "set_local_world"):
+            federation.set_local_world(self._world.snapshot())
+        # NetworkFederationService stores the receiver callback in _on_world_merged;
+        # bind it to our local-SSOT fold. (Public on_world_merged setter if present.)
+        setter = getattr(federation, "on_world_merged", None)
+        if setter is not None:
+            setter(self._on_federated_world)
+        else:
+            object.__setattr__(federation, "_on_world_merged", self._on_federated_world)
+
+    def _on_federated_world(self, merged: "WorldState") -> None:
+        """Receiver hook: fold a causally-merged remote WorldState into the local SSOT."""
+        self._world.apply_remote(merged)
+        self._emit(CognitiveEventType.OBSERVATION_RECEIVED, "federated",
+                   ConfidenceScore(0.9, ProvenanceType.OBSERVATION))
 
     # -- introspection ---------------------------------------------------------
     @property

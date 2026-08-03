@@ -240,6 +240,10 @@ class NetworkFederationService:
     def set_local_world(self, world: WorldState) -> None:
         self._local_world = world
 
+    def on_world_merged(self, cb: "Callable[[WorldState], None]") -> None:
+        """Public hook: set the receiver callback invoked on every causal merge."""
+        self._on_world_merged = cb
+
     def broadcast_event(self, event) -> None:
         """Ship a CognitiveEvent (carries its CausalMark) to all peers."""
         self._transport.send_event(event)
