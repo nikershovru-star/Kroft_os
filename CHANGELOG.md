@@ -142,6 +142,37 @@ akb-lint PASSED. Капстоун-петля замкнута: исходы -> �
 выученное -> решения меняются -> новые исходы. ФЛАГ 3 ТЗ-EX-01 ЗАКРЫТ.
 
 
+---
+
+## 2026-08-04 — ТЗ-LLM-01 (LLM-as-advisor plug-in + graceful fallback, валидация I-10) — DONE
+
+`7d32578 2bd95c0 b98b63f 7659be7 <docs>`
+
+- **Commit 1 — контракт (K1/K6).** `contracts/i_llm_advisor.py`: `ILLMAdvisor` (порт)
+  + `LLMAdvice` (frozen VO) + `LLMError`/`LLMTimeout` + `AdviseContext`. `adapter_for(ILlm)`
+  мостит существующий Model Platform порт `contracts/i_llm.ILlm` в advisor (порт НЕ
+  дублирован — KROFT «one port per boundary»). Ядро зависит только от `ILLMAdvisor`.
+- **Commit 2 — reference impl (LLM-free core сохранён).** `kernel/llm_advisor.py`:
+  `MockLLMClient` (детерминированный rule-based advisor; `fail=True` -> `LLMError`);
+  `LLMAdvisorReasoning(KnowledgeAwareReasoning)` (boosted step из advice; сбой ->
+  fallback на reference); `LLMAdvisorPlanner(ReferencePlanner)` (re-rank через advice;
+  сбой -> `super().plan()` чистый reference result). LLM НЕ выбирает финал (I-03).
+- **Commit 3 — интеграция.** `build_kernel(node_id, clock, llm_client=None)`: advisor
+  опционален (`ILlm` через `adapter_for` ИЛИ `ILLMAdvisor`); без client -> `advisor=None`
+  -> обёртки == PURE reference (поведение идентично LLM-free build). Интеграционный
+  капстоун: `build_kernel()` == `build_kernel(MockLLMClient(fail=True))` по
+  `selected_plan.steps` — kernel LLM-free ПО СУТИ, не по декларации.
+- **Commit 4 — тесты K8 (7 passed):** advice меняет ranking (boosted->фронт), но
+  Decision (не LLM) выбирает; `LLMError`/`LLMTimeout` -> fallback == результат без
+  LLM (без краша); без LLM неизменно; LLM НЕ выбирает, advisor read-only (O1); K6
+  (kernel зависит только от порта).
+- **Commit 5 — docs.** `ADR-065` (accepted) + AKB (`adrs.yaml` ADR-065, `issues.yaml`
+  LLM-01) + CHANGELOG + PROJECT_STATUS.
+
+**Verification:** full suite GREEN; arch-gate `14 passed`; akb-lint PASSED. I-10
+(kernel purity) ТЕПЕРЬ ПРОВЕРЕНО КОДОМ, а не декларацией.
+
+
 - **Commit 0 — фикс флага 1 (integration, ТЗ-RF-01).** Reflection больше НЕ коммитит
   semantic; ME-01 — единственный writer SOFT-слоя; дедупликация против уже
   закоммиченных `get_semantic()` (не только внутри тика). Один опыт → ровно 1 факт.

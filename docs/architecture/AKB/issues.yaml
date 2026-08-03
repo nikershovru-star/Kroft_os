@@ -239,3 +239,21 @@ issues:
   - EX-01-FLAG3
   impact: null
   closed_by: null
+- id: LLM-01
+  title: ТЗ-LLM-01 LLM-as-advisor contract boundary (validates I-10 kernel purity)
+  severity: low
+  status: closed
+  introduced_by: roadmap (after SE-01)
+  discovered: '2026-08-04'
+  root_cause: 'contract-boundary (I-10) был декларацией, не проверенным свойством: fallback при сбое LLM не доказан кодом'
+  resolution: 'ADR-065: ILLMAdvisor порт + MockLLMClient + LLMAdvisorReasoning/Planner; build_kernel(llm_client=); fallback
+    == no-LLM доказан. Kernel LLM-free по сути.'
+  related:
+  - ADR-065
+  - TZ-LLM-01
+  - I-10
+  - O1
+  addresses:
+  - I-10
+  impact: null
+  closed_by: null
