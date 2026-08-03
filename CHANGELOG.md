@@ -38,8 +38,44 @@ Format: `commit-range | scope | summary`.
 **Verification:** full suite `1053 passed, 19 skipped, 1 xpassed, 0 failed`;
 arch-gate `14 passed`; akb-lint PASSED.
 
+---
 
-## 2026-08-03 — ТЗ-NW-01 (Real Network Federation) — DONE
+## 2026-08-03 — ТЗ-RT-01 (Runtime / System Reflection, adaptive runtime contour) — DONE
+
+`19fbd9f 3badd8a b71aed2 e587dc3 5d0a7c9 <docs>`
+
+- **Commit 0 — усиление cognitive-value proof (честность NW-01).** `CognitiveKernel`
+  сохраняет `_last_selected_plan` (Plan-объект, не только id) как introspection.
+  Тест `test_federation_cognitive_value_changes_decision` БОЛЬШЕ НЕ сравнивает plan-ID
+  (uuid всегда уникальны -> вакуумное доказательство): инжектится world-aware planner,
+  federated факт `pref:blue` переворачивает ВЫБРАННЫЙ ПЛАН по СОДЕРЖАНИЮ (steps
+  choose_red -> choose_blue). Cognitive value доказан СЕМАНТИКОЙ, не id.
+- **Контракты (K1).** `contracts/i_runtime_reflection.py`: `IRuntimeMetrics.collect()
+  -> List[RuntimeMetric]`; `IRuntimeReflection.reflect(metrics) -> List[TuningProposal]`
+  (LLM-free, deterministic); `ITuningApplier.apply(proposal) -> bool` под O1 guard.
+  `RuntimeMetric` / `TuningProposal` (frozen VOs); конструктор `TuningProposal` ЗАПРЕЩАЕТ
+  `layer=HARD` (O1 на входе).
+- **Reference impl (LLM-free, I-09).** `kernel/runtime_reflection.py`:
+  `ReferenceRuntimeReflection` (правила R1-R3: low delivery -> raise timeout; fast
+  memory growth -> raise min_repetitions; low consolidation conf -> raise threshold;
+  old->new честно из `*.current` метрик, bounded); `ReferenceTuningApplier` (O1:
+  отклоняет НЕ-SOFT/unknown/без target); `ReferenceRuntimeMetrics`.
+- **Интеграция.** `kernel/runtime_supervisor.py`: `RuntimeSupervisor.step()` collect ->
+  reflect -> apply (только SOFT); `build_runtime_metrics()` собирает snapshot из живых
+  целей + операционных сигналов. Тюнингуемые цели (реально тюнингуемые, SOFT-only):
+  `ReferenceMemoryEvolution` (min_repetitions/confidence_threshold),
+  `NetworkTransport` (ensure_connected_timeout — добавлен `_connect_timeout`, K6),
+  `SimpleResourceManager` (budgets.tokens). O1: FSM-инварианты/HARD/контракты неизменны.
+- **Тесты (K8).** `tests/test_runtime_reflection.py` (14 passed): metrics->proposal;
+  O1 apply (SOFT меняется / unknown rejected / HARD запрещён конструктором); adaptive
+  behavior (выше timeout -> ensure_connected ждёт дольше; выше min_repetitions -> меньше
+  консолидаций); negative (нет метрик -> нет proposals); разделение с RF-01 (runtime НЕ
+  пишет semantic контент); full loop применяет 3 SOFT proposal к реальным целям.
+- **Docs.** `ADR-062` (accepted) — Runtime/System Reflection + разделение с RF-01 + O1
+  guard; AKB (`adrs.yaml` ADR-062, `issues.yaml` RT-01); CHANGELOG; PROJECT_STATUS.
+
+**Verification:** full suite `1063+ passed, 0 failed`; arch-gate `14 passed`;
+akb-lint PASSED; ad-hoc verifier (cognitive-value semantic) `17/17 PASS`.
 
 `b4d513e 4644d72 960d422 067e87c 7d46632 e4523df <docs>`
 
