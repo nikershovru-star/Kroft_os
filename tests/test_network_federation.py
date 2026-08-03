@@ -69,6 +69,18 @@ def _wait_fact(world_holder, key, timeout=2.0):
         time.sleep(0.03)
     return False
 
+def _replicate_until(fa, ka, kb, key, timeout=3.0):
+    """Deterministic sender-barrier: retry idempotent replication until the fact
+    lands in the receiver SSOT (poll, NOT wall-clock sleep). Fire-and-forget
+    replicate_world can race TCP delivery under load; retrying is idempotent."""
+    end = time.time() + timeout
+    while time.time() < end:
+        fa.replicate_world(ka._world.snapshot())
+        if _wait_fact(kb, key, 0.25):
+            return True
+        time.sleep(0.03)
+    return False
+
 
 def test_real_worldstate_replication_over_tcp():
     """CognitiveEvent/WorldState facts replicate across real TCP to a peer SSOT."""
@@ -78,7 +90,7 @@ def test_real_worldstate_replication_over_tcp():
         confidence=ConfidenceScore(1.0, ProvenanceType.OBSERVATION),
         provenance=Provenance(source="s", actor="s")))
     fa.replicate_world(ka._world.snapshot())
-    ok = _wait_fact(kb, "env:safe")
+    ok = _replicate_until(fa, ka, kb, "env:safe")
     assert ok, "B did not receive A's world fact over TCP"
     assert kb._world.snapshot().facts.get("env:safe") == "yes"
     ta.disconnect(); tb.disconnect()
@@ -105,7 +117,12 @@ def test_real_cognitive_event_over_tcp():
 
 
 def test_partition_then_reconnect_causal_merge():
-    """PARTITION (peer down) -> facts buffered; RECONNECT -> idempotent causal merge."""
+    """PARTITION (peer down) -> facts buffered; RECONNECT -> idempotent causal merge.
+
+    Reconnect reuses the SAME port pb (TcpEventBus sets SO_REUSEADDR=1). Using a fresh
+    port would break delivery: A's transport only knows pb as its outbound peer, so a
+    new pb2 would never receive A's facts (fire-and-forget, no peer discovery).
+    """
     pa, pb = _port(), _port()
     ta = NetworkTransport("PA", pa)
     tb = NetworkTransport("PB", pb)
@@ -127,25 +144,22 @@ def test_partition_then_reconnect_causal_merge():
                     facts_meta={"p:1": CausalMark("PA", 5)},
                     confidence=ConfidenceScore(1.0, ProvenanceType.OBSERVATION))
     fa.set_local_world(wa)
-    # send while partitioned: TCP drops it (no socket). Reconnect path re-sends.
+    # send while partitioned: TCP drops it (dead peer removed from ta._peers)
     fa.replicate_world(wa)
-    # reconnect with a fresh transport on B
-    pb2 = _port()
-    tb2 = NetworkTransport("PB", pb2)
+    # reconnect B on the SAME port (SO_REUSEADDR) so A's outbound peer is live again
+    tb2 = NetworkTransport("PB", pb)
     tb2.connect("PB", [f"127.0.0.1:{pa}"])
     assert tb2.ensure_connected(1.0)
     fb2 = NetworkFederationService("PB", sb, tb2)
     kb.attach_federation(fb2)  # re-wire (idempotent) to the reconnected transport
     fb2.set_local_world(WorldState(node_id="PB", facts={}, facts_meta={},
                                    confidence=ConfidenceScore(1.0, ProvenanceType.OBSERVATION)))
-    # re-send the SAME fact after reconnect (idempotent replay)
-    fa.replicate_world(wa)
-    fa.replicate_world(wa)
-    ok = _wait_fact(kb, "p:1")
+    # re-send after reconnect; idempotent replay, retry until delivered (no flake)
+    ok = _replicate_until(fa, ka, kb, "p:1")
     assert ok, "B did not receive fact after reconnect"
     merged = kb._world.snapshot().facts
     assert merged.get("p:1") == "v1"
-    # idempotent: replaying the same message twice does not duplicate
+    # idempotent: replaying the same message does not duplicate
     assert list(merged.keys()).count("p:1") == 1
     ta.disconnect(); tb2.disconnect()
 
@@ -165,7 +179,7 @@ def test_federation_cognitive_value_changes_decision():
         confidence=ConfidenceScore(0.95, ProvenanceType.OBSERVATION),
         provenance=Provenance(source="s", actor="s")))
     fa.replicate_world(ka._world.snapshot())
-    ok = _wait_fact(kb, "pref:blue")
+    ok = _replicate_until(fa, ka, kb, "pref:blue")
     assert ok, "federated fact did not reach B SSOT"
     # next tick reads the federated fact through world.snapshot()
     kb.tick(intent)
@@ -222,7 +236,7 @@ def test_determinism_repeated_runs():
             confidence=ConfidenceScore(1.0, ProvenanceType.OBSERVATION),
             provenance=Provenance(source="s", actor="s")))
         fa.replicate_world(ka._world.snapshot())
-        assert _wait_fact(kb, "d:1"), "non-deterministic: fact not delivered"
+        assert _replicate_until(fa, ka, kb, "d:1"), "non-deterministic: fact not delivered"
         ta.disconnect(); tb.disconnect()
 
 

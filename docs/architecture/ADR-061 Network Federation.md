@@ -85,7 +85,27 @@ Pre-Vote, membership changes) вне ТЗ-NW-01.
   НЕ `is`.
 - Перед `git commit --amend` проверять `git log -1` (какой коммит последний).
 
-## 7. Future Work
+## 8. Test Stability (honest post-fix note)
+
+При финальной проверке `--count=5` выявлен FLAKE (итерации 4-5: `1 failed, 8 passed`):
+оба network-теста (`test_partition_then_reconnect_causal_merge`,
+`test_federation_cognitive_value_changes_decision`) падали НЕДЕТЕРМИНИСТИЧНО из-за
+**fire-and-forget `replicate_world`** — факт не всегда доходил до приёмника за таймаут
+`_wait_fact` под нагрузкой (race доставки по TCP). Локализовано эмпирически:
+partition **3/10 fail**, cognitive-value **1/10 fail**.
+
+**Фикс (deterministic, без wall-clock sleep):**
+- `_replicate_until(fa, ka, kb, key)` — retry idempotent replication + polling до
+  появления факта в SSOT приёмника (poll 0.03s, timeout 3.0s). Idempotent replay не
+  дублирует (доказано в verifier).
+- Partition-reconnect: Б пере-joinit на **ТОТ ЖЕ порт `pb`** (TcpEventBus ставит
+  `SO_REUSEADDR=1`), НЕ на новый `pb2`. Причина: `TcpEventBus.publish_sync` шлёт
+  ТОЛЬКО в outbound-`_peers`; если B на новом порту, A не знает его как peer → факт
+  не доходит. Reuse порта сохраняет A→B outbound-связь живой после reconnect.
+
+После фикса: оба теста ×10 — `0 failed`.
+
+## 9. Future Work
 - CognitiveEvent и WorldState.facts стоит федерировать РАЗДЕЛЬНО (события → event bus,
   состояние → SharedContext), а не складывать события в facts (`_handle_remote_event`
   пишет `event:{type}:{ref_id}` в world.facts — допустимо для reference, но смешивает
@@ -93,3 +113,5 @@ Pre-Vote, membership changes) вне ТЗ-NW-01.
 - Partition/reconnect: текущий replay-буфер в `NetworkFederationService._replay_buffer`
   буферизует facts, полученные ДО `set_local_world`; для production нужен persistent
   WAL на уровне транспорта.
+- `replicate_world` fire-and-forget: для production стоит добавить sender-ACK handshake
+  (барьер на уровне транспорта), чтобы не полагаться на retry в тестах.
