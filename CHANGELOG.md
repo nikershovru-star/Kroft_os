@@ -111,6 +111,36 @@ akb-lint PASSED; ad-hoc verifier (cognitive-value semantic) `17/17 PASS`.
 akb-lint PASSED; ad-hoc verifier (real vs proxy outcome) подтверждён в тестах.
 
 
+---
+
+## 2026-08-04 — ТЗ-SE-01 (Self-Evolution Behavioral Closure, замыкание петли) — DONE
+
+`2bb0331 386a508 9bd91f4 5f53337 <docs>`
+
+- **Commit 1 — контракт (K1).** `contracts/i_self_evolution.py`: `ISoftPolicySource`
+  (read-side порт замыкания поведения) + `SoftPolicyPreference` (frozen VO). НЕ ломает
+  сигнатуры `IValueSystem`/`IReasoningEngine` — расширение через отдельный порт.
+- **Commit 2 — reference impl (LLM-free, I-09).** `kernel/self_evolution.py`:
+  `MemorySoftPolicySource` (читает SOFT-слой из `ILayeredMemory` через порт, K6-clean);
+  `PolicyAwareValueSystem(SimpleValueSystem)` (score += prefer/avoid бонус-штраф, O1
+  SOFT-only); `KnowledgeAwareReasoning(ReferenceReasoningEngine)` (recall semantic facts
+  как grounded candidates).
+- **Commit 3 — интеграция.** `build_kernel` wire `MemorySoftPolicySource(memory)` ->
+  `PolicyAwareValueSystem` + `KnowledgeAwareReasoning`. `SimpleValueSystem` вынесен в
+  `kernel/value_system.py` (разрыв import-цикла — K5-проверка поймала). Learn-фаза:
+  repeated FAILURE -> SOFT `avoid:<pattern>` policy (O1 layer=='soft', dedup). episode
+  summary связан с plan steps (`decided:choose_red`).
+- **Commit 4 — тесты K8 (6 passed, capstone):** repeated SUCCESS -> consolidation ->
+  NEXT решение ВЫБИРАЕТ learned; repeated FAILURE -> deprecation -> NEXT ИЗБЕГАЕТ failed;
+  NEGATIVE: без wiring эволюция НЕ меняет решение; O1 (avoid-policy soft, нет мутации
+  HARD/FSM); K6 (чтение через порт).
+- **Commit 5 — docs.** `ADR-064` (accepted) + AKB (`adrs.yaml` ADR-064, `issues.yaml`
+  SE-01) + CHANGELOG + PROJECT_STATUS.
+
+**Verification:** full suite `1086+ passed, 0 failed`; arch-gate `14 passed`;
+akb-lint PASSED. Капстоун-петля замкнута: исходы -> эволюция -> deliberation читает
+выученное -> решения меняются -> новые исходы. ФЛАГ 3 ТЗ-EX-01 ЗАКРЫТ.
+
 
 - **Commit 0 — фикс флага 1 (integration, ТЗ-RF-01).** Reflection больше НЕ коммитит
   semantic; ME-01 — единственный writer SOFT-слоя; дедупликация против уже

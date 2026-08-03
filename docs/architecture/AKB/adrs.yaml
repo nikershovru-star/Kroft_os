@@ -894,3 +894,23 @@ adrs:
   - TZ-EX-01
   - RF-01-FLAG2
   - O1
+- id: ADR-064
+  title: Self-Evolution Behavioral Closure — deliberation reads evolved SOFT layer (ТЗ-SE-01, closes EX-01 ФЛАГ 3)
+  status: accepted
+  relates_to:
+  - ADR-054
+  - ADR-060
+  - ADR-062
+  - ADR-063
+  ports_added:
+  - ISoftPolicySource
+  laws_affected:
+  - K1
+  - K6
+  - K8
+  - O1
+  evidence_level: V
+  addresses:
+  - TZ-SE-01
+  - EX-01-FLAG3
+  - O1

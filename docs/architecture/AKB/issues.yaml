@@ -221,3 +221,21 @@ issues:
   - RF-01-FLAG2
   impact: null
   closed_by: null
+- id: SE-01
+  title: ТЗ-SE-01 Self-Evolution behavioral closure (deliberation reads evolved SOFT layer)
+  severity: low
+  status: closed
+  introduced_by: roadmap (after EX-01)
+  discovered: '2026-08-04'
+  root_cause: 'ФЛАГ 3 EX-01: deliberation читала WorldState, не эволюционировавший SOFT-слой — выученное не меняло поведение'
+  resolution: 'ADR-064: ISoftPolicySource (read-side порт) + PolicyAwareValueSystem + KnowledgeAwareReasoning; build_kernel
+    wire; Learn-фаза avoid-policy из deprecation. Капстоун: success->select, failure->avoid.'
+  related:
+  - ADR-064
+  - TZ-SE-01
+  - EX-01
+  - O1
+  addresses:
+  - EX-01-FLAG3
+  impact: null
+  closed_by: null
