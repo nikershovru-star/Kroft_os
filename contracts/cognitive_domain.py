@@ -26,6 +26,7 @@ class ProvenanceType(str, Enum):
     MODEL_INFERENCE = "MODEL_INFERENCE"
     RULE_INFERENCE = "RULE_INFERENCE"
     AGGREGATION = "AGGREGATION"
+    REFLECTION = "REFLECTION"
 
 
 class CalibrationType(str, Enum):
