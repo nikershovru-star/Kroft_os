@@ -315,6 +315,7 @@ class CognitiveKernel(ICognitiveKernel):
         # the O1 Self-Evolving guard. Reflection never writes memory itself.
         self._reflection_engine = reflection_engine
         self._outcomes: list = []
+        self._last_reflection_report = None
         self._state = CognitiveState.IDLE
         self._goal: Optional[Goal] = None
         self._events: list = []
@@ -411,19 +412,17 @@ class CognitiveKernel(ICognitiveKernel):
             return self._state
         # ТЗ-RF-01: REFLECTION (analytic) runs BEFORE Learn (executive). It proposes
         # SOFT-layer evolution from accumulated experience + outcomes; Memory Evolution
-        # (Learn) commits it under the O1 Self-Evolving guard.
+        # (Learn) is the SOLE writer and commits the proposals under the O1 Self-Evolving
+        # guard. Reflection NEVER writes memory itself (ADR-060 §2: analytic vs executive).
+        self._last_reflection_report = None
         if self._reflection_engine is not None and self._memory is not None:
             report = self._reflection_engine.reflect(
                 self._memory, world_snapshot, outcomes=self._outcomes)
             self._emit(CognitiveEventType.REFLECTION_COMPLETED,
                        "reflection", report.confidence)
-            # hand the report to Memory Evolution: consolidation candidates become
-            # semantic facts (guarded), deprecation candidates are forgotten.
-            for c in report.consolidation_candidates:
-                if self._values is not None and self._values.hard_violations(c):
-                    continue
-                self._memory.commit_semantic(c)
-                self._emit(CognitiveEventType.SEMANTIC_CONSOLIDATED, c.id, c.confidence)
+            # store the report; Memory Evolution (Learn) is the ONLY writer that commits
+            # it. No commit_semantic here — avoids duplicate writes (ФЛАГ 1, ТЗ-NW-01).
+            self._last_reflection_report = report
         # Learn
         if not self._transition(CognitiveState.LEARN):
             return self._state
@@ -431,9 +430,10 @@ class CognitiveKernel(ICognitiveKernel):
         proposal = self._learning.propose([decision.id])
         if proposal and self._learning.accepts(proposal):
             self._emit(CognitiveEventType.POLICY_UPDATED, proposal.id, proposal.confidence)
-        # ТЗ-ME-01: Memory Evolution — turn THIS decision into an episode, then
-        # consolidate repeated high-confidence experience into SOFT semantic facts
-        # (guarded by the Self-Evolving invariant: HARD layer never evolves).
+        # ТЗ-ME-01: Memory Evolution — the SOLE writer of the SOFT layer. It turns THIS
+        # decision into an episode, consolidates repeated high-confidence experience into
+        # semantic facts, AND applies the Reflection report (ТЗ-RF-01) — all under the O1
+        # Self-Evolving guard. Single write path => no duplicate consolidation (ФЛАГ 1).
         if self._memory_evolution is not None and self._memory is not None:
             from contracts.i_cognitive_kernel import IValueSystem
             episode = Episode(
@@ -444,17 +444,26 @@ class CognitiveKernel(ICognitiveKernel):
             self._memory.record_episode(episode)
             facts, soft_policies = self._memory_evolution.consolidate(
                 self._memory.get_episodes())
-            for f in facts:
-                # Self-Evolving guard (O1): never evolve HARD; check hard_violations
-                # before committing any normative/soft proposal. Semantic facts are
-                # SOFT by construction, but we still re-assert the guard here.
-                if self._values is not None and self._values.hard_violations(f):
+            # Merge ME-01 facts + Reflection consolidation candidates, then DEDUPLICATE by
+            # content so one experience is consolidated exactly once (ФЛАГ 1, ТЗ-NW-01).
+            # Dedupe against BOTH this tick's candidates AND already-committed semantic
+            # facts, so repeated ticks never re-consolidate the same experience.
+            candidates = list(facts)
+            if self._last_reflection_report is not None:
+                candidates.extend(self._last_reflection_report.consolidation_candidates)
+            seen: set = {f.content for f in self._memory.get_semantic()}
+            for c in candidates:
+                if c.content in seen:
+                    continue  # dedupe: same experience already consolidated (ME-01 or Reflection)
+                seen.add(c.content)
+                # Self-Evolving guard (O1): never evolve HARD; check hard_violations before
+                # committing any SOFT/semantic proposal.
+                if self._values is not None and self._values.hard_violations(c):
                     continue  # reject — would violate a KROFT Law
-                self._memory.commit_semantic(f)
-                self._emit(CognitiveEventType.SEMANTIC_CONSOLIDATED, f.id, f.confidence)
-            # Флаг 2 fix (ТЗ-RF-01): soft_policies из consolidate больше не игнорируются.
-            # Они коммитятся в НОРМАТИВНЫЙ слой с тем же Self-Evolving guard — HARD
-            # policy отвергается (O1), только SOFT-предложения попадают в normative.
+                self._memory.commit_semantic(c)
+                self._emit(CognitiveEventType.SEMANTIC_CONSOLIDATED, c.id, c.confidence)
+            # Флаг 2 fix (ТЗ-RF-01): soft_policies из consolidate коммитятся в normative
+            # с тем же O1 guard — HARD policy отвергается, только SOFT попадают.
             for sp in soft_policies:
                 if sp.layer != "soft":
                     continue  # O1: HARD layer never evolves from experience
@@ -462,8 +471,11 @@ class CognitiveKernel(ICognitiveKernel):
                     continue  # reject — would violate a KROFT Law
                 self._memory.commit_normative(sp)
                 self._emit(CognitiveEventType.POLICY_UPDATED, sp.id, sp.confidence)
-            # forgetting: deprecate low-confidence / stale episodes
+            # forgetting: deprecate low-confidence / stale episodes (and Reflection's
+            # deprecation_candidates).
             deprecated = self._memory_evolution.forget(self._memory.get_episodes())
+            if self._last_reflection_report is not None:
+                deprecated = deprecated + list(self._last_reflection_report.deprecation_candidates)
             if deprecated:
                 self._emit(CognitiveEventType.NORMATIVE_DEPRECATED, deprecated[0],
                            ConfidenceScore(0.1, ProvenanceType.OBSERVATION))
