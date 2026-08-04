@@ -4,7 +4,7 @@ The KROFT_OS ``pytest.ini`` already sets ``norecursedirs = archive`` — but tha
 effect when pytest's rootdir is the repo. If pytest is launched from a parent dir (e.g. the
 Obsidian Vault root) pointing at ``02-Projects/KROFT_OS``, ``pytest.ini`` is not in scope and
 the stale ``archive/KnowledgeOS-v5/`` code (a SEPARATE, unmaintained project the owner chose
-to keep) gets collected, emitting benign ``\w``/DeprecationWarnings and unrelated failures.
+to keep) gets collected, emitting benign ``\\w``/DeprecationWarnings and unrelated failures.
 
 This conftest is ALWAYS loaded when pytest collects the repo path (regardless of cwd), and
 prunes any ``archive`` directory by substring — so the guard holds no matter where pytest is
