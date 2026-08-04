@@ -984,3 +984,26 @@ adrs:
   - RT-01-DEBT
   - I-08
   - I-10
+- id: ADR-068
+  title: Model Platform — concrete OpenAI-compatible ILlm adapter + transport port (ТЗ-LLM-02)
+  status: accepted
+  relates_to:
+  - ADR-065
+  - ADR-033
+  - ADR-067
+  ports_added:
+  - IHttpTransport
+  - HttpResponse
+  - OpenAiCompatibleClient
+  laws_affected:
+  - K1
+  - K6
+  - K8
+  - O1
+  - I-10
+  evidence_level: V
+  addresses:
+  - TZ-LLM-02
+  - FLAG-2-OBS-01
+  - I-08
+  - I-10

@@ -418,6 +418,39 @@ Capstone (автономная адаптация из живых метрик):
 
 ---
 
+## 2026-08-04 — ТЗ-LLM-02 (Model Platform: concrete OpenAI-compatible ILlm adapter) — DONE
+
+Завершает «LLM = сменный инструмент» (I-10): concrete adapter поверх pluggable
+IHttpTransport, contract-тесты БЕЗ живой модели/сети (fake transport). Bridge через
+adapter_for -> ILLMAdvisor -> kernel доказан на реальном-по-форме клиенте; graceful
+fallback == результат без LLM. Заодно кормит llm.fallback_rate (Флаг 2 OBS-01).
+
+- **Commit 1 — контракт + adapter.** `IHttpTransport` (contracts/i_http.py): `request() ->
+  HttpResponse` + TransportError/TransportTimeout — ОТДЕЛЬНАЯ граница (one-port-per-
+  boundary). `OpenAiCompatibleClient(ILlm)` (adapters/openai_compatible.py) поверх
+  IHttpTransport; ModelQuery.prompt -> OpenAI /chat/completions; transport error ->
+  LLMError / LLMTimeout. `LlmResponse.actual_model` обязателен (ADR-065 double-routing).
+  K1: adapters импортируют только contracts + stdlib (НЕТ provider SDK, K6).
+- **Commit 2 — bridge readiness.** advisor-обёртки (LLMAdvisorReasoning/Planner) получают
+  collector + record_failure(METRIC_LLM_FALLBACK_RATE) на LLMError/LLMTimeout. Bridge
+  adapter_for(ILlm) уже готов (LLM-01).
+- **Commit 3 — интеграция.** build_kernel(llm_client=, live_metrics=) проводит collector в
+  advisor-обёртки. BUG FIX: LiveMetricsCollector.record_failure НЕ инкрементил _fail, ratio
+  не считал fallback_rate -> метрика была 0; исправлено (fallback_rate = failures/total).
+- **Commit 4 — тесты K8 (8 passed, fake transport).** adapter satisfies ILlm (success ->
+  LlmResponse(actual_model)); adapter_for -> LLMAdvice; error/timeout -> LLMError/LLMTimeout
+  -> fallback == без LLM; fallback_rate инкрементируется (3/3=1.0). BUG FIX: adapter_for
+  перепаковывал LLMTimeout в LLMError — пробрасываем как есть (timeout vs error distinct).
+- **Commit 5 — docs.** ADR-068 + issues + CHANGELOG + PROJECT_STATUS.
+
+Capstone (bridge на реальном клиенте): concrete OpenAiCompatibleClient + fake transport ->
+adapter_for -> ILLMAdvisor -> kernel; error/timeout -> graceful fallback == no-LLM result;
+llm.fallback_rate растёт. Ядро LLM-free; I-10 «LLM = сменный инструмент» доказан кодом.
+
+**Verification:** `1116 passed, 0 failed`; gate `14 passed`; ad-hoc `TBD`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /

@@ -295,3 +295,24 @@ issues:
   - O1
   impact: null
   closed_by: null
+- id: TZ-LLM-02
+  title: Model Platform — concrete OpenAI-compatible ILlm adapter + contract-tests (closes I-10 "LLM=swappable tool")
+  type: feature
+  status: done
+  root_cause: null
+  resolution: 'ADR-068 + IHttpTransport (contracts/i_http.py) + OpenAiCompatibleClient(ILlm) (adapters/openai_compatible.py, поверх IHttpTransport, НЕТ provider SDK). adapter_for(ILlm)->ILLMAdvisor уже готов (LLM-01); уточнён: LLMTimeout/LLMError пробрасываются как есть. Hook llm.fallback_rate в LLMAdvisorReasoning/Planner (Флаг 2 OBS-01) через build_kernel(live_metrics=). Contract-тесты с fake transport (без живой модели/сети) доказывают bridge + graceful fallback == no-LLM.'
+  related:
+  - ADR-068
+  - ADR-065
+  - ADR-067
+  - ADR-033
+  - I-10
+  - O1
+  addresses:
+  - I-10
+  - FLAG-2-OBS-01
+  - K1
+  - K6
+  - K8
+  impact: null
+  closed_by: null
