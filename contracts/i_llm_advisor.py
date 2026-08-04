@@ -115,6 +115,8 @@ def adapter_for(llm) -> ILLMAdvisor:
             )
             try:
                 resp: LlmResponse = llm.complete(query)  # type: ignore[attr-defined]
+            except (LLMError, LLMTimeout):
+                raise  # advisor error vocabulary propagates unchanged (timeout vs error distinct)
             except Exception as exc:  # transport failure -> graceful fallback
                 raise LLMError(f"ILlm.complete failed: {exc}") from exc
             if not resp.ok:
