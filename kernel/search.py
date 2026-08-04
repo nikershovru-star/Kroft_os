@@ -161,3 +161,16 @@ class ReferenceSearchService(ISearchService):
             causal=None,
             relevance=rel,
         )]
+
+
+def build_search_service(memory: ILayeredMemory,
+                         graph: Optional[IGraphEngine] = None) -> ReferenceSearchService:
+    """Factory: assemble a standalone ``ReferenceSearchService`` (ТЗ-SEARCH-01 commit 3).
+
+    Intentionally SEPARATE from ``build_kernel`` (Флаг C): the cognitive kernel does
+    NOT depend on search, and search does NOT mutate the kernel. Callers (a future
+    advisor/reasoning context-request TЗ, or an external agent/API) construct the
+    service directly from the memory + graph they already hold. The kernel is never
+    touched, so the god-factory (Флаг 1 OBS-01) is not aggravated.
+    """
+    return ReferenceSearchService(memory=memory, graph=graph)
