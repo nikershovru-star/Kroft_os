@@ -80,3 +80,14 @@ K5-разведка (commit 0): `NetworkTransport(INetworkTransport)` — реа
   teardown; determinism; negative).
 - Smoke: два реальных TCP-узла на localhost, A→B outcome=True по сокету, trust 0.9→1.0; failure 0.9→0.8.
 - Full suite GREEN, gate 14/14, akb-lint PASSED.
+
+## Non-blocking reviewer flags (ТЗ-FED-TCP-01, accepted, НЕ блок)
+Зафиксированы ревьювером (2026-08-04), НЕ блокируют приём; тесты покрывают оба пути.
+- **Флаг 1 (light) — `_wait_for_outcome` poll-with-timeout, всё ещё wall-clock.** Это настоящий
+  await для сетевого клиента (НЕ sleep-luck), ограничен `response_timeout` (SOFT-tunable, O1).
+  Приемлемо для real TCP (тайминг присущ сети); детерминизм держится correlation по `request_id`
+  + `ensure_connected` barrier. Заметка, не блок.
+- **Флаг 2 (light) — `seed()` идемпотентен и НЕ перезаписывает LATEST-trust.** Из-за этого
+  gating-тесту пришлось понижать trust через `record_outcome`, а не `seed`. Задокументированная
+  идемпотентность (НЕ баг), но лёгкий API-нюанс: для тестов/конфигов «узел с низким доверием»
+  удобнее явный сеттер. Заметка, не блок.
