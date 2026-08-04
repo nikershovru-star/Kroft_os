@@ -788,6 +788,40 @@ exec; консенсус между узлами (только trust-gating).
 
 ---
 
+## 2026-08-04 — ТЗ-LLM-LIVE-01 (Real HTTP transport + local-model + graceful fallback) — DONE
+
+Capstone «интеллекта»: LLM становится РЕАЛЬНО подключаемым. K5-разведка (commit 0): `IHttpTransport`
+(contracts/i_http.py) УЖЕ есть; `OpenAiCompatibleClient` (adapters/openai_compatible.py, LLM-02) зависит
+ТОЛЬКО от порта (K1/K6: НЕТ requests/httpx/urllib в домене), маппит `TransportTimeout→LLMTimeout` /
+`TransportError→LLMError`; `ILLMAdvisor`+`adapter_for` (LLM-01) НЕ дублированы; fallback (LLMError/
+LLMTimeout → kernel retrieval-only) УЖЕ доказан `test_llm_advisor_fallback.py`. ЕДИНСТВЕННЫЙ реальный gap
+= `HttpTransport(IHttpTransport)` (stdlib urllib, в adapters/). `model_platform.py`/`embedding.py` бьют
+urllib НАПРЯМУЮ (legacy MVP) — НЕ переиспользуются, НЕ дублируются.
+
+- **Commit 1** — контракт: НОВЫЙ порт НЕ нужен (K5 one-port-per-boundary). `i_http.py` docstring уточнён
+  (реальная реализация = adapters/http_transport.py).
+- **Commit 2** — `adapters/http_transport.py`: `HttpTransport(IHttpTransport)` на stdlib `urllib.request`
+  (НЕТ SDK — K6). Маппинг: socket.timeout/urllib-timeout → TransportTimeout; URLError/HTTPError/
+  ConnectionError/OSError/ValueError → TransportError. Возвращает HttpResponse(status, body, headers).
+- **Commit 3** — `composition/llm_client_factory.py`: `build_llm_client(base_url, model, api_key, timeout)`
+  собирает HttpTransport + OpenAiCompatibleClient в готовый ILlm (Флаг C, НЕ в build_kernel);
+  `detect_local_ollama(host)` best-effort probe. K3/K6: единственная точка сборки (composition.*).
+- **Commit 4** — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b): `tests/test_llm_live_transport.py` — 5 тестов
+  против in-process http.server (НЕТ живой модели): real HTTP advise → LLMAdvice; HttpTransport
+  имплементирует порт; server DOWN/TIMEOUT → LLMError/LLMTimeout → kernel fallback == retrieval-only;
+  K6 domain-без-SDK (AST).
+- **Commit 5** — docs: ADR-079 + AKB + CHANGELOG + PROJECT_STATUS.
+
+Встроены: K1/K5/K6 (domain без SDK; HttpTransport в adapters/; build_llm_client в composition/); K8
+(AST-проверка отсутствия SDK в домене); O1 (LLM — советник, fallback защищает, ядро LLM-free);
+I-09 (детерминизм: in-process HTTP-сервер); Флаг C (standalone, НЕ в build_kernel). LLM-01/02 тесты НЕ
+сломаны. Долги (ADR-079 non-scope): мульти-провайдер роутинг (OmniRoute); RL/fine-tuning; обязательная
+живая модель в CI (тесты на in-process сервере, Ollama опционален).
+
+**Verification:** `1221 passed, 0 failed` baseline + 5 LLM-LIVE тестов; gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## 2026-08-04 — ТЗ-FED-TCP-01 (Federated execution over real TCP NW-01) — DONE
 
 Валидация Флага 1 FED-EXEC-01 на практике: два узла поверх РЕАЛЬНОГО TCP-транспорта

@@ -1280,6 +1280,31 @@ adrs:
   - FLAG-1-FED-EXEC
   - FLAG-1B-FED-TCP
 
+- id: ADR-079
+  title: Real HTTP transport + local-model integration + graceful fallback (ТЗ-LLM-LIVE-01)
+  status: accepted
+  relates_to:
+  - ADR-068
+  - ADR-065
+  - ADR-006
+  ports_added: []
+  ports_reused:
+  - IHttpTransport
+  - ILlm
+  - ILLMAdvisor
+  laws_affected:
+  - K1
+  - K5
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-LLM-LIVE-01
+  - FLAG-C-LLM-LIVE
+
+
 
 
 
