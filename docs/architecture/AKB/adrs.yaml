@@ -1007,3 +1007,30 @@ adrs:
   - FLAG-2-OBS-01
   - I-08
   - I-10
+
+- id: ADR-069
+  title: Knowledge Search / Retrieval — deterministic port over existing indexes (ТЗ-SEARCH-01)
+  status: accepted
+  relates_to:
+  - ADR-054
+  - ADR-046
+  - ADR-067
+  - ADR-068
+  ports_added:
+  - ISearchService
+  - SearchHit
+  - SearchScope
+  laws_affected:
+  - K1
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-SEARCH-01
+  - I-09
+  - FLAG-A-SEARCH
+  - FLAG-B-SEARCH
+  - FLAG-C-SEARCH
+  - FLAG-D-SEARCH

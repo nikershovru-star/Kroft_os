@@ -316,3 +316,21 @@ issues:
   - K8
   impact: null
   closed_by: null
+
+- id: TZ-SEARCH-01
+  title: Knowledge Search / Retrieval — deterministic extraction over accumulated knowledge
+  status: done
+  description: 'ISearchService поверх СУЩЕСТВУЮЩИХ индексов (content_index, knowledge graph, ILayeredMemory) — НЕ дублируя их. LLM-free, детерминированно (I-09). ReferenceSearchService: pure-scan semantic/episodic/normative facts + graph nodes, ranking (confidence desc, relevance desc, id asc).'
+  related:
+  - ADR-069
+  - ADR-054
+  - ADR-046
+  - ADR-067
+  addresses:
+  - I-09
+  - FLAG-A-SEARCH
+  - FLAG-B-SEARCH
+  - FLAG-C-SEARCH
+  - FLAG-D-SEARCH
+  impact: platform-wave-enabler
+  closed_by: ADR-069

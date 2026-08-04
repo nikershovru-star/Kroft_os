@@ -451,6 +451,41 @@ llm.fallback_rate растёт. Ядро LLM-free; I-10 «LLM = сменный �
 
 ---
 
+## 2026-08-04 — ТЗ-SEARCH-01 (Knowledge Search / Retrieval) — DONE
+
+Завершена первая платформенная волна применимости: детерминированное ИЗВЛЕЧЕНИЕ
+накопленных знаний по запросу (LLM-free, I-09). `ISearchService` (contracts/i_search.py)
++ `SearchHit` (frozen VO) + `SearchScope` (semantic/episodic/normative/graph/all).
+`ReferenceSearchService` (kernel/search.py) — STANDALONE read-only сервис поверх
+СУЩЕСТВУЮЩИХ источников (ILayeredMemory.get_semantic/episodes/normative + IGraphEngine.nodes()),
+БЕЗ дублирования content_index/knowledge graph (K5-разведка: порт не существовал → создан;
+индексы уже есть → переиспользованы).
+
+Четыре reviewer-флага встроены (обязательны):
+- **Флаг A** — НЕ индексировать при каждом search: PURE-SCAN по источникам, НЕ пишем в
+  разделяемый ContentIndex (без side-effect, детерминированно).
+- **Флаг B** — ТОТАЛЬНЫЙ порядок ранжирования (confidence desc, relevance desc, id asc):
+  стабильный тай-брейкер по id → идентичный результат при повторе (I-09).
+- **Флаг C** — search НЕ проводится в build_kernel/kernel.search(): сервис standalone,
+  ядро не зависит от search (K6), god-factory (Флаг 1 OBS-01) не усугубляется.
+  `build_search_service(memory, graph)` — отдельная фабрика, не в kernel.
+- **Флаг D** — `SearchHit.causal: Optional[CausalMark]` (реальный тип, не object);
+  граф-ноды без confidence/causal → нейтральный дефолт (0.5) + causal=None, ранжирование
+  единообразно между слоями.
+
+- **Commit 1+2 — контракт + impl.** `contracts/i_search.py` (ISearchService/SearchHit/
+  SearchScope, K1: contracts+stdlib); `kernel/search.py` (ReferenceSearchService, pure-scan,
+  total-order ranking, O1 read-only).
+- **Commit 3 — интеграция как standalone сервис.** `build_search_service` (Флаг C).
+- **Commit 4 — тесты K8.** `tests/test_knowledge_search.py`: 14 тестов (relevant hits,
+  total-order ranking, scope-фильтр, negative empty/no-match/unknown-scope → [],
+  детерминизм, O1 read-only, causal real type, factory).
+- **Commit 5 — docs.** ADR-069 + AKB (adrs/issues) + CHANGELOG + PROJECT_STATUS.
+
+**Verification:** `1118 passed, 0 failed`; gate `14 passed`; ad-hoc `TBD`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /
