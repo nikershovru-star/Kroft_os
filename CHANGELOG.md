@@ -555,6 +555,39 @@ boundary); существующий test_plugins.py (CLI IPlugin) НЕ слом�
 
 ---
 
+## 2026-08-04 — God-factory refactor (ТЗ-OBS-01 Флаг 1 debt CLOSED)
+
+Долг закрыт: `kernel/cognitive_kernel.build_kernel` перестал быть god-factory. Композиция
+опциональных подсистем (llm_client, live_metrics, bus) вынесена в единый composition root
+`KernelBuilder` (`kernel/kernel_builder.py`), параметры — в декларативный `KernelConfig`
+(`kernel/kernel_config.py`).
+
+Обязательные свойства рефакторинга:
+- **Обратная совместимость**: сигнатура `build_kernel(node_id, clock, llm_client, live_metrics)`
+  сохранена (48 существующих вызовов не сломаны) + добавлен опц. `config: KernelConfig`.
+  kwargs WIN над config.
+- **Не распухает**: новые опц. подсистемы будущих ТЗ = поле `KernelConfig` + ветка в
+  `KernelBuilder`, НЕ новый параметр `build_kernel`.
+- **Behavioural-equivalence доказана**: полный прогон ДО и ПОСЛЕ = 1157 passed / 0 failed
+  (идентично). Latent-баг найден и исправлен: reason/planner ВСЕГДА LLMAdvisor-варианты
+  (advisor=None -> pure path, но attach_metrics доступен для live collector) — иначе
+  live_metrics-only path падал бы.
+- **Флаг 3 (process lesson)**: агрессивная чистка импортов сломала публичный re-export API
+  (test_self_evolution_closure импортирует ReferencePlanner/ReferenceWorldModel/... из
+  kernel.cognitive_kernel). Восстановлено; долгосрочно — перевести тесты на импорт из
+  реальных модулей (kernel.planning и т.д.), снизив связность через cognitive_kernel.
+- **K1/K6**: builder импортирует только kernel + contracts (порт ILLMAdvisor, не конкретный
+  LLM-клиент). Standalone, НЕ в build_kernel (не усугубляет god-factory).
+
+- **Commit 1** — `kernel/kernel_config.py` + `kernel/kernel_builder.py` (extraction).
+- **Commit 2** — `kernel/cognitive_kernel.py`: build_kernel -> thin wrapper (re-exports kept).
+- **Commit 3** — тесты K8 эквивалентности (отдельный коммит, Флаг 1b): 9 тестов.
+- **Commit 4** — docs (этот раздел + PROJECT_STATUS + AKB debt-closed note).
+
+**Verification:** `1157 passed, 0 failed`; gate `14 passed`; ad-hoc god-factory 8/8; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /

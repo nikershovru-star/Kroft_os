@@ -366,4 +366,16 @@ issues:
   impact: platform-wave-enabler
   closed_by: ADR-071
 
+- id: DEBT-GOD-FACTORY
+  title: God-factory build_kernel extraction (ТЗ-OBS-01 Флаг 1) — RESOLVED
+  status: done
+  description: 'build_kernel перестал быть god-factory: композиция вынесена в KernelBuilder (kernel/kernel_builder.py), параметры — в KernelConfig (kernel/kernel_config.py). Обратная совместимость сохранена (48 вызовов). Behavioural-equivalence 1157/0 ДО и ПОСЛЕ.'
+  related:
+  - ADR-054
+  addresses:
+  - FLAG-1-OBS-01
+  impact: maintainability
+  closed_by: DEBT-GOD-FACTORY
+
+
 
