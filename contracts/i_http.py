@@ -32,6 +32,12 @@ class IHttpTransport(ABC):
     Concrete transports may wrap ``requests``/``httpx``/``urllib``/a custom socket — but
     that is THEIR implementation detail, hidden behind this port. Adapters (ILlm) call
     ``request`` and never touch a provider SDK directly.
+
+    Real implementation: ``adapters/http_transport.py`` (``HttpTransport``) — stdlib ``urllib``
+    only (K6: adapters -> contracts + stdlib), maps ``urlopen``/``URLError``/socket timeout to
+    ``TransportTimeout``/``TransportError`` per the contract below. The LLM-02 ``OpenAiCompatibleClient``
+    (adapter/openai_compatible.py) consumes this port and re-maps to ``LLMTimeout``/``LLMError`` so the
+    LLM-01 kernel bridge falls back gracefully. ТЗ-LLM-LIVE-01: НОВЫЙ порт НЕ нужен (K5 one-port-per-boundary).
     """
 
     @abstractmethod
