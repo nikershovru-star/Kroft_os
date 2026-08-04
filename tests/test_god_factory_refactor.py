@@ -89,7 +89,8 @@ def test_builder_deterministic_same_clock_origin():
 
 def test_build_kernel_delegates_to_builder():
     import kernel.cognitive_kernel as ck
-    src = open(ck.__file__, encoding="utf-8").read()
+    with open(ck.__file__, encoding="utf-8") as fh:
+        src = fh.read()
     assert "KernelBuilder(resolved).build()" in src
 
 
