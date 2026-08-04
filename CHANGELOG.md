@@ -588,6 +588,44 @@ boundary); существующий test_plugins.py (CLI IPlugin) НЕ слом�
 
 ---
 
+## 2026-08-04 — ТЗ-IDT-01 (Identity & Trust layer) — DONE
+
+Закрыта дыра FSE-01: знания федератировались БЕЗ проверки доверия. IDT-01 вводит Identity
+(агент как постоянный участник) + Trust (trust-score/version/author/rollback) + trust-гейтинг
+федерации.
+
+K5-разведка (commit 0) критична: порт Identity/Trust НЕ существовал. `AgentState` (ТЗ-AGENT-001,
+lifecycle-FSM) УЖЕ есть — ДРУГАЯ граница, НЕ дублируем. `Provenance`/`CausalMark` (cognitive_domain)
+переиспользуются для trust-метаданных. `FederationSoftMemorySync` (FSE-01) УЖЕ есть БЕЗ gating —
+расширен опционально (НЕ дублирован).
+
+- **Commit 1** — контракт (К5, НЕ дублирован): `contracts/i_identity.py` — `AgentIdentity` (frozen
+  VO), `IIdentityRegistry`, `TrustMeta` (frozen VO: item_id, trust_score, version, author_id,
+  rollback_pointer), `ITrustRegistry`, `IActionLog`.
+- **Commit 2** — impl: `kernel/identity.py` — `ReferenceIdentityRegistry` / `ReferenceTrustRegistry`
+  / `ReferenceActionLog` (in-memory, deterministic, LLM-free). `trust_score_of` агрегирует MAX
+  записанный trust_score по author (unknown -> 0.0).
+- **Commit 3** — FSE-01 integration (extend, not break, Флаг C): `SoftLayerItem` + `author_id`
+  (Optional, обратно совместимо); `FederationSoftMemorySync.__init__` + опц. `trust_registry`
+  / `trust_threshold` (после confidence_threshold -> позиционные вызовы FSE-01 целы). Sender
+  помечает author_id=origin; receiver отклоняет ВЕСЬ batch, если trust_score_of(sender) < threshold.
+  БЕЗ registry -> поведение byte-for-byte pre-IDT-01 (default permissive) -> FSE-01 тесты зелёные.
+- **Commit 4** — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b): `tests/test_identity_trust.py` — 10 тестов
+  (identity/action-log/trust/FSE-gating/rollback/determinism/negative/FSE-без-registry).
+- **Commit 5** — docs: ADR-072 + AKB (adrs/issues) + CHANGELOG + PROJECT_STATUS.
+
+Встроены: K1/K6 (contracts + stdlib; services→contracts only); O1 (реестры НЕ мутируют HARD/FSM);
+I-09 (determinism: MAX-агрегация trust, чистый threshold); Флаг C (standalone, НЕ в build_kernel,
+god-factory не усугубляется); K8 (unknown id -> None, low-trust reject, FSE-01 без registry неизменен).
+
+Долги (задокументированы в ADR-072, non-scope): real cryptographic signing (future); per-agent
+(не per-node) trust (author_id уже в DTO, но FSE-01 уровня узла author==origin); обмен агентами
+(не только знаниями) — future.
+
+**Verification:** `1157 passed, 0 failed` baseline + 10 IDT тестов; gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /

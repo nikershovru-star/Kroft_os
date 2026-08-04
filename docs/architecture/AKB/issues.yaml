@@ -377,5 +377,21 @@ issues:
   impact: maintainability
   closed_by: DEBT-GOD-FACTORY
 
+- id: TZ-IDT-01
+  title: Identity & Trust layer — agent identity + trust-gating of federation (LLM-free, standalone)
+  status: done
+  description: 'AgentIdentity + IIdentityRegistry + TrustMeta + ITrustRegistry + IActionLog (contracts/i_identity.py). ReferenceIdentityRegistry/ReferenceTrustRegistry/ReferenceActionLog (kernel/identity.py). FSE-01 (FederationSoftMemorySync) расширен опциональным trust-gейтингом (SoftLayerItem.author_id; receiver отклоняет low-trust sender). Закрывает дыру FSE-01.'
+  related:
+  - ADR-072
+  - ADR-066
+  - ADR-071
+  addresses:
+  - I-09
+  - FLAG-C-IDT
+  - FLAG-1B-IDT
+  impact: multi-node-foundation
+  closed_by: ADR-072
+
+
 
 

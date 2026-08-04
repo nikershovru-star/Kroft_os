@@ -1088,3 +1088,30 @@ adrs:
   - FLAG-C-PLUGIN
   - FLAG-1B-PLUGIN
 
+- id: ADR-072
+  title: Identity & Trust layer — agent identity + trust-gating of federation (ТЗ-IDT-01)
+  status: accepted
+  relates_to:
+  - ADR-066
+  - ADR-054
+  - ADR-071
+  ports_added:
+  - IIdentityRegistry
+  - ITrustRegistry
+  - IActionLog
+  - AgentIdentity
+  - TrustMeta
+  laws_affected:
+  - K1
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-IDT-01
+  - I-09
+  - FLAG-C-IDT
+  - FLAG-1B-IDT
+
+
