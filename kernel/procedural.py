@@ -84,7 +84,56 @@ def build_procedural(
     min_rate: float = 0.8,
     provenance: str = "procedure_consolidator",
 ) -> ProcedureConsolidator:
-    """Factory (Флаг C, standalone) — НЕ в build_kernel."""
+    """Factory (Флаг C, standalone) — НЕ in build_kernel."""
     return ProcedureConsolidator(
         procedural, threshold=threshold, min_rate=min_rate, provenance=provenance
     )
+
+
+class SkillEvolution:
+    """Closed-loop skill lifecycle (ТЗ-SKILL-EVOLVE-01) — по образцу trust-эволюции ORCH-01.
+
+    Feeds real dispatch outcomes back into a stored skill's confidence (success +, failure -),
+    and INVALIDATES a skill when its confidence drops below a floor (repeated failures). After
+    invalidation the orchestrator falls back to normal routing (agent/plugin). Deterministic (I-09)
+    and SOFT (O1): only the skill's confidence/validity changes; HARD/FSM untouched.
+
+    K5: переиспользует IProceduralMemory (record_skill_outcome / invalidate_skill) — НЕ дублирует
+    порт/Procedure. Frozen Procedure обновляется как НОВАЯ версия (store_skill, idempotent).
+    """
+
+    def __init__(
+        self,
+        procedural: IProceduralMemory,
+        delta: float = 0.1,
+        invalidate_floor: float = 0.3,
+    ) -> None:
+        self._procedural = procedural
+        self._delta = delta
+        self._floor = invalidate_floor
+
+    def on_skill_outcome(self, capability: str, success: bool) -> Optional["Procedure"]:
+        """Record a skill-recall-dispatch outcome; evolve confidence, invalidate if too low.
+
+        Returns the updated Procedure, or None if the skill was invalidated / did not exist.
+        Deterministic (I-09): same inputs -> same confidence trajectory.
+        """
+        if not self._procedural.has_skill(capability):
+            return None
+        updated = self._procedural.record_skill_outcome(capability, success, self._delta)
+        if updated is None:
+            return None
+        if updated.confidence < self._floor:
+            self._procedural.invalidate_skill(capability)
+            return None
+        return updated
+
+
+def build_skill_evolution(
+    procedural: IProceduralMemory,
+    delta: float = 0.1,
+    invalidate_floor: float = 0.3,
+) -> SkillEvolution:
+    """Factory (Флаг C, standalone) — НЕ in build_kernel."""
+    return SkillEvolution(procedural, delta=delta, invalidate_floor=invalidate_floor)
+

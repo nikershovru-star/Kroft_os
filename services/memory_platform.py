@@ -15,6 +15,7 @@ why `InMemoryProceduralMemory` lives here rather than in another service.
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from typing import Any, Dict, List, Optional
 
 from contracts.i_llm import ModelQuery
@@ -67,14 +68,45 @@ class InMemoryProceduralMemory(IProceduralMemory):
     def store_skill(self, skill: "Procedure") -> None:
         self._skills[skill.capability] = skill
 
-    def recall_skill_by_capability(self, capability: str) -> Optional["Procedure"]:
-        return self._skills.get(capability)
+    def recall_skill_by_capability(self, capability: str, min_confidence: float = 0.0) -> Optional["Procedure"]:
+        skill = self._skills.get(capability)
+        if skill is None:
+            return None
+        # Confidence-gated recall (ТЗ-SKILL-EVOLVE-01, Флаг 2): below the gate -> treat as absent.
+        if skill.confidence < min_confidence:
+            return None
+        return skill
 
     def list_skills(self) -> List["Procedure"]:
         return list(self._skills.values())
 
     def has_skill(self, capability: str) -> bool:
         return capability in self._skills
+
+    def record_skill_outcome(
+        self, capability: str, success: bool, delta: float = 0.1
+    ) -> Optional["Procedure"]:
+        """Evolve a stored skill's confidence from a dispatch outcome (ТЗ-SKILL-EVOLVE-01).
+
+        Frozen Procedure is updated as a NEW instance via store_skill (idempotent, deterministic).
+        success -> confidence += delta (cap 1.0); failure -> confidence -= delta (floor 0.0).
+        Returns the updated Procedure, or None if no skill exists for `capability`.
+        """
+        skill = self._skills.get(capability)
+        if skill is None:
+            return None
+        cur = skill.confidence + (delta if success else -delta)
+        cur = max(0.0, min(1.0, cur))
+        updated = replace(skill, confidence=round(cur, 4))
+        self._skills[capability] = updated  # store_skill semantics (overwrite by capability)
+        return updated
+
+    def invalidate_skill(self, capability: str) -> bool:
+        """Drop a stored skill (e.g. confidence fell below the floor). Returns True if removed."""
+        if capability in self._skills:
+            del self._skills[capability]
+            return True
+        return False
 
 
 # --------------------------------------------------------------------------
