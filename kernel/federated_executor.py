@@ -109,6 +109,14 @@ def build_federated_node(
     does NOT duplicate them. Standalone factory — НЕ in build_kernel.
     O1: server does not mutate remote trust; the client updates local trust from real outcomes.
 
+    REAL-TCP readiness (ТЗ-FED-TCP-01): this factory is transport-agnostic (Флаг 1 fix,
+    commit 321fc21) and accepts the real `NetworkTransport` (adapters/network_transport.py, NW-01
+    localhost TCP) as `transport` — no new port required. The caller (test/composition-root, NOT
+    kernel/adapters cross-import) wires `NetworkTransport(node_id, port).connect(node_id, [peer])`
+    then passes it here; the single delegated on_facts handler fans out to client+server regardless
+    of whether the concrete transport fan-outs or single-slots. НЕ дублирует
+    INetworkTransport/IRemoteOrchestrator.
+
     TRANSPORT-AGNOSTIC fan-out (Флаг 1 fix, 2026-08-04): `INetworkTransport.on_facts` does NOT
     guarantee fan-out — a real NW-01 TCP transport overwrites its single subscriber slot, so
     registering both the client and the server directly would lose one handler. Instead we
