@@ -5,6 +5,9 @@ not import services; K6: supervisor does not import healing.py internals).
 """
 from __future__ import annotations
 
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 from typing import Optional
 
 import pytest
@@ -206,19 +209,19 @@ def test_agent_recovery_adapter_health():
 # --------------------------------------------------------------------------- #
 
 def test_k1_circuit_breaker_no_services_import():
-    src = open("runtime/supervisor/circuit_breaker.py", encoding="utf-8").read()
+    src = open(REPO_ROOT / "runtime/supervisor/circuit_breaker.py", encoding="utf-8").read()
     assert "import services" not in src and "from services" not in src
     assert "import kernel" not in src and "from kernel" not in src
 
 
 def test_k8_supervisor_no_services_or_kernel_import():
-    src = open("runtime/supervisor/supervisor_service.py", encoding="utf-8").read()
+    src = open(REPO_ROOT / "runtime/supervisor/supervisor_service.py", encoding="utf-8").read()
     assert "import services" not in src and "from services" not in src
     assert "import kernel" not in src and "from kernel" not in src
 
 
 def test_k6_supervisor_does_not_import_healing_directly():
     # Supervisor must use the IAgentRecovery port, not healing.py internals.
-    src = open("runtime/supervisor/supervisor_service.py", encoding="utf-8").read()
+    src = open(REPO_ROOT / "runtime/supervisor/supervisor_service.py", encoding="utf-8").read()
     assert "from services.agent_orchestration.healing import" not in src
     assert "import healing" not in src

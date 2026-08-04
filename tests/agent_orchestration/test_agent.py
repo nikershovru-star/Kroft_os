@@ -4,6 +4,12 @@ Targets >=30 tests, >=95% coverage. Includes negative tests (cross-tenant
 messaging, unauthorized healing, invalid FSM transition) as proof-of-fire.
 """
 import pytest
+from pathlib import Path
+
+# cwd-independent base: this test file lives in tests/agent_orchestration/, so the
+# repo root is three levels up. Gate tests below write probe files and scan kernel/,
+# which must resolve relative to the repo root, not the current working directory.
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 from contracts.agent_orchestration import (
     AgentMessage,
@@ -223,16 +229,16 @@ def test_health_check_stale_detected():
 
 def test_drift_detection_clean():
     f = AgentLifecycleFSM()
-    a = SelfAnalyzer(f, __import__("pathlib").Path("."))
+    a = SelfAnalyzer(f, REPO_ROOT)
     assert a.detect_drift() == []  # clean code -> no drift
 
 
 def test_drift_detection_import_mismatch():
     f = AgentLifecycleFSM()
-    a = SelfAnalyzer(f, __import__("pathlib").Path("."))
+    a = SelfAnalyzer(f, REPO_ROOT)
     # simulate a violating file in kernel/
     import tempfile, os
-    bad = __import__("pathlib").Path("kernel/_drift_probe.py")
+    bad = REPO_ROOT / "kernel/_drift_probe.py"
     bad.write_text("import services.xxx\n")
     try:
         drifts = a.detect_drift()
@@ -324,11 +330,11 @@ def test_fsm_unknown_agent_transition():
 def test_health_check_red_on_k1_violation():
     # simulate a kernel/ file importing services -> K1 snapshot red
     import pathlib
-    probe = pathlib.Path("kernel/_k1_probe.py")
+    probe = REPO_ROOT / "kernel/_k1_probe.py"
     probe.write_text("import services.foo\n")
     try:
         f = AgentLifecycleFSM()
-        a = SelfAnalyzer(f, pathlib.Path("."))
+        a = SelfAnalyzer(f, REPO_ROOT)
         assert a.health_check().status == "red"
     finally:
         probe.unlink()

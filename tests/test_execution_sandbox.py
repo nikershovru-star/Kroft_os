@@ -8,8 +8,12 @@ from __future__ import annotations
 
 import sys
 import threading
+from pathlib import Path
 
 import pytest
+
+# cwd-independent base: these gate tests read source files by relative path.
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 from contracts.i_execution_sandbox import IExecutionSandbox, ExecutionResult
 from adapters.subprocess_sandbox import SubprocessSandbox
@@ -103,12 +107,12 @@ def test_registry_dangerous_approval_denied():
 # --------------------------------------------------------------------------- #
 
 def test_k1_port_no_services_import():
-    src = open("contracts/i_execution_sandbox.py", encoding="utf-8").read()
+    src = open(REPO_ROOT / "contracts/i_execution_sandbox.py", encoding="utf-8").read()
     assert "import services" not in src and "from services" not in src
     assert "import kernel" not in src and "from kernel" not in src
 
 
 def test_k8_adapter_no_kernel_services_import():
-    src = open("adapters/subprocess_sandbox.py", encoding="utf-8").read()
+    src = open(REPO_ROOT / "adapters/subprocess_sandbox.py", encoding="utf-8").read()
     assert "import kernel" not in src and "from kernel" not in src
     assert "import services" not in src and "from services" not in src
