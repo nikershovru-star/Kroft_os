@@ -108,28 +108,51 @@ def build_federated_node(
     K5: reuses build_remote_orchestrator (client) + build_remote_execution_listener (server);
     does NOT duplicate them. Standalone factory — НЕ in build_kernel.
     O1: server does not mutate remote trust; the client updates local trust from real outcomes.
+
+    TRANSPORT-AGNOSTIC fan-out (Флаг 1 fix, 2026-08-04): `INetworkTransport.on_facts` does NOT
+    guarantee fan-out — a real NW-01 TCP transport overwrites its single subscriber slot, so
+    registering both the client and the server directly would lose one handler. Instead we
+    register ONE delegating handler that fans out to the client and server internally. This is
+    transport-agnostic: works for both SyncTransport (test) and real TCP NW-01.
     """
     client = build_remote_orchestrator(
         transport, trust, trust_threshold=trust_threshold,
         trust_delta=trust_delta, local_node_id=node_id,
     )
     server = build_remote_execution_listener(transport, orchestrator, node_id)
-    return FederatedNode(client, server, node_id)
+
+    # Internal fan-out delegate: a single on_facts subscription that forwards to both
+    # the client (response correlation) and the server (request handling).
+    def _delegate(facts: List[dict], sender_node_id: str) -> None:
+        client._on_facts(facts, sender_node_id)
+        server._on_facts(facts, sender_node_id)
+
+    # Override the per-component subscriptions with a single delegating handler on the
+    # transport. Both client._on_facts and server._on_facts are still exercised; only the
+    # transport slot is unified (transport-agnostic, no reliance on on_facts fan-out).
+    transport.on_facts(_delegate)
+
+    return FederatedNode(client, server, node_id, _delegate)
+
 
 
 class FederatedNode:
     """A node that is both a federated client and a remote-execution server (ТЗ-FED-EXEC-01)."""
 
-    def __init__(self, client, server, node_id: str) -> None:
+    def __init__(self, client, server, node_id: str, delegate=None) -> None:
         self.client = client
         self.server = server
         self.node_id = node_id
+        self._delegate = delegate
 
     def start(self) -> None:
-        self.server.start()
+        # The fan-out delegate is ALREADY subscribed in build_federated_node (transport-agnostic
+        # fix for Флаг 1). Do NOT re-subscribe per-component here (would overwrite the slot on
+        # real NW-01 TCP). Just mark the server running.
+        self.server._running = True
 
     def stop(self) -> None:
-        self.server.stop()
+        self.server._running = False
 
     def dispatch_remote(self, node_id: str, goal) -> "TaskOutcome":
         """Client path: dispatch a goal to a trusted remote node (real outcome + trust update)."""
