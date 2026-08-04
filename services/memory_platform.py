@@ -26,6 +26,7 @@ from contracts.i_memory import (
     MemoryItem,
     MemoryKind,
     MemoryQuery,
+    Procedure,
 )
 from contracts.i_policy import CallRecord
 
@@ -45,6 +46,7 @@ class InMemoryProceduralMemory(IProceduralMemory):
 
     def __init__(self) -> None:
         self._procedures: Dict[str, Dict[str, Any]] = {}
+        self._skills: Dict[str, "Procedure"] = {}
 
     def record_procedure(self, name: str, steps: List[str], success: bool) -> None:
         entry = self._procedures.setdefault(
@@ -60,6 +62,19 @@ class InMemoryProceduralMemory(IProceduralMemory):
     def recall_procedure(self, name: str) -> Optional[Dict[str, Any]]:
         entry = self._procedures.get(name)
         return dict(entry) if entry else None
+
+    # --- ТЗ-SKILL-01: capability-keyed consolidated Procedure (skill) ---
+    def store_skill(self, skill: "Procedure") -> None:
+        self._skills[skill.capability] = skill
+
+    def recall_skill_by_capability(self, capability: str) -> Optional["Procedure"]:
+        return self._skills.get(capability)
+
+    def list_skills(self) -> List["Procedure"]:
+        return list(self._skills.values())
+
+    def has_skill(self, capability: str) -> bool:
+        return capability in self._skills
 
 
 # --------------------------------------------------------------------------

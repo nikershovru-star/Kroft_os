@@ -189,7 +189,14 @@ class ISemanticMemory(abc.ABC):
 
 
 class IProceduralMemory(abc.ABC):
-    """'How to do it' — execution patterns rather than facts (Wave 10 input)."""
+    """'How to do it' — execution patterns rather than facts (Wave 10 input).
+
+    K5 (ТЗ-SKILL-01): существующий порт НЕ дублируется. ТЗ предписывал
+    contracts/i_procedural.py (IProceduralMemory + Skill VO) — НО порт УЖЕ есть здесь
+    (Wave 9 / ADR-012). Расширяем СУЩЕСТВУЮЩИЙ порт (one-port-per-boundary), НЕ создаём
+    новый. Старые record_procedure/recall_procedure СОХРАНЕНЫ (обратная совместимость,
+    test_memory_contract/test_memory_platform целы).
+    """
 
     @abc.abstractmethod
     def record_procedure(self, name: str, steps: List[str], success: bool) -> None:
@@ -200,3 +207,42 @@ class IProceduralMemory(abc.ABC):
     def recall_procedure(self, name: str) -> Optional[Dict[str, Any]]:
         """Return the best-known way to perform `name`, or None."""
         raise NotImplementedError
+
+    # --- ТЗ-SKILL-01 extensions: capability-keyed consolidated Skill (Procedure) ---
+    @abc.abstractmethod
+    def store_skill(self, skill: "Procedure") -> None:
+        """Persist a consolidated Procedure (skill) keyed by capability."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def recall_skill_by_capability(self, capability: str) -> Optional["Procedure"]:
+        """Return the known-good Procedure for `capability`, or None."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def list_skills(self) -> List["Procedure"]:
+        """All consolidated Procedures."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def has_skill(self, capability: str) -> bool:
+        """True if a known-good Procedure exists for `capability`."""
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class Procedure:
+    """Consolidated procedural skill (ТЗ-SKILL-01). Frozen VO с реальными типами.
+
+    K5: НЕ дублирует `Skill` из cognitive_domain.py (Marketplace / TZ-021) — иное назначение.
+    O1: процедура — SOFT (не мутирует HARD/FSM); confidence эволюционирует из success-rate.
+    """
+
+    skill_id: str
+    name: str
+    capability: str
+    steps: Tuple[str, ...]
+    preconditions: Tuple[str, ...] = ()
+    confidence: float = 0.0
+    provenance: str = ""
+    causal: Optional[str] = None
