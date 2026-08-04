@@ -788,6 +788,52 @@ exec; консенсус между узлами (только trust-gating).
 
 ---
 
+## 2026-08-04 — ТЗ-SKILL-EVOLVE-01 (Closed-loop skill lifecycle) — DONE
+
+Замыкает Флаги 1–2 SKILL-01. SKILL-01 дал процедурную память, но цикл навыка был открыт: Procedure
+пишется один раз, confidence не эволюционирует, исходы dispatch не кормят skill обратно, recall
+безусловен. ТЗ-SKILL-EVOLVE-01 замыкает петлю (опыт → навык → recall → исход → эволюция навыка),
+по образцу trust-эволюции ORCH-01.
+
+K5-разведка (commit 0): `IProceduralMemory` (Wave 9/ADR-012) УЖЕ есть со `store_skill`/
+`recall_skill_by_capability` + `Procedure` frozen VO; `ITrustRegistry.record_outcome` (IDT-01) —
+образец паттерна эволюции. РЕШЕНИЕ: расширить СУЩЕСТВУЮЩИЙ порт (НЕ новый, K5 one-port-per-boundary).
+
+- **Commit 1** — contract: `IProceduralMemory` расширен (НЕ дублируется): `record_skill_outcome`
+  (confidence эволюционирует success+/failure-, frozen→новая версия через store_skill,
+  idempotent), `invalidate_skill` (удаление при confidence<floor), `recall_skill_by_capability
+  (capability, min_confidence=0.0)` (обратно-совместимый gate, закрывает Флаг 2). Старые методы
+  СОХРАНЕНЫ.
+- **Commit 2** — impl: `InMemoryProceduralMemory` (replace для confidence, min_confidence gate,
+  invalidate del) + `SkillEvolution` (on_skill_outcome → record_skill_outcome + invalidate при
+  floor, по образцу ITrustRegistry.record_outcome) + `build_skill_evolution` (Флаг C).
+- **Commit 3** — ORCH-01 integration: `ReferenceOrchestrator` опц. `skill_recall_min_confidence`;
+  `route()` confidence-gated recall (Флаг 2 ЗАКРЫТ: низко-уверенный skill НЕ вытесняет агента/
+  плагин); `dispatch()` для `kind='skill'` исполняет локально и кормит РЕАЛЬНЫЙ исход в
+  `record_skill_outcome` (Флаг 1 ЗАКРЫТ: петля замкнута); repeated failure → invalidate →
+  обычный routing. Standalone (Флаг C), НЕ в build_kernel.
+- **Commit 4** — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b): `tests/test_skill_evolution.py` — 7 тестов
+  (confidence evolves; missing→None; repeated failure→invalidate→normal routing; gated recall
+  excludes low-confidence; orchestrator closed loop feeds outcome; determinism; O1 skills SOFT).
+- **Commit 5** — docs: ADR-077 + AKB (adrs/issues) + CHANGELOG + PROJECT_STATUS.
+
+Встроены: K1/K6 (contracts+stdlib; kernel/services→contracts only); O1 (skills SOFT; HARD/FSM
+нетронуты); I-09 (determinism: gate + confidence-эволюция + инвалидация); Флаг C (standalone, НЕ в
+build_kernel); K5 (НЕ дублирован IProceduralMemory/Procedure/ReferenceOrchestrator — расширен); K8
+(low-confidence skill НЕ вспоминается; инвалидированный → обычный routing). Петля навыка замкнута.
+
+Флаг 1 FED-EXEC-01 ТАКЖЕ ЗАКРЫТ в этом сеансе (отдельный коммит `321fc21`): `build_federated_node`
+регистрирует ОДИН делегирующий handler (transport-agnostic fan-out), чтобы real-TCP NW-01 при
+двойной подписке (client+server) НЕ перезаписывал слот. Доказано на single-slot transport.
+
+Долги (ADR-077 non-scope): RL/авто-синтез процедур; LLM-backed skill synthesis; реальное
+мульти-агент exec для навыков, маршрутизированных к агенту (Флаг 2 FED-EXEC-01: агентский «real
+outcome» придёт только с полноценным мульти-агентным исполнением — задокументировано, не блок).
+
+**Verification:** `1208 passed, 0 failed` baseline + 7 SKILL-EVOLVE тестов; gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /

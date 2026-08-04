@@ -453,6 +453,21 @@ issues:
   impact: network-layer-complete
   closed_by: ADR-076
 
+- id: TZ-SKILL-EVOLVE-01
+  title: Closed-loop skill lifecycle — skill confidence evolves from dispatch outcomes + confidence-gated recall (LLM-free, standalone)
+  status: done
+  description: 'Замыкает Флаги 1–2 SKILL-01. K5-разведка: IProceduralMemory (Wave 9/ADR-012) УЖЕ есть со store_skill/recall_skill_by_capability + Procedure frozen VO; НЕ дублирован — расширен. contract: IProceduralMemory +record_skill_outcome(capability,success,delta) [confidence evolves, frozen->new via store_skill, idempotent] +invalidate_skill +recall_skill_by_capability(capability, min_confidence=0.0) [backward-compatible gate]. impl: InMemoryProceduralMemory (replace for confidence, min_confidence gate, invalidate del) + SkillEvolution (on_skill_outcome -> record_skill_outcome + invalidate при floor, по образцу ITrustRegistry.record_outcome). orchestrator (ORCH-01): skill_recall_min_confidence опц -> route() confidence-gated recall (Флаг 2 closed), dispatch kind=skill кормит record_skill_outcome (Флаг 1 closed). repeated failure -> invalidate -> normal routing. K5: НЕ дублирован порт/VO. O1: skills SOFT. I-09: deterministic.'
+  related:
+  - ADR-077
+  - ADR-074
+  - ADR-073
+  addresses:
+  - I-09
+  - FLAG-1B-SKILL-EVOLVE
+  impact: skill-lifecycle-closed
+  closed_by: ADR-077
+
+
 
 
 

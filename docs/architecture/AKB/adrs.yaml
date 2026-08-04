@@ -1226,6 +1226,33 @@ adrs:
   - FLAG-C-FED-EXEC
   - FLAG-1B-FED-EXEC
 
+- id: ADR-077
+  title: Closed-loop skill lifecycle — skill confidence evolves from dispatch outcomes + confidence-gated recall (ТЗ-SKILL-EVOLVE-01)
+  status: accepted
+  relates_to:
+  - ADR-074
+  - ADR-073
+  - ADR-012
+  - ADR-075
+  ports_added: []
+  ports_reused:
+  - IProceduralMemory
+  - Procedure
+  - ReferenceOrchestrator
+  laws_affected:
+  - K1
+  - K5
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-SKILL-EVOLVE-01
+  - I-09
+  - FLAG-1B-SKILL-EVOLVE
+
+
 
 
 
