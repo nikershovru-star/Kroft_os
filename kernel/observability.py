@@ -49,6 +49,7 @@ class LiveMetricsCollector:
         self._clock = clock if clock is not None else NodeLamportClock("obs")
         self._num: Dict[str, float] = {}
         self._den: Dict[str, float] = {}
+        self._fail: Dict[str, float] = {}
         self._window: Dict[str, Deque[float]] = {}
         self._last: Dict[str, float] = {}
         # per-tick growth accounting (Флаг 1: growth_rate_per_tick = episodes/ticks)
@@ -65,6 +66,9 @@ class LiveMetricsCollector:
         self._den[metric] = self._den.get(metric, 0.0) + 1.0
 
     def record_failure(self, metric: str) -> None:
+        """Record a failed attempt for ``metric`` (e.g. execution failure, LLM fallback).
+        Increments BOTH the failure counter and the denominator (total attempts)."""
+        self._fail[metric] = self._fail.get(metric, 0.0) + 1.0
         self._den[metric] = self._den.get(metric, 0.0) + 1.0
 
     def record_raw(self, metric: str, value: float) -> None:
@@ -86,6 +90,8 @@ class LiveMetricsCollector:
 
     # -- read helpers --
     def ratio(self, metric: str) -> float:
+        """Compute the ratio for ``metric`` (Флаг 1: metrics are RELATIONS, not raw
+        counters). success/failure rates use the appropriate numerator/denominator."""
         if metric == METRIC_MEMORY_CONSOLIDATION_CONFIDENCE:
             return self._consolidation_confidence()
         if metric == METRIC_MEMORY_GROWTH_RATE_PER_TICK:
@@ -93,7 +99,9 @@ class LiveMetricsCollector:
         den = self._den.get(metric, 0.0)
         if den <= 0.0:
             return self._last.get(metric, 0.0)
-        return self._num.get(metric, 0.0) / den
+        if metric == METRIC_LLM_FALLBACK_RATE:
+            return self._fail.get(metric, 0.0) / den  # fallbacks / total attempts
+        return self._num.get(metric, 0.0) / den  # successes / total attempts
 
     def _consolidation_confidence(self) -> float:
         """Avg outcome utility over the sliding window (Флаг 2): defined even when

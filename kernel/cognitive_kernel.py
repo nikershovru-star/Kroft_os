@@ -765,6 +765,12 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
         advisor = llm_client if isinstance(llm_client, ILLMAdvisor) else adapter_for(llm_client)
     reason = LLMAdvisorReasoning(shared_clock, attn, soft_source, advisor=advisor)
     planner = LLMAdvisorPlanner(shared_clock, world_model=world_model, values=val, advisor=advisor)
+    # ТЗ-OBS-01 Флаг 2 / ТЗ-LLM-02: wire the live collector into the advisor wrappers so
+    # advisor fallback (LLMError/LLMTimeout) increments llm.fallback_rate. No-op if no
+    # collector (live_metrics is None) — kernel behaviour unchanged.
+    if live_metrics is not None:
+        reason.attach_metrics(live_metrics)
+        planner.attach_metrics(live_metrics)
     # ТЗ-RF-01: Reflection Engine — the ANALYTIC half of Self-Evolving. Runs BEFORE
     # Learn; reflects on experience + outcomes, proposing SOFT-layer evolution (outcome-
     # based, ФЛАГ 1). Memory Evolution commits the proposals under the O1 guard.
