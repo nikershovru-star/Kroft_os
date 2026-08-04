@@ -438,6 +438,22 @@ issues:
   impact: network-layer-foundation
   closed_by: ADR-075
 
+- id: TZ-FED-EXEC-01
+  title: Remote execution listener — node-server executes goal locally, returns real TaskOutcome (LLM-free, standalone)
+  status: done
+  description: 'Капстоун без фейков: серверная половина FED-ORCH-01. K5-разведка: INetworkTransport (NW-01) broadcast-only carrier; FED-ORCH-01 wire-helpers были ПРИВАТНЫ -> централизованы в contracts/i_federated_orchestrator.py (REQ_MARKER/RESP_MARKER + encode/decode, single-source-of-truth; client отрефакторен behaviour-preserving). НОВЫЙ порт IRemoteExecutionListener (server, НЕ дублирует client one-port-per-boundary). ReferenceRemoteExecutionListener: on_facts, фильтр по node_id (только свои), локальное IOrchestrator.dispatch (реальный outcome), send_facts ответа. build_federated_node: узел = client+server, делят orchestrator+trust+transport. SyncTransport in-process deterministic (real TCP NW-01 опц). Найден+исправлен реальный баг: client+server на одном transport перезаписывали on_facts-слот -> fan-out. Закрывает Флаг 2 ORCH-01 на сети (failure 0.9->0.8).'
+  related:
+  - ADR-076
+  - ADR-075
+  - ADR-073
+  addresses:
+  - I-09
+  - FLAG-C-FED-EXEC
+  - FLAG-1B-FED-EXEC
+  impact: network-layer-complete
+  closed_by: ADR-076
+
+
 
 
 

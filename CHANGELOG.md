@@ -742,6 +742,52 @@ dispatch на известные); LLM-backed remote исполнение; ко�
 
 ---
 
+## 2026-08-04 — ТЗ-FED-EXEC-01 (Remote execution listener) — DONE
+
+Капстоун без фейков: серверная половина FED-ORCH-01. FED-ORCH-01 дал клиентскую сторону
+(dispatch_remote + trust-эволюция), но responder был фейковым (`FakeTransport`). ТЗ-FED-EXEC-01
+добавляет сервер: узел-слушатель принимает `RemoteGoalRequest`, исполняет СВОИМ локальным
+`ReferenceOrchestrator`/плагином и возвращает РЕАЛЬНЫЙ `TaskOutcome`. Два узла обмениваются
+исполнением без фейков; trust обновляется из реально вычисленного исхода. Завершает GitS Network
+Layer (Tachikoma: автономные сервисные агенты на узлах).
+
+K5-разведка (commit 0) КРИТИЧНА: `INetworkTransport` (NW-01) — broadcast-only carrier; FED-ORCH-01
+wire-helpers были ПРИВАТНЫ в `kernel/federated_orchestrator.py` -> централизованы в
+`contracts/i_federated_orchestrator.py` (commit 1): `REQ_MARKER`/`RESP_MARKER` +
+`encode_goal_request`/`decode_goal_request`/`encode_outcome_response`/`decode_outcome_response`/
+`is_goal_request`/`is_outcome_response` — single-source-of-truth; client отрефакторен на них
+(behaviour-preserving, доказано 9/9 FED-ORCH-01 тестами). НОВЫЙ порт `IRemoteExecutionListener`
+(server, НЕ дублирует client — one-port-per-boundary).
+
+- **Commit 1** — контракт: централизован wire-формат + `IRemoteExecutionListener` (start/stop;
+  on_facts, фильтр по node_id, локальный dispatch, send ответа). `ReferenceOrchestrator` (ORCH-01)
+  переиспользуется для исполнения.
+- **Commit 2** — `kernel/federated_executor.py`: `ReferenceRemoteExecutionListener` (server) поверх
+  `INetworkTransport` (carrier) + `IOrchestrator`; `build_remote_execution_listener` (Флаг C).
+- **Commit 3** — `build_federated_node` + `FederatedNode` (Флаг C, standalone, НЕ в build_kernel):
+  узел = client + server, делят ОДИН orchestrator + trust + transport; два in-process узла
+  диспетчеризуют друг на друга (SyncTransport in тестах; real TCP NW-01 опц, как FSE-01).
+- **Commit 4** — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b): `tests/test_federated_execution.py` — 6
+  тестов (two-node real execution success/failure; trust evolves from real outcome, failure 0.9->0.8;
+  trust-gating excludes low-trust; determinism; negative request-not-for-this-node ignored;
+  O1 server no remote trust mutation). НАЙДЕН+ИСПРАВЛЕН реальный баг: client+server на одном transport
+  перезаписывали on_facts-слот -> fan-out (node_id -> list[handler]).
+- **Commit 5** — docs: ADR-076 + AKB (adrs/issues) + CHANGELOG + PROJECT_STATUS.
+
+Встроены: K1/K6 (contracts+stdlib; kernel→contracts only); O1 (trust SOFT; server НЕ мутирует
+remote trust); I-09 (correlation request_id, fan-out, SyncTransport детерминирован); Флаг C
+(standalone, НЕ в build_kernel); K5 (НЕ дублирован INetworkTransport/IRemoteOrchestrator/
+ReferenceOrchestrator; НОВЫЙ серверный порт; wire single-source-of-truth); K8 (чужой запрос игнор,
+low-trust исключён). GitS Network Layer ЗАВЕРШЁН. Закрывает Флаг 2 ORCH-01 на сетевом уровне
+(failure 0.9->0.8).
+
+Долги (задокументированы в ADR-076, non-scope): multi-hop routing / discovery; LLM-backed remote
+exec; консенсус между узлами (только trust-gating).
+
+**Verification:** `1202 passed, 0 failed` baseline + 9 FED + 6 FED-EXEC тестов; gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /
