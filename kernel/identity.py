@@ -53,6 +53,9 @@ class ReferenceTrustRegistry(ITrustRegistry):
     def __init__(self) -> None:
         self._by_item: Dict[str, TrustMeta] = {}
         self._by_author: Dict[str, List[TrustMeta]] = {}
+        # ТЗ-ORCH-01: LATEST running trust per author (evolves from dispatch outcomes).
+        # Distinct from the MAX aggregate (_by_author scores used for federation gating).
+        self._running: Dict[str, float] = {}
 
     def record(self, meta: TrustMeta) -> None:
         self._by_item[meta.item_id] = meta
@@ -70,6 +73,22 @@ class ReferenceTrustRegistry(ITrustRegistry):
 
     def threshold_check(self, meta: TrustMeta, threshold: float) -> bool:
         return meta.trust_score >= threshold
+
+    def record_outcome(self, author_id: str, success: bool, delta: float = 0.1) -> float:
+        """Evolve LATEST running trust: success +delta (cap 1.0), failure -delta (floor 0.0)."""
+        cur = self._running.get(author_id, 0.5)
+        cur = cur + delta if success else cur - delta
+        cur = max(0.0, min(1.0, cur))
+        self._running[author_id] = cur
+        return cur
+
+    def current_trust(self, author_id: str) -> float:
+        """LATEST running trust (0.5 if no outcome recorded yet)."""
+        return self._running.get(author_id, 0.5)
+
+    def seed(self, author_id: str, score: float) -> None:
+        if author_id not in self._running:
+            self._running[author_id] = max(0.0, min(1.0, score))
 
 
 class ReferenceActionLog(IActionLog):

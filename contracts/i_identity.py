@@ -71,8 +71,16 @@ class IIdentityRegistry:
 class ITrustRegistry:
     """Trust bookkeeping for federated items (ТЗ-IDT-01).
 
-    Deterministic: trust_score_of(author_id) returns a stable aggregate; threshold_check
-    is a pure comparison. Default gating is PERMISSIVE (caller supplies threshold).
+    Deterministic: trust_score_of(author_id) returns a stable aggregate (MAX of recorded
+    scores) used for FEDERATION gating; threshold_check is a pure comparison. Default
+    gating is PERMISSIVE (caller supplies threshold).
+
+    ТЗ-ORCH-01 extension: ``record_outcome`` / ``current_trust`` maintain a LATEST running
+    score that EVOLVES from dispatch outcomes (success raises, failure lowers). This is the
+    value the orchestrator routes on — distinct from the MAX aggregate used for federation,
+    which closes Флаг 1 (trust-then-attack) of IDT-01: a single high item no longer makes an
+    author permanently trusted, because the orchestrator reads ``current_trust`` (latest),
+    not ``trust_score_of`` (max).
     """
 
     def record(self, meta: TrustMeta) -> None:
@@ -82,11 +90,39 @@ class ITrustRegistry:
         raise NotImplementedError
 
     def trust_score_of(self, author_id: str) -> float:
-        """Aggregate trust for an author (0.0 if unknown). Deterministic."""
+        """Aggregate trust for an author (MAX of recorded scores; 0.0 if unknown).
+
+        Used for FEDERATION gating. Deterministic.
+        """
         raise NotImplementedError
 
     def threshold_check(self, meta: TrustMeta, threshold: float) -> bool:
         """True if ``meta.trust_score >= threshold`` (and author known)."""
+        raise NotImplementedError
+
+    def record_outcome(self, author_id: str, success: bool, delta: float = 0.1) -> float:
+        """Update the LATEST running trust from a dispatch outcome; return the new score.
+
+        Deterministic: success -> +delta (capped at 1.0), failure -> -delta (floored at 0.0).
+        Unknown author starts from 0.5. The orchestrator calls this to evolve trust.
+        """
+        raise NotImplementedError
+
+    def current_trust(self, author_id: str) -> float:
+        """LATEST running trust for an author (0.5 if no outcome recorded yet).
+
+        Distinct from ``trust_score_of`` (MAX of recorded ``TrustMeta`` scores). The
+        orchestrator routes on ``current_trust`` so a failure actually lowers trust.
+        """
+        raise NotImplementedError
+
+    def seed(self, author_id: str, score: float) -> None:
+        """Set the LATEST running trust baseline (e.g. from AgentIdentity.trust_level).
+
+        Idempotent: does NOT overwrite a score already evolved by ``record_outcome``.
+        Called by the orchestrator at build time to initialise running trust from the
+        declared identity trust; subsequent dispatch outcomes evolve it.
+        """
         raise NotImplementedError
 
 
