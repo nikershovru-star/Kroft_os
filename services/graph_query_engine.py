@@ -27,7 +27,7 @@ _MIN_TOKEN_LEN = 2
 
 
 def _tokenize(text: str) -> List[str]:
-    """\\w+ tokens, lowercased, len >= 2. No stemming / stop-words."""
+    r"""\w+ tokens, lowercased, len >= 2. No stemming / stop-words."""
     return [t for t in _TOKEN_RE.findall((text or "").lower()) if len(t) >= _MIN_TOKEN_LEN]
 
 
@@ -1616,7 +1616,7 @@ class GraphQueryEngine(IGraphQuery):
 
     # ----- full-text + structural search (Stage 21 DSL) -----
     def _parse_query(self, query: str) -> Tuple[List[str], Dict[str, str]]:
-        """Split a query into (text_terms, structural_filters).
+        r"""Split a query into (text_terms, structural_filters).
 
         A ``key:value`` token is a structural filter; everything else is a
         full-text term. Filters are stripped BEFORE tokenization because
