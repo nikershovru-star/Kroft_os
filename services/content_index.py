@@ -1,4 +1,4 @@
-"""ContentIndex — in-memory inverted index for full-text search (Stage 18 + 20).
+r"""ContentIndex — in-memory inverted index for full-text search (Stage 18 + 20).
 
 Closes the Stage-10 honest limitation "No content indexing — the crawler
 stores node labels + extracted tags in metadata but does NOT index full
@@ -35,7 +35,7 @@ _MIN_TOKEN_LEN = 2
 
 
 def _tokenize(text: str) -> List[str]:
-    """\w+ tokens, lowercased, len >= 2. No stemming / stop-words."""
+    r"""\w+ tokens, lowercased, len >= 2. No stemming / stop-words."""
     return [
         t for t in _TOKEN_RE.findall((text or "").lower())
         if len(t) >= _MIN_TOKEN_LEN
