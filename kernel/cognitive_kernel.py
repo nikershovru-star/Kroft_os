@@ -60,6 +60,21 @@ from kernel.planning import ReferencePlanner
 from kernel.memory_evolution import ReferenceMemoryEvolution
 from kernel.memory_store import InMemoryLayeredMemory
 from kernel.reflection import ReferenceReflectionEngine
+from kernel.runtime_reflection import (
+    ReferenceRuntimeReflection,
+    ReferenceTuningApplier,
+)
+from kernel.runtime_supervisor import RuntimeSupervisor
+from kernel.observability import LiveMetricsCollector, LiveRuntimeMetrics
+from contracts.i_observability import (
+    ILiveMetricsCollector,
+    METRIC_EXECUTION_SUCCESS_RATE,
+    METRIC_FEDERATION_DELIVERY_SUCCESS_RATE,
+    METRIC_LLM_FALLBACK_RATE,
+    METRIC_MEMORY_CONSOLIDATION_CONFIDENCE,
+    METRIC_MEMORY_GROWTH_RATE_PER_TICK,
+)
+from contracts.i_runtime_reflection import IRuntimeMetrics, RuntimeMetric
 from kernel.self_evolution import (
     MemorySoftPolicySource,
     PolicyAwareValueSystem,
@@ -338,6 +353,10 @@ class CognitiveKernel(ICognitiveKernel):
         self._last_selected_plan = None  # introspection (semantic cognitive-value proof)
         self._federation = None  # ТЗ-NW-01: set by attach_federation
         self._soft_sync = None   # ТЗ-FSE-01: set by attach_soft_memory_sync
+        self._metrics = None     # ТЗ-OBS-01: live collector (ILiveMetricsCollector)
+        self._supervisor = None   # ТЗ-OBS-01: RuntimeSupervisor (autonomous loop)
+        self._metrics_interval = 3  # Флаг 3: step every N ticks (anti-thrash)
+        self._tick_no = 0
 
     # -- event emission (I-17) -------------------------------------------------
     def _emit(self, etype: CognitiveEventType, ref_id: str,
@@ -437,6 +456,15 @@ class CognitiveKernel(ICognitiveKernel):
                 confidence=result.confidence,
                 causal=result.causal,
             )
+            # ТЗ-OBS-01 hook (no-op if no collector): live execution success rate +
+            # rolling consolidation confidence from outcome utility (Флаг 1/2).
+            if self._metrics is not None:
+                if result.success:
+                    self._metrics.record_success(METRIC_EXECUTION_SUCCESS_RATE)
+                else:
+                    self._metrics.record_failure(METRIC_EXECUTION_SUCCESS_RATE)
+                self._metrics.record_raw(METRIC_MEMORY_CONSOLIDATION_CONFIDENCE,
+                                         float(result.reward if result.reward is not None else 0.0))
         else:
             # ТЗ-RF-01 proxy fallback (backward compatible): success = decision
             # accepted; utility = decision confidence. Used when no executor wired.
@@ -487,6 +515,10 @@ class CognitiveKernel(ICognitiveKernel):
             self._memory.record_episode(episode)
             facts, soft_policies = self._memory_evolution.consolidate(
                 self._memory.get_episodes())
+            # ТЗ-OBS-01 hook (no-op if no collector): count new consolidated facts as
+            # memory growth this tick (for memory.growth_rate_per_tick).
+            if self._metrics is not None:
+                self._metrics.record_episode_growth(len(facts))
             # Merge ME-01 facts + Reflection consolidation candidates, then DEDUPLICATE by
             # content so one experience is consolidated exactly once (ФЛАГ 1, ТЗ-NW-01).
             # Dedupe against BOTH this tick's candidates AND already-committed semantic
@@ -554,6 +586,16 @@ class CognitiveKernel(ICognitiveKernel):
             # a wired sync.
             if self._soft_sync is not None and self._memory is not None:
                 self._soft_sync.publish_soft_layer(self._memory, self._node_id)
+            # ТЗ-OBS-01: autonomous runtime adaptation from LIVE metrics (closes RT-01
+            # debt). Every N ticks (Флаг 3: anti-thrash) run the supervisor loop
+            # collect->reflect->apply; hooks above fed LIVE counters this tick. No-op
+            # without a wired supervisor.
+            if self._metrics is not None:
+                self._metrics.record_tick()
+            if self._supervisor is not None:
+                self._tick_no += 1
+                if self._tick_no % self._metrics_interval == 0:
+                    self._supervisor.step()
         # back to Idle
         self._transition(CognitiveState.IDLE)
         return self._state
@@ -637,6 +679,15 @@ class CognitiveKernel(ICognitiveKernel):
         if locker is not None:
             locker()
 
+    def attach_live_metrics(self, collector: "object", supervisor: "object") -> None:
+        """ТЗ-OBS-01: wire a live metrics collector (ILiveMetricsCollector) + optional
+        RuntimeSupervisor. Hook-points in tick() record operational counters; the
+        supervisor runs the autonomous collect->reflect->apply loop every N ticks (Флаг 3).
+        No-op semantics: with no collector the kernel behaves EXACTLY as before (hooks
+        are skipped)."""
+        self._metrics = collector
+        self._supervisor = supervisor
+
     def attach_executor(self, executor: "object") -> None:
         """ТЗ-EX-01: wire a real execution backend (IExecutor).
 
@@ -664,7 +715,8 @@ class CognitiveKernel(ICognitiveKernel):
 
 
 def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = None,
-                 llm_client: Optional[object] = None) -> CognitiveKernel:
+                 llm_client: Optional[object] = None,
+                 live_metrics: Optional[object] = None) -> CognitiveKernel:
     """Factory: assemble a deterministic, LLM-free reference kernel (I-09).
 
     ТЗ-RE-01 flag 1: ONE shared Lamport clock per node. The same clock instance is
@@ -718,7 +770,29 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     # based, ФЛАГ 1). Memory Evolution commits the proposals under the O1 guard.
     reflection_engine = ReferenceReflectionEngine(shared_clock)
 
-    return CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner,
+    # ТЗ-OBS-01: autonomous runtime adaptation from LIVE metrics (closes RT-01 debt).
+    # When a live collector is supplied, build a LiveRuntimeMetrics(IRuntimeMetrics) and
+    # wire a RuntimeSupervisor that adapts SOFT params autonomously (Флаг 3: step every
+    # N ticks, hysteresis is inherent in bounded monotonic rules). No-op without it.
+    supervisor = None
+    if live_metrics is not None:
+        live_runtime = LiveRuntimeMetrics(
+            live_metrics, memory_evolution=memory_evolution, clock=shared_clock)
+        supervisor = RuntimeSupervisor(
+            metrics=live_runtime,
+            reflection=ReferenceRuntimeReflection(clock=shared_clock),
+            applier=ReferenceTuningApplier(),
+            targets={
+                "memory.confidence_threshold": memory_evolution,
+                "memory.min_repetitions": memory_evolution,
+            },
+            clock=shared_clock,
+        )
+
+    kernel = CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner,
                            clock=shared_clock, reason=reason, world_model=world_model,
                            memory_evolution=memory_evolution, memory=memory,
                            reflection_engine=reflection_engine)
+    if live_metrics is not None:
+        kernel.attach_live_metrics(live_metrics, supervisor)
+    return kernel
