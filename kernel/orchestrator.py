@@ -51,6 +51,7 @@ class ReferenceOrchestrator(IOrchestrator):
         procedural: Optional[IProceduralMemory] = None,
         remote: Optional[IRemoteOrchestrator] = None,
         remote_nodes: Tuple[str, ...] = (),
+        skill_recall_min_confidence: float = 0.0,
     ) -> None:
         self._identities = identity_registry
         self._plugins = plugin_registry
@@ -62,6 +63,7 @@ class ReferenceOrchestrator(IOrchestrator):
         self._procedural = procedural
         self._remote = remote
         self._remote_nodes = tuple(remote_nodes)
+        self._skill_gate = skill_recall_min_confidence
         # Seed LATEST running trust from declared baselines (evolves via record_outcome).
         # Idempotent: does NOT overwrite trust already evolved by prior dispatch outcomes.
         for agent in self._identities.list():
@@ -70,11 +72,13 @@ class ReferenceOrchestrator(IOrchestrator):
             trust_registry.seed(manifest.id, self._plugin_default_trust)
 
     def route(self, goal: OrchestrationGoal) -> Optional[RoutingDecision]:
-        # ТЗ-SKILL-01: if a known-good Procedure (skill) exists for this capability,
-        # recall it first (skill-recall). This is deterministic and overrides normal
-        # agent/plugin scoring. O1: skills are SOFT; orchestrator does not mutate them.
+        # ТЗ-SKILL-01 + ТЗ-SKILL-EVOLVE-01: if a known-good Procedure (skill) exists for this
+        # capability AND its confidence passes the recall gate, recall it first (skill-recall).
+        # Confidence-gated recall closes Флаг 2 SKILL-01 (low-confidence skill does NOT displace
+        # a strong agent/plugin). Deterministic; O1: skills are SOFT, orchestrator does not mutate.
         if self._procedural is not None:
-            skill = self._procedural.recall_skill_by_capability(goal.capability)
+            skill = self._procedural.recall_skill_by_capability(
+                goal.capability, min_confidence=self._skill_gate)
             if skill is not None:
                 return RoutingDecision(
                     chosen_id=skill.skill_id,
@@ -113,10 +117,38 @@ class ReferenceOrchestrator(IOrchestrator):
             # ТЗ-FED-ORCH-01: dispatch to a trusted remote node (real outcome + trust update
             # handled inside ReferenceRemoteOrchestrator.dispatch_remote via ITrustRegistry).
             return self._remote.dispatch_remote(decision.chosen_id, goal)
+        if decision.kind == "skill":
+            # ТЗ-SKILL-EVOLVE-01: skill-recall dispatch. Execute the skill locally (plugin path by
+            # capability) and feed the REAL outcome back into the skill's confidence (closes Флаг 1
+            # SKILL-01: open loop). On repeated failure the skill is invalidated -> next route()
+            # falls back to normal agent/plugin routing. O1: skill confidence is SOFT.
+            success = self._execute_skill(goal, decision)
+            if self._procedural is not None:
+                # record_skill_outcome evolves confidence; SkillEvolution.invalidate via floor is
+                # performed by the caller's SkillEvolution; here we evolve directly for the orchestrator.
+                self._procedural.record_skill_outcome(goal.capability, success, self._delta)
+            return TaskOutcome(success=success, detail=f"skill executed (outcome fed back)")
         # agent: delegated execution (real multi-agent run via NW-01 = future, ТЗ-ORCH-01 non-scope)
         self._log.append(decision.chosen_id, f"dispatch:{goal.goal_id}:delegated")
         self._trust.record_outcome(decision.chosen_id, True, self._delta)
         return TaskOutcome(success=True, detail="agent delegated (outcome logged)")
+
+    def _execute_skill(self, goal: OrchestrationGoal, decision: "RoutingDecision") -> bool:
+        """Execute a recalled skill locally; returns the REAL success of the chosen executor.
+
+        A skill is a recall of a known-good procedure; its execution reuses the best local
+        executor for the capability (plugin preferred, else agent delegation). The returned
+        success is the real outcome that evolves the skill's confidence (ТЗ-SKILL-EVOLVE-01).
+        """
+        # Prefer a local plugin matching the capability (real execution).
+        for manifest in self._plugins.list():
+            if goal.capability in manifest.capabilities:
+                result = self._plugins.invoke(manifest.id, goal.payload)
+                self._log.append(decision.chosen_id, f"dispatch:{goal.goal_id}:{'ok' if result.ok else 'fail'}")
+                return bool(result.ok)
+        # Else delegate to an agent (logged); agent real outcome is non-scope (Флаг 2 FED-EXEC-01).
+        self._log.append(decision.chosen_id, f"dispatch:{goal.goal_id}:delegated")
+        return True
 
     # ------------------------------------------------------------------
     def _score_candidates(self, goal: OrchestrationGoal):
@@ -160,6 +192,7 @@ def build_orchestrator(
     procedural: Optional[IProceduralMemory] = None,
     remote: Optional[IRemoteOrchestrator] = None,
     remote_nodes: Tuple[str, ...] = (),
+    skill_recall_min_confidence: float = 0.0,
 ) -> ReferenceOrchestrator:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated).
 
@@ -168,7 +201,11 @@ def build_orchestrator(
     `remote` + `remote_nodes` (ТЗ-FED-ORCH-01) are OPTIONAL: when provided and no local
     eligible executor exists, route() falls back to a trusted remote node (real outcome +
     trust update handled by the remote orchestrator).
+    `skill_recall_min_confidence` (ТЗ-SKILL-EVOLVE-01) is OPTIONAL: when > 0, route() only
+    recalls a skill whose confidence >= the gate (confidence-gated recall, closes Флаг 2
+    SKILL-01); below the gate the orchestrator uses normal agent/plugin routing.
     """
     return ReferenceOrchestrator(
         identity_registry, plugin_registry, trust_registry, action_log,
-        trust_threshold, plugin_default_trust, trust_delta, procedural, remote, remote_nodes)
+        trust_threshold, plugin_default_trust, trust_delta, procedural, remote,
+        remote_nodes, skill_recall_min_confidence)
