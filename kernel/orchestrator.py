@@ -18,7 +18,7 @@ current_trust (LATEST, evolves) -> closes Флаг 1 of IDT-01.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from contracts.i_identity import (
     IActionLog,
@@ -32,6 +32,7 @@ from contracts.i_orchestrator import (
     RoutingDecision,
     TaskOutcome,
 )
+from contracts.i_federated_orchestrator import IRemoteOrchestrator
 from contracts.plugin import IPluginRegistry
 
 
@@ -48,6 +49,8 @@ class ReferenceOrchestrator(IOrchestrator):
         plugin_default_trust: float = 0.5,
         trust_delta: float = 0.1,
         procedural: Optional[IProceduralMemory] = None,
+        remote: Optional[IRemoteOrchestrator] = None,
+        remote_nodes: Tuple[str, ...] = (),
     ) -> None:
         self._identities = identity_registry
         self._plugins = plugin_registry
@@ -57,6 +60,8 @@ class ReferenceOrchestrator(IOrchestrator):
         self._plugin_default_trust = plugin_default_trust
         self._delta = trust_delta
         self._procedural = procedural
+        self._remote = remote
+        self._remote_nodes = tuple(remote_nodes)
         # Seed LATEST running trust from declared baselines (evolves via record_outcome).
         # Idempotent: does NOT overwrite trust already evolved by prior dispatch outcomes.
         for agent in self._identities.list():
@@ -78,13 +83,20 @@ class ReferenceOrchestrator(IOrchestrator):
                     score=skill.confidence,
                 )
         candidates = self._score_candidates(goal)
-        if not candidates:
-            return None
-        # deterministic: highest score, tie-break by id (stable sort)
-        candidates.sort(key=lambda c: (-c[1], c[0]))
-        best_id, best_score, kind, rationale = candidates[0]
-        return RoutingDecision(
-            chosen_id=best_id, kind=kind, rationale=rationale, score=best_score)
+        if candidates:
+            # deterministic: highest score, tie-break by id (stable sort)
+            candidates.sort(key=lambda c: (-c[1], c[0]))
+            best_id, best_score, kind, rationale = candidates[0]
+            return RoutingDecision(
+                chosen_id=best_id, kind=kind, rationale=rationale, score=best_score)
+        # ТЗ-FED-ORCH-01: no local eligible executor -> fall back to a trusted remote node.
+        if self._remote is not None:
+            for node_id in sorted(self._remote_nodes):  # deterministic tie-break by node_id
+                if self._trust.current_trust(node_id) >= self._threshold:
+                    return RoutingDecision(
+                        chosen_id=node_id, kind="remote",
+                        rationale=f"remote:{node_id}", score=self._trust.current_trust(node_id))
+        return None
 
     def dispatch(self, goal: OrchestrationGoal) -> TaskOutcome:
         decision = self.route(goal)
@@ -97,6 +109,10 @@ class ReferenceOrchestrator(IOrchestrator):
             self._log.append(decision.chosen_id, f"dispatch:{goal.goal_id}:{'ok' if success else 'fail'}")
             self._trust.record_outcome(decision.chosen_id, success, self._delta)
             return TaskOutcome(success=success, detail=detail)
+        if decision.kind == "remote":
+            # ТЗ-FED-ORCH-01: dispatch to a trusted remote node (real outcome + trust update
+            # handled inside ReferenceRemoteOrchestrator.dispatch_remote via ITrustRegistry).
+            return self._remote.dispatch_remote(decision.chosen_id, goal)
         # agent: delegated execution (real multi-agent run via NW-01 = future, ТЗ-ORCH-01 non-scope)
         self._log.append(decision.chosen_id, f"dispatch:{goal.goal_id}:delegated")
         self._trust.record_outcome(decision.chosen_id, True, self._delta)
@@ -142,12 +158,17 @@ def build_orchestrator(
     plugin_default_trust: float = 0.5,
     trust_delta: float = 0.1,
     procedural: Optional[IProceduralMemory] = None,
+    remote: Optional[IRemoteOrchestrator] = None,
+    remote_nodes: Tuple[str, ...] = (),
 ) -> ReferenceOrchestrator:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated).
 
     `procedural` (ТЗ-SKILL-01) is OPTIONAL: when provided, route() recalls a known-good
     Procedure (skill) by capability before normal agent/plugin scoring.
+    `remote` + `remote_nodes` (ТЗ-FED-ORCH-01) are OPTIONAL: when provided and no local
+    eligible executor exists, route() falls back to a trusted remote node (real outcome +
+    trust update handled by the remote orchestrator).
     """
     return ReferenceOrchestrator(
         identity_registry, plugin_registry, trust_registry, action_log,
-        trust_threshold, plugin_default_trust, trust_delta, procedural)
+        trust_threshold, plugin_default_trust, trust_delta, procedural, remote, remote_nodes)
