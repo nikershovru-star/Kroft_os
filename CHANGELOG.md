@@ -702,6 +702,46 @@ outcomes придут оттуда (Флаг 2 ORCH-01: agent-trust моното
 
 ---
 
+## 2026-08-04 — ТЗ-FED-ORCH-01 (Federated orchestration) — DONE
+
+Закрывает Флаг 2 ORCH-01: реальный remote-outcome обновляет trust узла (failure РЕАЛЬНО понижает).
+ORCH-01 дал оркестрацию, но agent-dispatch был always-success (реальный исход придёт с сетью);
+NW-01 дал транспорт + trust-гейтинг (IDT-01). ТЗ-FED-ORCH-01 связал их.
+
+K5-разведка (commit 0) КРИТИЧНА: `INetworkTransport` (NW-01) — broadcast-only, НЕТ
+request/response RPC для goal-dispatch. Решение: создан НОВЫЙ порт `IRemoteOrchestrator`
+(request/response dispatch) — K5-чисто (транспорт ≠ оркестрация); `INetworkTransport`
+переиспользован КАК carrier (send_facts/on_facts несут dict-конверты по correlation-id).
+`ITrustRegistry` (IDT-01) переиспользован: trust-gating через `current_trust` (LATEST, НЕ MAX),
+обновление через `record_outcome` из реального исхода. `ReferenceOrchestrator` (ORCH-01) расширен.
+
+- **Commit 1+2** — `contracts/i_federated_orchestrator.py` (RemoteGoalRequest/RemoteOutcomeResponse
+  frozen VO + IRemoteOrchestrator) + `kernel/federated_orchestrator.py` (ReferenceRemoteOrchestrator:
+  trust-gating `current_trust(node) >= threshold`; после реального outcome -> `record_outcome`;
+  failure 0.9->0.8).
+- **Commit 3** — `kernel/orchestrator.py` (ORCH-01): `ReferenceOrchestrator` опц. принимает
+  `IRemoteOrchestrator` + `remote_nodes`; `route()` fallback на доверенный remote при отсутствии
+  локального eligible (tie-break по node_id); `dispatch()` kind='remote' -> `dispatch_remote`.
+  Standalone (Флаг C), обратная совместимость (remote=None -> локальный routing цел).
+- **Commit 4** — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b): `tests/test_federated_orchestration.py` —
+  9 тестов (real remote outcome; trust evolves from remote failure/success; trust-gating excludes
+  low-trust; orchestrator fallback; low-trust-only -> None; determinism; no-remote local intact).
+- **Commit 5** — docs: ADR-075 + AKB (adrs/issues) + CHANGELOG + PROJECT_STATUS.
+
+Встроены: K1/K6 (contracts+stdlib; kernel/services->contracts only); O1 (trust SOFT; remote НЕ
+мутирует HARD/FSM); I-09 (correlation по request_id, tie-break по node_id, FakeTransport
+детерминирован); Флаг C (standalone, НЕ в build_kernel); K5 (НЕ дублирован INetworkTransport/
+ITrustRegistry/ReferenceOrchestrator; новый порт IRemoteOrchestrator оправдан); K8 (low-trust
+исключён, нет remote -> локальный routing цел). GitS Network Layer реализован: узлы обмениваются
+исполнением задач (goal -> remote -> outcome), НЕ только знаниями.
+
+Долги (задокументированы в ADR-075, non-scope): multi-hop routing / discovery узлов (только прямой
+dispatch на известные); LLM-backed remote исполнение; консенсус между узлами (только trust-gating).
+
+**Verification:** `1157 passed, 0 failed` baseline + 10 IDT + 8 ORCH + 9 SKILL + 9 FED тестов; gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /

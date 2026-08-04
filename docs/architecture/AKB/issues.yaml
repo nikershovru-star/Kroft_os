@@ -422,6 +422,23 @@ issues:
   impact: memory-layer-complete
   closed_by: ADR-074
 
+- id: TZ-FED-ORCH-01
+  title: Federated orchestration — dispatch goal to remote trusted node via NW-01, real remote outcome updates trust (LLM-free, standalone)
+  status: done
+  description: 'Закрывает Флаг 2 ORCH-01: реальный remote-outcome обновляет trust узла (failure понижает). K5-критично: INetworkTransport (NW-01) broadcast-only, НЕТ request/response -> создан НОВЫЙ порт IRemoteOrchestrator (НЕ дублирует транспорт); INetworkTransport переиспользован КАК carrier (send_facts/on_facts несут dict-конверты по correlation-id). ITrustRegistry (IDT-01) переиспользован: trust-gating через current_trust (LATEST), record_outcome из реального исхода. contracts/i_federated_orchestrator.py + kernel/federated_orchestrator.py (ReferenceRemoteOrchestrator) + ReferenceOrchestrator remote-fallback (опц. IRemoteOrchestrator + remote_nodes).'
+  related:
+  - ADR-075
+  - ADR-074
+  - ADR-073
+  - ADR-066
+  addresses:
+  - I-09
+  - FLAG-C-FED
+  - FLAG-1B-FED
+  impact: network-layer-foundation
+  closed_by: ADR-075
+
+
 
 
 
