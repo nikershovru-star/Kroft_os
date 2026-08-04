@@ -1114,4 +1114,32 @@ adrs:
   - FLAG-C-IDT
   - FLAG-1B-IDT
 
+- id: ADR-073
+  title: Trust-aware orchestration — route goal to best agent/plugin, evolve trust from outcome (ТЗ-ORCH-01)
+  status: accepted
+  relates_to:
+  - ADR-072
+  - ADR-071
+  - ADR-066
+  ports_added:
+  - IOrchestrator
+  - OrchestrationGoal
+  - RoutingDecision
+  - TaskOutcome
+  ports_extended:
+  - ITrustRegistry
+  laws_affected:
+  - K1
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-ORCH-01
+  - I-09
+  - FLAG-C-ORCH
+  - FLAG-1B-ORCH
+
+
 

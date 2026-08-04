@@ -392,6 +392,22 @@ issues:
   impact: multi-node-foundation
   closed_by: ADR-072
 
+- id: TZ-ORCH-01
+  title: Trust-aware orchestration — route goal -> best agent/plugin, evolve trust from outcome (LLM-free, standalone)
+  status: done
+  description: 'Orchestrator маршрутизирует goal к лучшему исполнителю (agent ИЛИ plugin) по specialization*trust, исключает permission/low-trust, исполняет, логирует в IActionLog и обновляет trust из исхода (success +, failure -). contracts/i_orchestrator.py + kernel/orchestrator.py + build_orchestrator. ITrustRegistry расширен (record_outcome/current_trust/seed) — закрывает Флаг 1 IDT-01.'
+  related:
+  - ADR-073
+  - ADR-072
+  - ADR-071
+  addresses:
+  - I-09
+  - FLAG-C-ORCH
+  - FLAG-1B-ORCH
+  impact: behavior-foundation
+  closed_by: ADR-073
+
+
 
 
 

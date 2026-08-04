@@ -626,6 +626,43 @@ god-factory не усугубляется); K8 (unknown id -> None, low-trust re
 
 ---
 
+## 2026-08-04 — ТЗ-ORCH-01 (Trust-aware orchestration) — DONE
+
+Построенные слои (Identity/Trust/Plugins) стали ПОВЕДЕНИЕМ: оркестратор маршрутизирует goal к
+лучшему исполнителю (agent ИЛИ plugin) по specialization-match * trust, исключает
+permission-violating / low-trust, исполняет, логирует в IActionLog и обновляет trust из исхода
+(успех +, провал -) — trust ЭВОЛЮЦИОНИРУЕТ, замыкая петлю (фокус ТЗ-ORCH-01).
+
+K5-разведка (commit 0) критична: trust-aware ROUTING НЕ существовал. Переиспользованы (НЕ
+дублированы): `IIdentityRegistry`/`ITrustRegistry`/`IActionLog` (IDT-01), `IPluginRegistry`
+(PLUGIN-01). `IAgentPlatform` (ТЗ-AGENT-001) — agent-platform, НЕ оркестратор -> НЕ трогаем
+(реальное мульти-агент исполнение через сеть — future, NW-01). `ITrustRegistry` расширен
+(record_outcome/current_trust/seed) -> orchestrator читает LATEST running-trust (НЕ MAX), что
+закрывает Флаг 1 IDT-01 (trust-then-attack: провал реально понижает trust).
+
+- **Commit 1** — IDT-01 follow-up: `ITrustRegistry.record_outcome`/`current_trust`/`seed`
+  (contracts/i_identity.py + kernel/identity.py); `trust_score_of` (MAX, FSE-01) НЕ тронут.
+- **Commit 2** — контракт (К5, НЕ дублирован): `contracts/i_orchestrator.py` —
+  `OrchestrationGoal`/`RoutingDecision`/`TaskOutcome`/`IOrchestrator` (frozen VO, реальные типы).
+- **Commit 3** — impl + `build_orchestrator` фабрика (Флаг C, standalone, НЕ в build_kernel):
+  `kernel/orchestrator.py` — `ReferenceOrchestrator` (score=spec*trust, exclusion, max+tie-break
+  id; dispatch -> log + trust update из исхода).
+- **Commit 4** — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b): `tests/test_orchestrator.py` — 8 тестов
+  (route by spec+trust, permission/low-trust exclusion, trust evolves, negative, determinism).
+- **Commit 5** — docs: ADR-073 + AKB (adrs/issues) + CHANGELOG + PROJECT_STATUS.
+
+Встроены: K1/K6 (contracts + stdlib; kernel→contracts only); O1 (реестры НЕ мутируют HARD/FSM;
+trust-обновления SOFT); I-09 (scoring + тай-брейкер по id детерминированы); Флаг C (standalone,
+НЕ в build_kernel); K8 (no eligible -> None, low-trust/permission exclusion).
+
+Долги (задокументированы в ADR-073, non-scope): реальное мульти-агент исполнение через сеть
+(NW-01) — reference делегирует агента и логирует исход; RL/сложное планирование — только
+детерминированный scoring.
+
+**Verification:** `1157 passed, 0 failed` baseline + 10 IDT + 8 ORCH тестов; gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /
