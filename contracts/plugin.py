@@ -29,10 +29,20 @@ Stage 40 adds agent-extension hooks:
   register_agent_patterns()        - return list of (regex, [(tool, matcher), ...]).
 
 Architecture contract: stdlib (abc, typing) only.
+
+---
+
+ТЗ-PLUGIN-01 (ADR-071) EXTENSION (К5: IPlugin уже существовал как CLI/export boundary,
+Stage 25 — НЕ дублируем; вводим отдельный invoke-capable под-порт ICapabilityPlugin +
+IPluginRegistry поверх него). Плагины-обёртки над существующими портами
+(ISearchService / IResearchService) реализуют ICapabilityPlugin и регистрируются в
+ReferencePluginRegistry — детерминированно, LLM-free, standalone (Флаг C: НЕ в build_kernel).
 """
+
 from __future__ import annotations
 
 import abc
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
@@ -76,3 +86,91 @@ class Plugin:
     ) -> List[Tuple[str, List[Tuple[str, Callable[[Any], Dict[str, Any]]]]]]:
         """Stage 40: return list of (regex, [(tool_name, matcher_fn), ...])."""
         return []
+
+
+# ===========================================================================
+# ТЗ-PLUGIN-01 (ADR-071): capability-plugin registry (К5 EXTENSION, not duplicate)
+# ===========================================================================
+
+
+class PluginInvocationError(Exception):
+    """Raised when a plugin id is unknown or its invoke() fails."""
+
+
+@dataclass(frozen=True)
+class PluginResult:
+    """Outcome of a plugin invocation (frozen VO, real types — Флаг LLM-01)."""
+    ok: bool
+    payload: Any = None
+    error: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class PluginManifest:
+    """Static descriptor of a registered plugin (frozen VO)."""
+    id: str
+    name: str
+    capabilities: Tuple[str, ...]
+
+
+class ICapabilityPlugin(abc.ABC):
+    """Invoke-capable plugin port (ТЗ-PLUGIN-01).
+
+    Distinct from the CLI/export ``IPlugin`` (Stage 25): this boundary is for
+    discoverable, invocable capabilities behind a registry. one-port-per-boundary
+    (K5): we do NOT add invoke to the existing CLI ``IPlugin`` (that would change
+    its abstractmethod contract and break plugin_loader / test_plugins).
+    """
+
+    @property
+    @abc.abstractmethod
+    def id(self) -> str:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def name(self) -> str:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def capabilities(self) -> Tuple[str, ...]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def invoke(self, args: Any) -> PluginResult:
+        """Execute the plugin capability. Deterministic; read-only w.r.t. HARD/FSM."""
+        raise NotImplementedError
+
+
+class IPluginRegistry(abc.ABC):
+    """Deterministic registry of ICapabilityPlugin instances (ТЗ-PLUGIN-01).
+
+    register/list/get/invoke are deterministic (I-09). Unknown-id invoke ->
+    PluginResult(ok=False) (negative, no raise required by caller). Plugins are
+    read-only w.r.t. HARD/FSM/contracts (O1).
+    """
+
+    @abc.abstractmethod
+    def register(self, plugin: ICapabilityPlugin) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def unregister(self, plugin_id: str) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def list(self) -> List[PluginManifest]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get(self, plugin_id: str) -> Optional[ICapabilityPlugin]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def has(self, plugin_id: str) -> bool:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def invoke(self, plugin_id: str, args: Any = None) -> PluginResult:
+        raise NotImplementedError
