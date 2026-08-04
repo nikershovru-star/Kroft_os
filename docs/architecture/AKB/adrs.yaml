@@ -1304,6 +1304,33 @@ adrs:
   - TZ-LLM-LIVE-01
   - FLAG-C-LLM-LIVE
 
+- id: ADR-080
+  title: Real agent execution — agent-routed dispatch runs a real cognitive tick (ТЗ-AGENT-EXEC-01)
+  status: accepted
+  relates_to:
+  - ADR-073
+  - ADR-014
+  - ADR-076
+  ports_added:
+  - IAgentExecutor
+  ports_reused:
+  - IOrchestrator
+  - IAgentPlatform
+  - ITrustRegistry
+  laws_affected:
+  - K1
+  - K5
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-AGENT-EXEC-01
+  - FLAG-2-FED-EXEC
+  - FLAG-2-SKILL-EVOLVE
+
+
 
 
 

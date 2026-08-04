@@ -496,6 +496,22 @@ issues:
   impact: llm-real-transport
   closed_by: ADR-079
 
+- id: TZ-AGENT-EXEC-01
+  title: Real agent execution — agent-routed dispatch runs a real cognitive tick (closes Флаг 2 FED-EXEC)
+  status: done
+  description: 'Последний «фейк» в оркестрации закрыт: agent-routed dispatch возвращает РЕАЛЬНЫЙ outcome из kernel tick. K5-разведка: orchestrator.py:131-134 delegated success=True (Флаг 2 FED-EXEC); route() строит kind=agent из IIdentityRegistry (spec+trust, I-09); build_kernel+tick -> ._last_selected_plan (реальный LLM-free tick, I-09); IAgentPlatform.run(goal:str)->AgentResult (ADR-014) — ДРУГОЙ boundary, НЕ переиспользуется. commit 1: НОВЫЙ порт IAgentExecutor (execute(goal:OrchestrationGoal)->TaskOutcome, one-port-per-boundary, НЕ дублирует IAgentPlatform). commit 2: kernel/agent_executor.py ReferenceAgentExecutor -> goal→Intent, build_kernel tick, РЕАЛЬНЫЙ TaskOutcome (plan выбран/исполнен=success); НЕ поднимает исключений (сбой->TaskOutcome(success=False), trust понижается); build_agent_executor (Флаг C). commit 3: ReferenceOrchestrator принимает опц agent_executor; dispatch kind=agent ВЫЗЫВАЕТ executor.execute -> РЕАЛЬНЫЙ outcome -> record_outcome (trust эволюционирует success+/failure-); БЕЗ executor -> delegated success=True СОХРАНЕН (backward-compat); build_orchestrator пробрасывает. commit 4: tests/test_agent_execution.py 5 K8 тестов (real tick outcome + trust rise 0.9->1.0; real FAILURE lowers 0.9->0.8; no-executor delegated; determinism; O1 SOFT). commit 5: ADR-080. K1/K5/K6/K8/O1/I-09/Флаг C встроены. Закрывает Флаг 2 FED-EXEC-01 + Флаг 2 SKILL-EVOLVE-01. Non-scope: remote agent exec через FED-EXEC (далее); RL; LLM-backed agent (опционален).'
+  related:
+  - ADR-080
+  - ADR-073
+  - ADR-014
+  addresses:
+  - I-09
+  - FLAG-2-FED-EXEC
+  - FLAG-2-SKILL-EVOLVE
+  impact: real-agent-execution
+  closed_by: ADR-080
+
+
 
 
 

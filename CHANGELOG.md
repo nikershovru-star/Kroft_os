@@ -788,6 +788,41 @@ exec; консенсус между узлами (только trust-gating).
 
 ---
 
+## 2026-08-04 — ТЗ-AGENT-EXEC-01 (Real agent execution) — DONE
+
+Последний «фейк» в оркестрации закрыт: agent-routed dispatch возвращает РЕАЛЬНЫЙ outcome из
+kernel tick. K5-разведка (commit 0): `orchestrator.py:131-134` delegated success=True (Флаг 2 FED-EXEC);
+`route()` строит `kind='agent'` из `IIdentityRegistry` (spec+trust, I-09); `build_kernel`+`tick` →
+`._last_selected_plan` (реальный LLM-free tick, I-09); `IAgentPlatform.run(goal:str)→AgentResult` (ADR-014)
+— ДРУГОЙ boundary, НЕ переиспользуется.
+
+- **Commit 1** — НОВЫЙ порт `IAgentExecutor` (commit 1, `contracts/i_agent_executor.py`): `execute
+  (goal:OrchestrationGoal)→TaskOutcome` (+опц `can_execute`). One-port-per-boundary: НЕ дублирует
+  `IAgentPlatform` (ADR-014), который координирует платформу целиком и возвращает `AgentResult`; здесь
+  граница уже (goal-shape + result-shape = TaskOutcome, единообразно с plugin/remote/skill).
+- **Commit 2** — `kernel/agent_executor.py`: `ReferenceAgentExecutor` транслирует goal→Intent, прогоняет
+  РЕАЛЬНЫЙ когнитивный tick (`build_kernel`+`ReferenceExecutor`+`tick`), возвращает `TaskOutcome` из исхода
+  tick (plan выбран/исполнен = success). LLM-free по умолчанию (I-09 детерминизм); `llm_client` опционален.
+  НЕ поднимает исключений: сбой → `TaskOutcome(success=False)` (trust ПОНИЖАЕТСЯ, как при реальном провале).
+  `build_agent_executor` (Флаг C, НЕ в build_kernel). K1/K6: kernel/* → contracts+stdlib, НЕТ adapters/services.
+- **Commit 3** — `kernel/orchestrator.py`: `ReferenceOrchestrator` принимает опц `agent_executor`;
+  `dispatch()` `kind='agent'` ВЫЗЫВАЕТ `executor.execute(goal)` → РЕАЛЬНЫЙ outcome → `record_outcome` (trust
+  эволюционирует success+/failure-). БЕЗ executor → прежнее delegated success=True СОХРАНЕНО (backward-compat).
+  `build_orchestrator` пробрасывает `agent_executor`. Закрывает Флаг 2 FED-EXEC-01 + Флаг 2 SKILL-EVOLVE-01.
+- **Commit 4** — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b): `tests/test_agent_execution.py` — 5 тестов (real tick
+  outcome + trust rise 0.9→1.0; real FAILURE lowers 0.9→0.8; no-executor delegated; determinism; O1 SOFT).
+- **Commit 5** — docs: ADR-080 + AKB + CHANGELOG + PROJECT_STATUS.
+
+Встроены: K1/K5/K6 (НОВЫЙ порт НЕ дублирует IAgentPlatform, kernel→contracts+stdlib), K8 (real failure
+lowers trust), O1 (executor НЕ мутирует HARD/FSM; trust SOFT через record_outcome), I-09 (LLM-free tick,
+детерминизм), Флаг C (standalone, НЕ в build_kernel). «Tachikoma»-визия: автономные сервисные агенты
+реально исполняют цели локально. Долги (ADR-080 non-scope): remote agent exec через FED-EXEC (далее); RL;
+LLM-backed agent (опционален через build_kernel llm_client).
+
+**Verification:** `1226 passed, 0 failed` baseline + 5 AGENT-EXEC тестов; gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## 2026-08-04 — ТЗ-LLM-LIVE-01 (Real HTTP transport + local-model + graceful fallback) — DONE
 
 Capstone «интеллекта»: LLM становится РЕАЛЬНО подключаемым. K5-разведка (commit 0): `IHttpTransport`
