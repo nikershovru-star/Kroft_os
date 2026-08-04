@@ -407,6 +407,22 @@ issues:
   impact: behavior-foundation
   closed_by: ADR-073
 
+- id: TZ-SKILL-01
+  title: Procedural Memory / Skills — consolidation of repeated success into reusable Procedures + recall in orchestration (LLM-free, standalone)
+  status: done
+  description: 'Memory Layer завершён: процедурная память. Успешные последовательности консолидируются в Procedure (skill), orchestrator recall вместо повторного вывода. K5-критично: IProceduralMemory УЖЕ есть в contracts/i_memory.py (Wave 9/ADR-012) + InMemoryProceduralMemory в services/memory_platform.py; class Skill УЖЕ есть в cognitive_domain.py (Marketplace). НЕ дублировано — расширен существующий порт (store_skill/recall_skill_by_capability/list_skills/has_skill) + добавлен Procedure VO. kernel/procedural.py (ProcedureConsolidator, детерминированный learning) + ReferenceOrchestrator skill-recall (опц. IProceduralMemory).'
+  related:
+  - ADR-074
+  - ADR-073
+  - ADR-012
+  addresses:
+  - I-09
+  - FLAG-C-SKILL
+  - FLAG-1B-SKILL
+  impact: memory-layer-complete
+  closed_by: ADR-074
+
+
 
 
 

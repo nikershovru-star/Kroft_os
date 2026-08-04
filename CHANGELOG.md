@@ -663,6 +663,45 @@ trust-обновления SOFT); I-09 (scoring + тай-брейкер по id 
 
 ---
 
+## 2026-08-04 — ТЗ-SKILL-01 (Procedural Memory / Skills) — DONE
+
+Memory Layer ЗАВЕРШЁН: процедурная память. Успешные последовательности действий консолидируются
+в Procedure (skill), который orchestrator вспоминает (recall) вместо повторного вывода. Эволюция
+стала продуктивной: опыт (repeated success) -> Procedure -> recall.
+
+K5-разведка (commit 0) КРИТИЧНА: ТЗ предписывал `contracts/i_procedural.py` (IProceduralMemory +
+Skill VO), НО `IProceduralMemory` УЖЕ есть в `contracts/i_memory.py` (Wave 9/ADR-012) +
+`InMemoryProceduralMemory` в `services/memory_platform.py`, а `class Skill` УЖЕ есть в
+`contracts/cognitive_domain.py` (Marketplace/TZ-021). Дублирование порта/класса = нарушение K5
+one-port-per-boundary. Решение: расширен СУЩЕСТВУЮЩИЙ `IProceduralMemory` (store_skill/
+recall_skill_by_capability/list_skills/has_skill) + добавлен `Procedure` VO (frozen, НЕ Skill).
+Старые record_procedure/recall_procedure СОХРАНЕНЫ (обратная совместимость, тесты целы).
+
+- **Commit 1** — `contracts/i_memory.py` (Procedure VO + IProceduralMemory extension) +
+  `services/memory_platform.py` (impl). K5: существующий порт, НЕ дублирован.
+- **Commit 2** — `kernel/procedural.py`: `ProcedureConsolidator` (детерминированный learning из
+  repeated success, >= threshold + >= min_rate; idempotent store_skill один раз; steps первого
+  успеха) + `build_procedural` фабрика (Флаг C, standalone).
+- **Commit 3** — `kernel/orchestrator.py` (ORCH-01): `ReferenceOrchestrator` опц. принимает
+  `IProceduralMemory`; `route()` сначала `recall_skill_by_capability` -> `RoutingDecision(
+  kind='skill', rationale='skill-recall:<cap>')`, переопределяя обычный routing. Standalone (Флаг C).
+- **Commit 4** — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b): `tests/test_procedural_memory.py` — 9 тестов
+  (store/recall, consolidation из repeated success, idempotent, skill-recall, negative, O1 SOFT, I-09).
+- **Commit 5** — docs: ADR-074 + AKB (adrs/issues) + CHANGELOG + PROJECT_STATUS.
+
+Встроены: K1/K6 (contracts+stdlib; kernel/services->contracts only); O1 (Procedure SOFT; orchestrator
+НЕ мутирует skill); I-09 (консолидация/recall детерминированы, order-independent, idempotent);
+Флаг C (standalone, НЕ в build_kernel); K5 (НЕ дублирован IProceduralMemory/Skill/ILayeredMemory/ORCH);
+K8 (no skill -> обычный routing; recall None для unknown).
+
+Долги (задокументированы в ADR-074, non-scope): реальное мульти-агент исполнение (NW-01) — agent
+outcomes придут оттуда (Флаг 2 ORCH-01: agent-trust монотонно растёт до NW-01); RL/авто-синтез
+процедур — только детерминированная консолидация из лога; LLM-backed skill synthesis — future.
+
+**Verification:** `1157 passed, 0 failed` baseline + 10 IDT + 8 ORCH + 9 SKILL тестов; gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /
