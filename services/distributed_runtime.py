@@ -41,6 +41,7 @@ from contracts.i_distributed_runtime import (
 from contracts.i_leader_elector import ILeaderElector
 from contracts.i_memory import IMemoryStore
 from contracts.i_network_transport import INetworkTransport, SoftLayerItem
+from contracts.i_identity import ITrustRegistry
 from contracts.i_cognitive_kernel import ILayeredMemory
 from contracts.i_telemetry import ITelemetrySink
 from contracts.knowledge_graph import Node, NodeType
@@ -362,11 +363,19 @@ class FederationSoftMemorySync:
     unchanged — it already reads ``ILayeredMemory``; federation only FILLS that layer.
     """
     def __init__(self, self_node_id: str, memory: "ILayeredMemory",
-                 transport: "INetworkTransport", confidence_threshold: float = 0.5) -> None:
+                 transport: "INetworkTransport", confidence_threshold: float = 0.5,
+                 trust_registry: "Optional[ITrustRegistry]" = None,
+                 trust_threshold: float = 0.0) -> None:
         self._node_id = self_node_id
         self._memory = memory
         self._transport = transport
         self._threshold = confidence_threshold
+        # ТЗ-IDT-01: optional trust-gating at the federation boundary. When None, the
+        # receiver behaves EXACTLY like pre-IDT-01 (default permissive) — FSE-01 tests
+        # stay green. When set, the receiver rejects batches from authors whose
+        # trust_score_of(sender) < trust_threshold.
+        self._trust_registry = trust_registry
+        self._trust_threshold = trust_threshold
         self._receiver_bound = True  # subscribed once in __init__; never re-bound
         # NOTE: we do NOT disable the receiver here. The NW-01 "flag 1" lock prevents
         # EXTERNAL re-binding of the receiver callback to a different target; the local
@@ -395,6 +404,7 @@ class FederationSoftMemorySync:
                     kind="semantic", content=f.content, confidence=f.confidence.value,
                     origin=origin, causal=_causal_to_dict(f.causal),
                     provenance=_prov_to_dict(f.confidence.provenance),
+                    author_id=origin,  # ТЗ-IDT-01: author == learning node
                 ).to_wire())
         for p in memory.get_normative():
             if getattr(p, "layer", None) == "soft" and p.confidence.value >= self._threshold:
@@ -402,6 +412,7 @@ class FederationSoftMemorySync:
                     kind="soft_policy", content=p.body, confidence=p.confidence.value,
                     origin=origin, causal=None,
                     provenance=_prov_to_dict(p.provenance),
+                    author_id=origin,  # ТЗ-IDT-01: author == learning node
                 ).to_wire())
             # HARD (layer != 'soft'): skipped — O1, never federated
         if items:
@@ -409,8 +420,15 @@ class FederationSoftMemorySync:
 
     def _handle_remote_soft(self, items: List[dict], sender: str) -> None:
         """Receiver: merge federated SOFT items with confidence-gate + dedup + provenance.
-        Stays live after attach (the NW-01 flag-1 lock only prevents re-binding, not
-        receiving). Idempotent: duplicate content/body is skipped."""
+
+        ТЗ-IDT-01 trust-gating (OPTIONAL, default permissive): if a trust registry is wired,
+        reject the ENTIRE batch when the sender's trust score is below the threshold. With
+        no registry, behaviour is byte-for-byte the pre-IDT-01 FSE-01 receiver.
+        """
+        # ТЗ-IDT-01: optional trust-gate at the federation boundary.
+        if self._trust_registry is not None:
+            if self._trust_registry.trust_score_of(sender) < self._trust_threshold:
+                return  # reject untrusted sender (low-trust items NEVER enter memory)
         for it in items:
             item = SoftLayerItem.from_wire(it)
             if item.confidence < self._threshold:

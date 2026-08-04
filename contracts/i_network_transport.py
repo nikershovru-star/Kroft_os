@@ -87,9 +87,10 @@ class SoftLayerItem:
     origin: str          # node_id that learned it
     causal: Optional[dict] = None     # serialized CausalMark (node_origin, lamport)
     provenance: Optional[dict] = None  # serialized Provenance
+    author_id: Optional[str] = None    # ТЗ-IDT-01: authoring agent/nоде (default = origin)
 
     def to_wire(self) -> dict:
-        return {
+        d = {
             "kind": self.kind,
             "content": self.content,
             "confidence": self.confidence,
@@ -97,10 +98,14 @@ class SoftLayerItem:
             "causal": self.causal,
             "provenance": self.provenance,
         }
+        if self.author_id is not None:
+            d["author_id"] = self.author_id
+        return d
 
     @classmethod
     def from_wire(cls, d: dict) -> "SoftLayerItem":
         return cls(
             kind=d["kind"], content=d["content"], confidence=float(d["confidence"]),
             origin=d["origin"], causal=d.get("causal"), provenance=d.get("provenance"),
+            author_id=d.get("author_id"),
         )
