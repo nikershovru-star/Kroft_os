@@ -1034,3 +1034,30 @@ adrs:
   - FLAG-B-SEARCH
   - FLAG-C-SEARCH
   - FLAG-D-SEARCH
+
+- id: ADR-070
+  title: Research Service — deterministic research cycle over SEARCH (ТЗ-RESEARCH-01)
+  status: accepted
+  relates_to:
+  - ADR-069
+  - ADR-054
+  - ADR-046
+  - ADR-065
+  ports_added:
+  - IResearchService
+  - ResearchReport
+  - ResearchGoal
+  laws_affected:
+  - K1
+  - K6
+  - K8
+  - O1
+  - I-09
+  - I-10
+  evidence_level: V
+  addresses:
+  - TZ-RESEARCH-01
+  - I-09
+  - I-10
+  - FLAG-C-RESEARCH
+  - FLAG-1B-RESEARCH

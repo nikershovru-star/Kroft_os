@@ -486,6 +486,39 @@ llm.fallback_rate растёт. Ядро LLM-free; I-10 «LLM = сменный �
 
 ---
 
+## 2026-08-04 — ТЗ-RESEARCH-01 (Research Service) — DONE
+
+Завершена вторая платформенная волна применимости: детерминированный исследовательский
+цикл ПОВЕРХ SEARCH-01 (извлечение -> синтез -> опц. SOFT-запись), LLM-free по умолчанию (I-09).
+`IResearchService` (contracts/i_research.py) + `ResearchReport`/`ResearchGoal` (frozen VO,
+реальные типы: findings: Tuple[SearchHit], causal: Optional[CausalMark]). `ReferenceResearchService`
+(kernel/research.py) — STANDALONE read-first сервис поверх СУЩЕСТВУЮЩЕГО ISearchService
+(НЕ дублирует порт поиска, K5-разведка: IResearchService не существовал → создан;
+ISearchService/ILayeredMemory/ILLMAdvisor уже есть → переиспользованы).
+
+Четыре обязательных ограничения встроены:
+- **Флаг C (SEARCH-01)** — НЕ в build_kernel: `build_research_service` отдельная standalone
+  фабрика; ядро не зависит от research (K6), god-factory (Флаг 1 OBS-01) не усугубляется.
+- **I-09 (determinism)** — LLM-free путь детерминирован: summary = top-finding content
+  (search total-order Флага B SEARCH-01), aggregate confidence = mean; повторный goal →
+  идентичный report.
+- **LLM-01/02 (fallback)** — опц. ILLMAdvisor; при LLMError/LLMTimeout → graceful fallback на
+  retrieval-only summary (== результат без LLM); fallback сам детерминирован.
+- **O1 (SOFT-only)** — write-back ТОЛЬКО через commit_semantic (SOFT), под opt-in
+  `write_back=True`; НЕ трогает HARD/FSM/контракты.
+
+- **Commit 1 — контракт.** `contracts/i_research.py` (IResearchService/ResearchReport/ResearchGoal, K1).
+- **Commit 2+3 — impl + integration.** `kernel/research.py` (ReferenceResearchService,
+  LLM-free cycle, O1 SOFT write-back; build_research_service standalone фабрика).
+- **Commit 4 — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b/4).** `tests/test_research_service.py`:
+  13 тестов (report+findings, determinism, aggregate conf, negative, LLM fallback ==
+  retrieval-only, O1 SOFT write-back, factory standalone).
+- **Commit 5 — docs.** ADR-070 + AKB (adrs/issues) + CHANGELOG + PROJECT_STATUS.
+
+**Verification:** `1130 passed, 0 failed`; gate `14 passed`; ad-hoc `TBD`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /

@@ -334,3 +334,20 @@ issues:
   - FLAG-D-SEARCH
   impact: platform-wave-enabler
   closed_by: ADR-069
+
+- id: TZ-RESEARCH-01
+  title: Research Service — deterministic research cycle over SEARCH (LLM-free default + fallback)
+  status: done
+  description: 'IResearchService поверх ISearchService (SEARCH-01): retrieve -> aggregate confidence -> ResearchReport; опц. LLM-синтез через ILLMAdvisor с fallback == retrieval-only. Standalone (Флаг C), НЕ в build_kernel. O1: write-back только SOFT (commit_semantic, opt-in).'
+  related:
+  - ADR-070
+  - ADR-069
+  - ADR-054
+  addresses:
+  - I-09
+  - I-10
+  - FLAG-C-RESEARCH
+  - FLAG-1B-RESEARCH
+  impact: platform-wave-enabler
+  closed_by: ADR-070
+
