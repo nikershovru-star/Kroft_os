@@ -229,6 +229,40 @@ class IProceduralMemory(abc.ABC):
         """True if a known-good Procedure exists for `capability`."""
         raise NotImplementedError
 
+    # --- ТЗ-SKILL-EVOLVE-01 extensions: closed-loop skill lifecycle (НЕ новый порт, K5) ---
+    @abc.abstractmethod
+    def record_skill_outcome(
+        self, capability: str, success: bool, delta: float = 0.1
+    ) -> Optional["Procedure"]:
+        """Evolve a stored skill's confidence from a dispatch outcome (ТЗ-SKILL-EVOLVE-01).
+
+        success -> confidence += delta (cap 1.0); failure -> confidence -= delta (floor 0.0).
+        Returns the UPDATED Procedure (a NEW frozen instance via store_skill) or None if no
+        skill exists for `capability`. Deterministic (I-09). Does NOT invent a new skill.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def invalidate_skill(self, capability: str) -> bool:
+        """Drop a stored skill (e.g. confidence fell below the floor). Returns True if removed.
+
+        Deterministic (I-09). After invalidation the orchestrator falls back to normal routing.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def recall_skill_by_capability(
+        self, capability: str, min_confidence: float = 0.0
+    ) -> Optional["Procedure"]:
+        """Return the known-good Procedure for `capability`, or None.
+
+        K5 (ТЗ-SKILL-EVOLVE-01): behaviour-preserving extension — `min_confidence` gate is
+        OPTIONAL (default 0.0 = unchanged recall for SKILL-01 callers). When set, only skills
+        with `confidence >= min_confidence` are returned (confidence-gated recall, closes
+        Флаг 2 SKILL-01). Low-confidence / invalidated skills -> None -> normal routing.
+        """
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class Procedure:
