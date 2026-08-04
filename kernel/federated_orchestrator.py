@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
+import time
+
 from contracts.i_federated_orchestrator import (
     REQ_MARKER,
     RESP_MARKER,
@@ -61,12 +63,14 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         trust_threshold: float = 0.2,
         trust_delta: float = 0.1,
         local_node_id: str = "local",
+        response_timeout: float = 2.0,
     ) -> None:
         self._t = transport
         self._trust = trust
         self._threshold = trust_threshold
         self._delta = trust_delta
         self._local = local_node_id
+        self._response_timeout = response_timeout  # SOFT tunable (O1, runtime reflection)
         self._pending: Dict[str, dict] = {}
         self._t.on_facts(self._on_facts)
 
@@ -87,16 +91,32 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         )
         # Carrier: ship the request via NW-01 send_facts (broadcast; remote node responds).
         self._t.send_facts([envelope], self._local)
-        # Deterministic reference path: the transport delivers the response synchronously
-        # (FakeTransport in tests calls on_facts immediately). If not resolved -> failure.
-        holder = self._pending.get(request_id)
-        if holder is None or "outcome" not in holder:
+        # Deterministic WAIT for the correlated response (ТЗ-FED-TCP-01 / FSE-01 timing lesson):
+        # over real TCP the remote execution + response round-trips asynchronously, so we poll
+        # the pending holder (with a soft timeout) until the outcome lands — NOT a synchronous
+        # assume. In-process SyncTransport resolves within one poll; real TCP resolves after the
+        # network round-trip. Poll (short sleeps), NOT wall-clock sleep-luck.
+        outcome = self._wait_for_outcome(request_id, timeout=self._response_timeout)
+        if outcome is None:
+            self._pending.pop(request_id, None)
             return TaskOutcome(success=False, detail=f"no remote response from {node_id}")
-        outcome: TaskOutcome = holder["outcome"]
-        del self._pending[request_id]
         # Trust evolves from the REAL remote outcome (success +, failure -).
         self._trust.record_outcome(node_id, outcome.success, self._delta)
         return outcome
+
+    def _wait_for_outcome(self, request_id: str, timeout: float) -> Optional[TaskOutcome]:
+        """Deterministic barrier: poll the pending holder until the correlated outcome arrives.
+
+        Returns the TaskOutcome, or None on timeout. Polls (short sleeps) — does not busy-spin
+        and does not assume synchronous transport delivery (real TCP round-trips async).
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            holder = self._pending.get(request_id)
+            if holder is not None and "outcome" in holder:
+                return holder["outcome"]
+            time.sleep(0.01)
+        return None
 
     def _on_facts(self, facts: List[dict], sender_node_id: str) -> None:
         for fact in facts:
@@ -115,9 +135,11 @@ def build_remote_orchestrator(
     trust_threshold: float = 0.2,
     trust_delta: float = 0.1,
     local_node_id: str = "local",
+    response_timeout: float = 2.0,
 ) -> ReferenceRemoteOrchestrator:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated)."""
     return ReferenceRemoteOrchestrator(
         transport, trust, trust_threshold=trust_threshold,
         trust_delta=trust_delta, local_node_id=local_node_id,
+        response_timeout=response_timeout,
     )
