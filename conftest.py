@@ -1,25 +1,29 @@
-"""Pytest bootstrap: ensure project root + first-party packages import cleanly.
+"""Repo-root conftest: hard guard against collecting the git-ignored ``archive/`` tree.
 
-The eager imports below guarantee that `contracts`, `kernel`, `runtime`,
-`infrastructure`, `services`, `adapters` are fully registered in sys.modules
-*before* pytest collects test modules. Without this, full-suite collection hits a
-namespace-package conflict (ModuleNotFoundError on existing files such as
-contracts.i_execution_sandbox / runtime.supervisor.circuit_breaker) because partial
-package state leaks between collected test modules.
+The KROFT_OS ``pytest.ini`` already sets ``norecursedirs = archive`` — but that only takes
+effect when pytest's rootdir is the repo. If pytest is launched from a parent dir (e.g. the
+Obsidian Vault root) pointing at ``02-Projects/KROFT_OS``, ``pytest.ini`` is not in scope and
+the stale ``archive/KnowledgeOS-v5/`` code (a SEPARATE, unmaintained project the owner chose
+to keep) gets collected, emitting benign ``\w``/DeprecationWarnings and unrelated failures.
+
+This conftest is ALWAYS loaded when pytest collects the repo path (regardless of cwd), and
+prunes any ``archive`` directory by substring — so the guard holds no matter where pytest is
+started. It does NOT modify ``archive/`` (owner decision: leave it untouched); it only excludes
+it from collection.
 """
-import os
-import sys
+
+from __future__ import annotations
+
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-# Eager registration of first-party top-level packages (bootstrap only).
-for _pkg in ("contracts", "kernel", "runtime", "infrastructure", "services", "adapters"):
-    try:
-        __import__(_pkg)
-    except Exception:
-        # A package may be partially importable in isolation; let individual
-        # tests surface real import errors rather than failing collection.
-        pass
+def pytest_ignore_collect(collection_path: "Path", config) -> bool:
+    # collection_path is a pathlib.Path in pytest >= 7.
+    parts = collection_path.parts
+    # 'archive' is a top-level dir under the repo; also guard the known nested name.
+    if "archive" in parts:
+        return True
+    # Defense in depth: substring match on the full path string.
+    if "archive" in str(collection_path) and "KnowledgeOS-v5" in str(collection_path):
+        return True
+    return False
