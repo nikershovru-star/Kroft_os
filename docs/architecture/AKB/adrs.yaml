@@ -1061,3 +1061,30 @@ adrs:
   - I-10
   - FLAG-C-RESEARCH
   - FLAG-1B-RESEARCH
+
+- id: ADR-071
+  title: Plugin Registry — deterministic capability registry over existing ports (ТЗ-PLUGIN-01)
+  status: accepted
+  relates_to:
+  - ADR-069
+  - ADR-070
+  - ADR-054
+  ports_added:
+  - ICapabilityPlugin
+  - IPluginRegistry
+  - PluginManifest
+  - PluginResult
+  - PluginInvocationError
+  laws_affected:
+  - K1
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-PLUGIN-01
+  - I-09
+  - FLAG-C-PLUGIN
+  - FLAG-1B-PLUGIN
+

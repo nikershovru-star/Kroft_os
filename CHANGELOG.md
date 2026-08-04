@@ -519,6 +519,42 @@ ISearchService/ILayeredMemory/ILLMAdvisor уже есть → переиспол
 
 ---
 
+## 2026-08-04 — ТЗ-PLUGIN-01 (Plugin Registry) — DONE
+
+Завершена третья платформенная волна применимости: детерминированный реестр внешних
+capabilities за портом (register/list/invoke), LLM-free (I-09), standalone (Флаг C).
+`ICapabilityPlugin` + `IPluginRegistry` (contracts/plugin.py) + `ReferencePluginRegistry`
+(kernel/plugin.py) + reference-плагины `SearchPlugin`/`ResearchPlugin`, ОБЁРТКИ над
+существующими `ISearchService`/`IResearchService` (К5: переиспользование, НЕ дублирование).
+
+К5-разведка (commit 0) критична: `IPlugin` (CLI/export/crawl, Stage 25) УЖЕ существовал в
+`contracts/plugin.py`. Создание второго `IPlugin` в `i_plugin.py` = дублирование границы
+(запрещено). Введён отдельный invoke-capable под-порт `ICapabilityPlugin` (one-port-per-
+boundary); существующий test_plugins.py (CLI IPlugin) НЕ сломан (10/10 green). `ICapabilityRegistry`
+(runtime) — другой реестр (именованные capabilities), НЕ затронут.
+
+Обязательные ограничения встроены:
+- **Флаг C (SEARCH/RESEARCH)** — НЕ в build_kernel: `build_plugin_registry` отдельная standalone
+  фабрика; ядро не зависит от registry (K6), god-factory (Флаг 1 OBS-01) не усугубляется.
+- **I-09 (determinism)** — list() сортирован по id (стабильный порядок); invoke детерминирован.
+- **O1 (read-only)** — reference-плагины ТОЛЬКО читают (search/research), НЕ мутируют HARD/FSM/
+  контракты; registry НЕ мутирует плагины.
+- **K8 (negative)** — unknown-id invoke -> PluginResult(ok=False, error); duplicate register ->
+  PluginInvocationError; unregister unknown -> no-op.
+
+- **Commit 1 — контракт (расширение, К5).** `contracts/plugin.py`: ICapabilityPlugin, IPluginRegistry,
+  PluginManifest/PluginResult (frozen VO), PluginInvocationError; IPlugin (CLI) не тронут.
+- **Commit 2+3 — impl + integration.** `kernel/plugin.py`: ReferencePluginRegistry + SearchPlugin/
+  ResearchPlugin (обёртки) + build_plugin_registry (standalone фабрика).
+- **Commit 4 — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b).** `tests/test_plugin_registry.py`: 14 тестов
+  (register/list/get, invoke->PluginResult, determinism, unregister, duplicate->error, unknown->
+  error, O1 read-only, composition, factory).
+- **Commit 5 — docs.** ADR-071 + AKB (adrs/issues) + CHANGELOG + PROJECT_STATUS.
+
+**Verification:** `1143 passed, 0 failed`; gate `14 passed`; ad-hoc `TBD`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /

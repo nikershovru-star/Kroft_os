@@ -351,3 +351,19 @@ issues:
   impact: platform-wave-enabler
   closed_by: ADR-070
 
+- id: TZ-PLUGIN-01
+  title: Plugin Registry — deterministic capability registry over existing ports (LLM-free, standalone)
+  status: done
+  description: 'ICapabilityPlugin + IPluginRegistry поверх существующих портов (ISearchService/IResearchService). ReferencePluginRegistry in-memory deterministic; SearchPlugin/ResearchPlugin ОБЁРТЫВАЮТ порты (НЕ дублируют). Standalone (Флаг C), НЕ в build_kernel. O1: read-only w.r.t. HARD.'
+  related:
+  - ADR-071
+  - ADR-070
+  - ADR-069
+  addresses:
+  - I-09
+  - FLAG-C-PLUGIN
+  - FLAG-1B-PLUGIN
+  impact: platform-wave-enabler
+  closed_by: ADR-071
+
+
