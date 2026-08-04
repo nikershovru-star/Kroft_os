@@ -84,3 +84,20 @@ K5-разведка (commit 0): `IProceduralMemory` (Wave 9/ADR-012) УЖЕ ес
 - Smoke: store 0.8 → success 0.9 → failure 0.8; gate 0.5 excludes 0.3 skill→plugin; SkillEvolution
   invalidate при floor 0.3; orchestrator dispatch 0.8→0.9.
 - Full suite GREEN, gate 14/14, akb-lint PASSED.
+
+## Non-blocking reviewer flags (ТЗ-SKILL-EVOLVE-01, accepted, НЕ блок)
+Зафиксированы ревьювером (2026-08-04), НЕ блокируют приём; тесты покрывают оба пути.
+
+- **Флаг 1 (medium-light) — два пути эволюции навыка; инвалидация не в оркестраторе.**
+  `ReferenceOrchestrator.dispatch` для `kind='skill'` вызывает `record_skill_outcome` напрямую
+  (эволюция confidence, НО без инвалидации), тогда как `SkillEvolution.on_skill_outcome`
+  делает эволюцию + инвалидацию при `confidence < floor`. Следствие: в самом оркестраторе навык
+  может упасть до 0.0 и НЕ инвалидироваться; fallback на обычный routing достигается только через
+  `skill_recall_min_confidence > 0` (при `gate=0.0` навык с confidence 0.0 всё ещё вспоминается).
+  **Рекомендация (будущая):** унифицировать — либо оркестратор использует `SkillEvolution`
+  (с инвалидацией), либо `record_skill_outcome` сам инвалидирует при floor. Тогда замкнутый цикл
+  не зависит от выставленного gate. Future work (отдельный мелкий ТЗ/коммит), НЕ блок.
+
+- **Флаг 2 (light) — `_execute_skill` для агентского пути возвращает `True`.**
+  Наследие Флага 2 FED-EXEC-01: реальный исход для навыка, маршрутизированного к агенту, придёт
+  только с полноценным мульти-агентным исполнением. Задокументировано, НЕ блок.
