@@ -467,6 +467,22 @@ issues:
   impact: skill-lifecycle-closed
   closed_by: ADR-077
 
+- id: TZ-FED-TCP-01
+  title: Federated execution over real TCP NW-01 — two nodes exchange execution over a real socket, trust from real outcome (LLM-free, standalone)
+  status: done
+  description: 'Валидация Флага 1 FED-EXEC-01 на практике. K5-разведка: NetworkTransport(INetworkTransport) — реальный TCP (wraps TcpEventBus, localhost); connect/ensure_connected(barrier, НЕ sleep-luck)/send_facts/on_facts/disconnect; real NetworkTransport.on_facts fan-out (append) -> фикс 321fc21 (delegate) корректен в обоих случаях. FSE-01 real-TCP паттерн: уникальные порты, _wire, disconnect teardown, poll/retry. НОВЫЙ порт НЕ нужен (K5) — переиспользуем INetworkTransport + build_federated_node (transport-agnostic). commit 1: контракт не менялся (build_federated_node docstring уточнён). commit 2: tests/fed_tcp_helpers.py (build_tcp_federated_node+make_tcp_federated_pair+ensure_pair_connected+teardown_tcp_pair) — в tests/ (K1/K6: kernel/adapters НЕ cross-import). НАЙДЕН+ИСПРАВЛЕН баг: dispatch_remote ждал ответ синхронно -> на real TCP async false-negative; fix _wait_for_outcome(request_id,timeout) poll barrier + response_timeout SOFT (O1). commit 3: tests/test_federated_tcp_execution.py 6 K8 тестов (real outcome по сокету + trust evolve success+/failure-; gating low-trust excluded; clean teardown; determinism correlation request_id; negative server ignores non-addressed). commit 4: ADR-078. K1/K6/K8/O1/I-09/Флаг C/К5 все встроены.'
+  related:
+  - ADR-078
+  - ADR-076
+  - ADR-044
+  addresses:
+  - I-09
+  - FLAG-1-FED-EXEC
+  - FLAG-1B-FED-TCP
+  impact: network-layer-real-tcp
+  closed_by: ADR-078
+
+
 
 
 

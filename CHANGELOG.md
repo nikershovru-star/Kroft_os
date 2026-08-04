@@ -788,6 +788,43 @@ exec; консенсус между узлами (только trust-gating).
 
 ---
 
+## 2026-08-04 — ТЗ-FED-TCP-01 (Federated execution over real TCP NW-01) — DONE
+
+Валидация Флага 1 FED-EXEC-01 на практике: два узла поверх РЕАЛЬНОГО TCP-транспорта
+`NetworkTransport` (adapters/network_transport.py, NW-01 localhost TCP) обмениваются
+исполнением; trust обновляется из РЕАЛЬНОГО исхода, пришедшего по сокету. Завершает Network
+Layer реальным транспортом.
+
+K5-разведка (commit 0): `NetworkTransport(INetworkTransport)` — реальный TCP (wraps TcpEventBus);
+`connect`/`ensure_connected`(barrier, НЕ sleep-luck)/`send_facts`/`on_facts`/`disconnect`. FSE-01
+real-TCP паттерн: уникальные порты, `_wire`, teardown `disconnect()`, poll/retry. **ВАЖНО:** real
+`NetworkTransport.on_facts` fan-out (append) -> фикс `321fc21` (единый delegate) корректен в ОБОИХ
+случаях.
+
+- **Commit 1** — контракт: НОВЫЙ порт НЕ нужен (K5). `build_federated_node` docstring уточнён
+  (принимает real TCP; kernel НЕ импортирует adapters — wiring в tests/).
+- **Commit 2** — reference impl: `tests/fed_tcp_helpers.py` (build_tcp_federated_node +
+  make_tcp_federated_pair + ensure_pair_connected + teardown_tcp_pair) — в tests/ (K1/K6:
+  kernel/adapters НЕ cross-import). **НАЙДЕН+ИСПРАВЛЕН реальный баг:** `dispatch_remote` ждал ответ
+  синхронно -> на real TCP async false-negative 'no remote response'. Фикс: `_wait_for_outcome
+  (request_id, timeout)` poll-with-timeout barrier (детерминизм по request_id) + `response_timeout`
+  SOFT-tunable (O1). SyncTransport НЕ сломан (FED-ORCH/EXEC зелёные).
+- **Commit 3** — тесты K8 (ОТДЕЛЬНЫЙ коммит, Флаг 1b): `tests/test_federated_tcp_execution.py` —
+  6 тестов (real outcome по сокету + trust success+/failure-; gating low-trust excluded; clean
+  teardown; determinism correlation request_id; negative server ignores non-addressed).
+- **Commit 4** — docs: ADR-078 + AKB (adrs/issues) + CHANGELOG + PROJECT_STATUS.
+
+Встроены: K1/K6 (cross-layer wiring в tests/, kernel/adapters НЕ cross-import); O1 (trust SOFT;
+server НЕ мутирует remote trust); I-09 (correlation request_id + ensure_connected barrier, НЕ
+sleep-luck); Флаг C (standalone, НЕ в build_kernel); K5 (НЕ дублирован INetworkTransport/
+IRemoteOrchestrator/build_federated_node); K8 (server фильтрует по node_id; low-trust excluded).
+Network Layer ЗАВЕРШЁН реальным транспортом. Долги (ADR-078 non-scope): multi-hop routing/
+discovery; консенсус; LLM-backed remote exec; распределённый TCP по разным хостам (только localhost).
+
+**Verification:** `1215 passed, 0 failed` baseline + 6 FED-TCP тестов; gate `14 passed`; akb-lint PASSED.
+
+---
+
 ## 2026-08-04 — ТЗ-SKILL-EVOLVE-01 (Closed-loop skill lifecycle) — DONE
 
 Замыкает Флаги 1–2 SKILL-01. SKILL-01 дал процедурную память, но цикл навыка был открыт: Procedure

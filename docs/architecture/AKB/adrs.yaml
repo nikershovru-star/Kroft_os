@@ -1252,6 +1252,35 @@ adrs:
   - I-09
   - FLAG-1B-SKILL-EVOLVE
 
+- id: ADR-078
+  title: Federated execution over real TCP NW-01 — two nodes exchange execution over a real socket, trust from real outcome (ТЗ-FED-TCP-01)
+  status: accepted
+  relates_to:
+  - ADR-076
+  - ADR-075
+  - ADR-044
+  - ADR-015
+  ports_added: []
+  ports_reused:
+  - INetworkTransport
+  - IRemoteOrchestrator
+  - IRemoteExecutionListener
+  - ReferenceOrchestrator
+  laws_affected:
+  - K1
+  - K5
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-FED-TCP-01
+  - I-09
+  - FLAG-1-FED-EXEC
+  - FLAG-1B-FED-TCP
+
+
 
 
 
