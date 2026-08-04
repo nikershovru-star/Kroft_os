@@ -33,6 +33,7 @@ from contracts.i_orchestrator import (
     TaskOutcome,
 )
 from contracts.i_federated_orchestrator import IRemoteOrchestrator
+from contracts.i_agent_executor import IAgentExecutor
 from contracts.plugin import IPluginRegistry
 
 
@@ -52,6 +53,7 @@ class ReferenceOrchestrator(IOrchestrator):
         remote: Optional[IRemoteOrchestrator] = None,
         remote_nodes: Tuple[str, ...] = (),
         skill_recall_min_confidence: float = 0.0,
+        agent_executor: Optional["IAgentExecutor"] = None,
     ) -> None:
         self._identities = identity_registry
         self._plugins = plugin_registry
@@ -64,6 +66,7 @@ class ReferenceOrchestrator(IOrchestrator):
         self._remote = remote
         self._remote_nodes = tuple(remote_nodes)
         self._skill_gate = skill_recall_min_confidence
+        self._agent_executor = agent_executor  # ТЗ-AGENT-EXEC-01 (Флаг C): optional
         # Seed LATEST running trust from declared baselines (evolves via record_outcome).
         # Idempotent: does NOT overwrite trust already evolved by prior dispatch outcomes.
         for agent in self._identities.list():
@@ -128,7 +131,19 @@ class ReferenceOrchestrator(IOrchestrator):
                 # performed by the caller's SkillEvolution; here we evolve directly for the orchestrator.
                 self._procedural.record_skill_outcome(goal.capability, success, self._delta)
             return TaskOutcome(success=success, detail=f"skill executed (outcome fed back)")
-        # agent: delegated execution (real multi-agent run via NW-01 = future, ТЗ-ORCH-01 non-scope)
+        # agent: real execution when an IAgentExecutor is wired (ТЗ-AGENT-EXEC-01, closes
+        # Флаг 2 FED-EXEC-01 / Флаг 2 SKILL-EVOLVE-01). The executor runs a REAL cognitive
+        # tick and returns the computed TaskOutcome; trust evolves from that real outcome
+        # (success +, failure -) via record_outcome — uniform with plugin/remote/skill.
+        if self._agent_executor is not None:
+            outcome = self._agent_executor.execute(goal)
+            self._log.append(decision.chosen_id,
+                             f"dispatch:{goal.goal_id}:{'ok' if outcome.success else 'fail'}")
+            self._trust.record_outcome(decision.chosen_id, outcome.success, self._delta)
+            return outcome
+        # Backward-compatible fallback: no executor wired -> delegated success=True (pre-TЗ
+        # behaviour). Trust always rises here (delegated, no real outcome) — retained only so
+        # callers not yet using IAgentExecutor keep working; superseded by real execution above.
         self._log.append(decision.chosen_id, f"dispatch:{goal.goal_id}:delegated")
         self._trust.record_outcome(decision.chosen_id, True, self._delta)
         return TaskOutcome(success=True, detail="agent delegated (outcome logged)")
@@ -193,6 +208,7 @@ def build_orchestrator(
     remote: Optional[IRemoteOrchestrator] = None,
     remote_nodes: Tuple[str, ...] = (),
     skill_recall_min_confidence: float = 0.0,
+    agent_executor: Optional[IAgentExecutor] = None,
 ) -> ReferenceOrchestrator:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated).
 
@@ -204,8 +220,11 @@ def build_orchestrator(
     `skill_recall_min_confidence` (ТЗ-SKILL-EVOLVE-01) is OPTIONAL: when > 0, route() only
     recalls a skill whose confidence >= the gate (confidence-gated recall, closes Флаг 2
     SKILL-01); below the gate the orchestrator uses normal agent/plugin routing.
+    `agent_executor` (ТЗ-AGENT-EXEC-01) is OPTIONAL: when provided, dispatch() for kind='agent'
+    runs a REAL agent tick and returns the computed TaskOutcome (trust evolves from the real
+    outcome); when absent, agent dispatch falls back to the pre-ТЗ delegated success=True.
     """
     return ReferenceOrchestrator(
         identity_registry, plugin_registry, trust_registry, action_log,
         trust_threshold, plugin_default_trust, trust_delta, procedural, remote,
-        remote_nodes, skill_recall_min_confidence)
+        remote_nodes, skill_recall_min_confidence, agent_executor)
