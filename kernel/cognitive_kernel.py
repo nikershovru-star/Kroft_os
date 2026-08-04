@@ -64,6 +64,7 @@ from kernel.runtime_reflection import (
     ReferenceRuntimeReflection,
     ReferenceTuningApplier,
 )
+from kernel.kernel_config import KernelConfig
 from kernel.runtime_supervisor import RuntimeSupervisor
 from kernel.observability import LiveMetricsCollector, LiveRuntimeMetrics
 from contracts.i_observability import (
@@ -716,89 +717,26 @@ class CognitiveKernel(ICognitiveKernel):
 
 def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = None,
                  llm_client: Optional[object] = None,
-                 live_metrics: Optional[object] = None) -> CognitiveKernel:
+                 live_metrics: Optional[object] = None,
+                 config: Optional["KernelConfig"] = None) -> CognitiveKernel:
     """Factory: assemble a deterministic, LLM-free reference kernel (I-09).
 
-    ТЗ-RE-01 flag 1: ONE shared Lamport clock per node. The same clock instance is
-    injected into the world store AND the kernel so all emitted CausalMarks carry
-    the same causal order + node_origin = node_id (never the literal "kernel").
+    Backward-compatible thin wrapper. All composition logic now lives in ``KernelBuilder``
+    (kernel/kernel_builder.py) so this factory stops growing per-ТЗ (ТЗ-OBS-01 Флаг 1: the
+    old god-factory accumulated optional params + inline ``if ... is not None`` + post-hoc
+    ``attach_*`` blocks). New optional subsystems are added as a ``KernelConfig`` field +
+    a branch in ``KernelBuilder``, NOT as a new positional/keyword argument here.
+
+    Behaviour is identical to the pre-refactor build:
+    - ONE shared Lamport clock per node (injected into world + reasoning/planner/world-model/
+      reflection) so CausalMarks share causal order + node_origin == node_id.
+    - LLM-free by construction; optional ``llm_client`` wrapped behind ILLMAdvisor (adapter_for);
+      when None the advisor wrappers degrade to the pure reference path.
+    - Optional ``live_metrics`` wires the live collector + RuntimeSupervisor (no-op if None).
+    - Explicit kwargs WIN over a passed ``config`` object.
     """
-    shared_clock = clock if clock is not None else NodeLamportClock(node_id)
-    world = InMemoryWorldState(node_id, clock=shared_clock)
-    res = SimpleResourceManager()
-    attn = SimpleAttention(res)
-    # ТЗ-ME-01: Memory Evolution — Learn-phase mechanism of Self-Evolving.
-    # SOFT-layer consolidation (semantic facts) from repeated high-confidence episodes;
-    # HARD layer is immutable from experience (O1 guard). Created BEFORE value/reasoning
-    # so the evolved SOFT layer can be wired into deliberation (ТЗ-SE-01).
-    memory = InMemoryLayeredMemory()
-    memory_evolution = ReferenceMemoryEvolution(shared_clock)
-    # ТЗ-SE-01: behavioral closure of Self-Evolving. The evolved SOFT layer (semantic
-    # facts + soft policies) is exposed to deliberation through ISoftPolicySource so
-    # learning changes BEHAVIOR, not just memory (closes ФЛАГ 3, ТЗ-EX-01).
-    soft_source: ISoftPolicySource = MemorySoftPolicySource(memory)
-    val = PolicyAwareValueSystem(soft_source)
-    dec = DeterministicDecisionEngine()
-    exec_ = DeterministicExecutive(res)
-    learn = SimpleLearningPolicy()
-    # ТЗ-RE-01: Reasoning Engine wired with the SAME shared node clock (flag 1) so
-    # reasoning steps carry the node's causal order + node_origin = node_id.
-    # ТЗ-SE-01: KnowledgeAwareReasoning also surfaces consolidated semantic facts
-    # (decided:<action>) as grounded candidate directions.
-    reason = KnowledgeAwareReasoning(shared_clock, attn, soft_source)
-    # ТЗ-WM-01: World Model is an ADVISOR over world state, sharing the same clock.
-    # Wired into the Reasoning Engine so grounded steps are ranked by PREDICTED
-    # utility (not word overlap). The deterministic Decision still makes the final pick.
-    world_model = ReferenceWorldModel(shared_clock)
-    # ТЗ-PL-01: Autonomous Planner — a real Deliberate-phase component (not a lambda).
-    # Generates candidates from reasoning steps, runs each through the World Model
-    # (lookahead via simulate), and ranks by PREDICTED VALUE-AWARE utility (flag 2).
-    # The planner only ranks; the deterministic Decision makes the final pick (I-03).
-    planner = ReferencePlanner(shared_clock, world_model=world_model, values=val)
-    # ТЗ-LLM-01: LLM-as-advisor contract boundary (I-10, kernel purity). The kernel is
-    # LLM-free by construction; an OPTIONAL LLM advisor may re-rank candidates. We wrap
-    # the supplied client (an ILlm model port OR an ILLMAdvisor) behind ILLMAdvisor.
-    # When None, the advisor wrappers degrade to the PURE reference path (no behavior
-    # change vs. the LLM-free build above) — proving the kernel works without a model.
-    advisor: Optional[ILLMAdvisor] = None
-    if llm_client is not None:
-        advisor = llm_client if isinstance(llm_client, ILLMAdvisor) else adapter_for(llm_client)
-    reason = LLMAdvisorReasoning(shared_clock, attn, soft_source, advisor=advisor)
-    planner = LLMAdvisorPlanner(shared_clock, world_model=world_model, values=val, advisor=advisor)
-    # ТЗ-OBS-01 Флаг 2 / ТЗ-LLM-02: wire the live collector into the advisor wrappers so
-    # advisor fallback (LLMError/LLMTimeout) increments llm.fallback_rate. No-op if no
-    # collector (live_metrics is None) — kernel behaviour unchanged.
-    if live_metrics is not None:
-        reason.attach_metrics(live_metrics)
-        planner.attach_metrics(live_metrics)
-    # ТЗ-RF-01: Reflection Engine — the ANALYTIC half of Self-Evolving. Runs BEFORE
-    # Learn; reflects on experience + outcomes, proposing SOFT-layer evolution (outcome-
-    # based, ФЛАГ 1). Memory Evolution commits the proposals under the O1 guard.
-    reflection_engine = ReferenceReflectionEngine(shared_clock)
-
-    # ТЗ-OBS-01: autonomous runtime adaptation from LIVE metrics (closes RT-01 debt).
-    # When a live collector is supplied, build a LiveRuntimeMetrics(IRuntimeMetrics) and
-    # wire a RuntimeSupervisor that adapts SOFT params autonomously (Флаг 3: step every
-    # N ticks, hysteresis is inherent in bounded monotonic rules). No-op without it.
-    supervisor = None
-    if live_metrics is not None:
-        live_runtime = LiveRuntimeMetrics(
-            live_metrics, memory_evolution=memory_evolution, clock=shared_clock)
-        supervisor = RuntimeSupervisor(
-            metrics=live_runtime,
-            reflection=ReferenceRuntimeReflection(clock=shared_clock),
-            applier=ReferenceTuningApplier(),
-            targets={
-                "memory.confidence_threshold": memory_evolution,
-                "memory.min_repetitions": memory_evolution,
-            },
-            clock=shared_clock,
-        )
-
-    kernel = CognitiveKernel(world, attn, res, val, dec, exec_, learn, planner,
-                           clock=shared_clock, reason=reason, world_model=world_model,
-                           memory_evolution=memory_evolution, memory=memory,
-                           reflection_engine=reflection_engine)
-    if live_metrics is not None:
-        kernel.attach_live_metrics(live_metrics, supervisor)
-    return kernel
+    base = config if config is not None else KernelConfig()
+    resolved = base.merged(node_id=node_id, clock=clock,
+                           llm_client=llm_client, live_metrics=live_metrics)
+    from kernel.kernel_builder import KernelBuilder
+    return KernelBuilder(resolved).build()
