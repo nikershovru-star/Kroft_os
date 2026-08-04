@@ -20,7 +20,7 @@ O1: сервер НЕ мутирует trust (ни свой, ни remote) — tr
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Tuple
 
 from contracts.i_federated_orchestrator import (
     is_goal_request,
@@ -28,8 +28,10 @@ from contracts.i_federated_orchestrator import (
     encode_outcome_response,
     RemoteOutcomeResponse,
 )
+from contracts.i_identity import ITrustRegistry
 from contracts.i_network_transport import INetworkTransport
 from contracts.i_orchestrator import IOrchestrator
+from kernel.federated_orchestrator import build_remote_orchestrator
 
 
 class RemoteExecutionListener:
@@ -85,3 +87,51 @@ def build_remote_execution_listener(
 ) -> RemoteExecutionListener:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated)."""
     return RemoteExecutionListener(transport, orchestrator, node_id)
+
+
+def build_federated_node(
+    transport: INetworkTransport,
+    orchestrator: IOrchestrator,
+    trust: ITrustRegistry,
+    node_id: str,
+    trust_threshold: float = 0.2,
+    trust_delta: float = 0.1,
+    remote_nodes: Tuple[str, ...] = (),
+) -> "FederatedNode":
+    """Integration glue (ТЗ-FED-EXEC-01 commit 3, Флаг C): a SERVICE node = client + server.
+
+    A node is BOTH a client (can dispatch goals to trusted remote nodes) AND a server
+    (executes goals addressed to it locally). It shares ONE local orchestrator, ONE trust
+    registry, and ONE transport between the client (IRemoteOrchestrator) and the server
+    (IRemoteExecutionListener) — so dispatch and execution are coherent on the same substrate.
+
+    K5: reuses build_remote_orchestrator (client) + build_remote_execution_listener (server);
+    does NOT duplicate them. Standalone factory — НЕ in build_kernel.
+    O1: server does not mutate remote trust; the client updates local trust from real outcomes.
+    """
+    client = build_remote_orchestrator(
+        transport, trust, trust_threshold=trust_threshold,
+        trust_delta=trust_delta, local_node_id=node_id,
+    )
+    server = build_remote_execution_listener(transport, orchestrator, node_id)
+    return FederatedNode(client, server, node_id)
+
+
+class FederatedNode:
+    """A node that is both a federated client and a remote-execution server (ТЗ-FED-EXEC-01)."""
+
+    def __init__(self, client, server, node_id: str) -> None:
+        self.client = client
+        self.server = server
+        self.node_id = node_id
+
+    def start(self) -> None:
+        self.server.start()
+
+    def stop(self) -> None:
+        self.server.stop()
+
+    def dispatch_remote(self, node_id: str, goal) -> "TaskOutcome":
+        """Client path: dispatch a goal to a trusted remote node (real outcome + trust update)."""
+        return self.client.dispatch_remote(node_id, goal)
+
