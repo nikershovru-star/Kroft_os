@@ -276,3 +276,22 @@ issues:
   - O1
   impact: null
   closed_by: null
+- id: TZ-OBS-01
+  title: Observability — live metrics feed autonomous runtime adaptation (closes RT-01 debt)
+  type: feature
+  status: done
+  root_cause: null
+  resolution: 'ADR-067 + ILiveMetricsCollector (contracts/i_observability.py) + LiveMetricsCollector/LiveRuntimeMetrics (kernel/observability.py): живые счётчики (ratios, скользящее окно) кормят RuntimeSupervisor, который АВТОНОМНО тюнит SOFT-параметры (R3: consolidation_confidence<0.6 -> raise confidence_threshold). build_kernel wire-ит collector+supervisor; hooks no-op без collector. ReferenceRuntimeMetrics injectable сохранён (RT-01 цел).'
+  related:
+  - ADR-067
+  - ADR-062
+  - ADR-040
+  - RT-01
+  - I-08
+  - O1
+  addresses:
+  - RT-01-DEBT
+  - I-08
+  - O1
+  impact: null
+  closed_by: null

@@ -384,6 +384,40 @@ arch-gate `14 passed`; akb-lint PASSED.
 
 ---
 
+## 2026-08-04 — ТЗ-OBS-01 (Observability, автономная runtime-адаптация) — DONE
+
+Закрывает долг RT-01: метрики были injectable-snapshot (адаптация не автономна). OBS-01
+инструментирует ядро/execution/память живыми счётчиками и кормит RuntimeSupervisor,
+который адаптируется АВТОНОМНО (collect->reflect->apply каждые N tick, Флаг 3).
+
+- **Commit 1 — контракт + ADR-067.** `ILiveMetricsCollector` (contracts/i_observability.py)
+  — ОТДЕЛЬНАЯ граница от `contracts/i_metrics.py: IMetricsCollector` (системный psutil-порт;
+  KROFT one-port-per-boundary, переименование чтобы не дублировать). Канонические имена
+  метрик СОВПАДАЮТ с RT-01 rule names (R1/R3).
+- **Commit 2 — reference impl (LLM-free, K1).** `LiveMetricsCollector`: хранит num/den,
+  вычисляет RATIOS (Флаг 1: success_rate=success/total, delivery=delivered/(delivered+dropped),
+  fallback=fallbacks/calls; growth=episodes/ticks окно). `consolidation_confidence` = avg
+  utility за скользящее окно (Флаг 2: пустое -> carry-last, нет истории -> 0.5, НЕ
+  «нет значения»). `LiveRuntimeMetrics(IRuntimeMetrics)` читает ЖИВЫЕ счётчики + tunable
+  (mirrors build_runtime_metrics). `ReferenceRuntimeMetrics` injectable СОХРАНЁН (RT-01 цел).
+- **Commit 3 — интеграция.** `build_kernel(live_metrics=)`: wire LiveRuntimeMetrics +
+  RuntimeSupervisor (targets memory.confidence_threshold/min_repetitions). Hook-точки в
+  tick(): execution success/fail, consolidation growth, record_tick; supervisor.step()
+  каждые N=3 tick (Флаг 3, anti-thrash). No-op без collector (поведение ядра не меняется).
+- **Commit 4 — тесты K8 (5 passed, capstone).** degraded (choose_red -> low reward) ->
+  живая consolidation_confidence < 0.6 -> supervisor АВТОНОМНО поднимает confidence_threshold
+  (R3) -> measurably меньше консолидаций. NEGATIVE: здоровые (choose_blue) -> порог не
+  ползёт. O1: только SOFT; no-op без collector.
+- **Commit 5 — docs.** ADR-067 + issues + CHANGELOG + PROJECT_STATUS.
+
+Capstone (автономная адаптация из живых метрик): без injectable snapshot supervisor сам
+поднимает порог при degraded-исходах. Ядро LLM-free; телеметрия для инспекции всей
+построенной сложности (федерация, эволюция, LLM-advisor).
+
+**Verification:** `1108 passed, 0 failed`; gate `14 passed`; ad-hoc `TBD`; akb-lint PASSED.
+
+---
+
 ## Baseline — v1.0 (ТЗ-002 D2)
 
 V1/V2/V3 CLOSED, No High Architectural Debt. Metrics: `768 passed / 0 failed /

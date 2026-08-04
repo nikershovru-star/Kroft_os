@@ -960,3 +960,27 @@ adrs:
   - I-08
   - I-10
   - O1
+- id: ADR-067
+  title: Observability — live metrics feed autonomous runtime adaptation (ТЗ-OBS-01)
+  status: accepted
+  relates_to:
+  - ADR-040
+  - ADR-062
+  - ADR-044
+  - ADR-054
+  - ADR-065
+  ports_added:
+  - ILiveMetricsCollector
+  - LiveMetricsCollector
+  - LiveRuntimeMetrics
+  laws_affected:
+  - K1
+  - K6
+  - K8
+  - O1
+  evidence_level: V
+  addresses:
+  - TZ-OBS-01
+  - RT-01-DEBT
+  - I-08
+  - I-10
