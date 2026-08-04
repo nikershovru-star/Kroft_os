@@ -34,6 +34,7 @@ from contracts.i_llm_advisor import (
     LLMError,
     LLMTimeout,
 )
+from contracts.i_observability import ILiveMetricsCollector, METRIC_LLM_FALLBACK_RATE
 from kernel.reasoning import ReferenceReasoningEngine
 from kernel.self_evolution import KnowledgeAwareReasoning
 from kernel.planning import ReferencePlanner
@@ -73,9 +74,15 @@ class LLMAdvisorReasoning(KnowledgeAwareReasoning):
     def __init__(self, clock, attention, source=None, advisor: Optional[ILLMAdvisor] = None) -> None:
         super().__init__(clock, attention, source)
         self._advisor = advisor
+        self._collector: Optional[ILiveMetricsCollector] = None  # ТЗ-OBS-01 Флаг 2 / ТЗ-LLM-02
 
     def attach_advisor(self, advisor: Optional[ILLMAdvisor]) -> None:
         self._advisor = advisor
+
+    def attach_metrics(self, collector: Optional[ILiveMetricsCollector]) -> None:
+        """ТЗ-OBS-01 Флаг 2 / ТЗ-LLM-02: wire a live metrics collector so advisor
+        fallback (LLMError/LLMTimeout) increments ``llm.fallback_rate``. No-op if None."""
+        self._collector = collector
 
     def reason(self, intent: Intent, world: WorldState,
                attention_context, budget_tokens: int):
@@ -91,6 +98,8 @@ class LLMAdvisorReasoning(KnowledgeAwareReasoning):
             advice = self._advisor.advise(ctx)
         except (LLMError, LLMTimeout):
             # graceful fallback: the pure reference steps stand unchanged
+            if self._collector is not None:
+                self._collector.record_failure(METRIC_LLM_FALLBACK_RATE)
             return steps
         if advice is None or not getattr(advice, "suggestion", ""):
             return steps
@@ -118,9 +127,15 @@ class LLMAdvisorPlanner(ReferencePlanner):
     def __init__(self, clock, world_model=None, values=None, advisor: Optional[ILLMAdvisor] = None) -> None:
         super().__init__(clock, world_model=world_model, values=values)
         self._advisor = advisor
+        self._collector: Optional[ILiveMetricsCollector] = None  # ТЗ-OBS-01 Флаг 2 / ТЗ-LLM-02
 
     def attach_advisor(self, advisor: Optional[ILLMAdvisor]) -> None:
         self._advisor = advisor
+
+    def attach_metrics(self, collector: Optional[ILiveMetricsCollector]) -> None:
+        """ТЗ-OBS-01 Флаг 2 / ТЗ-LLM-02: wire collector so advisor fallback
+        increments ``llm.fallback_rate``. No-op if None."""
+        self._collector = collector
 
     def plan(self, goal, reasoning_steps, world, budget_tokens, intent=None):
         base = super().plan(goal, reasoning_steps, world, budget_tokens, intent=intent)
@@ -135,6 +150,8 @@ class LLMAdvisorPlanner(ReferencePlanner):
             advice = self._advisor.advise(ctx)
         except (LLMError, LLMTimeout):
             # graceful fallback: pure reference plan list (unchanged)
+            if self._collector is not None:
+                self._collector.record_failure(METRIC_LLM_FALLBACK_RATE)
             return base
         if advice is None or not getattr(advice, "suggestion", ""):
             return base
