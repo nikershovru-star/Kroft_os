@@ -25,6 +25,7 @@ from contracts.i_identity import (
     IIdentityRegistry,
     ITrustRegistry,
 )
+from contracts.i_memory import IProceduralMemory
 from contracts.i_orchestrator import (
     IOrchestrator,
     OrchestrationGoal,
@@ -46,6 +47,7 @@ class ReferenceOrchestrator(IOrchestrator):
         trust_threshold: float = 0.0,
         plugin_default_trust: float = 0.5,
         trust_delta: float = 0.1,
+        procedural: Optional[IProceduralMemory] = None,
     ) -> None:
         self._identities = identity_registry
         self._plugins = plugin_registry
@@ -54,6 +56,7 @@ class ReferenceOrchestrator(IOrchestrator):
         self._threshold = trust_threshold
         self._plugin_default_trust = plugin_default_trust
         self._delta = trust_delta
+        self._procedural = procedural
         # Seed LATEST running trust from declared baselines (evolves via record_outcome).
         # Idempotent: does NOT overwrite trust already evolved by prior dispatch outcomes.
         for agent in self._identities.list():
@@ -62,6 +65,18 @@ class ReferenceOrchestrator(IOrchestrator):
             trust_registry.seed(manifest.id, self._plugin_default_trust)
 
     def route(self, goal: OrchestrationGoal) -> Optional[RoutingDecision]:
+        # ТЗ-SKILL-01: if a known-good Procedure (skill) exists for this capability,
+        # recall it first (skill-recall). This is deterministic and overrides normal
+        # agent/plugin scoring. O1: skills are SOFT; orchestrator does not mutate them.
+        if self._procedural is not None:
+            skill = self._procedural.recall_skill_by_capability(goal.capability)
+            if skill is not None:
+                return RoutingDecision(
+                    chosen_id=skill.skill_id,
+                    kind="skill",
+                    rationale=f"skill-recall:{skill.capability}",
+                    score=skill.confidence,
+                )
         candidates = self._score_candidates(goal)
         if not candidates:
             return None
@@ -126,8 +141,13 @@ def build_orchestrator(
     trust_threshold: float = 0.0,
     plugin_default_trust: float = 0.5,
     trust_delta: float = 0.1,
+    procedural: Optional[IProceduralMemory] = None,
 ) -> ReferenceOrchestrator:
-    """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated)."""
+    """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated).
+
+    `procedural` (ТЗ-SKILL-01) is OPTIONAL: when provided, route() recalls a known-good
+    Procedure (skill) by capability before normal agent/plugin scoring.
+    """
     return ReferenceOrchestrator(
         identity_registry, plugin_registry, trust_registry, action_log,
-        trust_threshold, plugin_default_trust, trust_delta)
+        trust_threshold, plugin_default_trust, trust_delta, procedural)
