@@ -77,7 +77,9 @@ class KernelBuilder:
         attn = SimpleAttention(res)
 
         # ТЗ-ME-01 + ТЗ-SE-01: SOFT-layer memory evolution wired into deliberation.
-        memory = InMemoryLayeredMemory()
+        # ТЗ-LIVE-01: use an injected memory store (resumed from JsonMemoryStore) when supplied,
+        # else a fresh in-memory store — so the kernel can RESUME its self-evolution across restarts.
+        memory = cfg.memory if cfg.memory is not None else InMemoryLayeredMemory()
         memory_evolution = ReferenceMemoryEvolution(shared_clock)
         soft_source = MemorySoftPolicySource(memory)
 

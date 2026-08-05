@@ -718,7 +718,9 @@ class CognitiveKernel(ICognitiveKernel):
 def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = None,
                  llm_client: Optional[object] = None,
                  live_metrics: Optional[object] = None,
-                 config: Optional["KernelConfig"] = None) -> CognitiveKernel:
+                 config: Optional["KernelConfig"] = None,
+                 memory: Optional[object] = None,
+                 procedural: Optional[object] = None) -> CognitiveKernel:
     """Factory: assemble a deterministic, LLM-free reference kernel (I-09).
 
     Backward-compatible thin wrapper. All composition logic now lives in ``KernelBuilder``
@@ -733,10 +735,13 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     - LLM-free by construction; optional ``llm_client`` wrapped behind ILLMAdvisor (adapter_for);
       when None the advisor wrappers degrade to the pure reference path.
     - Optional ``live_metrics`` wires the live collector + RuntimeSupervisor (no-op if None).
+    - Optional ``memory`` / ``procedural`` inject pre-loaded stores so the kernel can RESUME
+      across restarts (ТЗ-LIVE-01); when None fresh in-memory stores are created.
     - Explicit kwargs WIN over a passed ``config`` object.
     """
     base = config if config is not None else KernelConfig()
     resolved = base.merged(node_id=node_id, clock=clock,
-                           llm_client=llm_client, live_metrics=live_metrics)
+                           llm_client=llm_client, live_metrics=live_metrics,
+                           memory=memory)
     from kernel.kernel_builder import KernelBuilder
     return KernelBuilder(resolved).build()

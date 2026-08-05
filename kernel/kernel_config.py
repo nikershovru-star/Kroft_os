@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from contracts.cognitive_domain import NodeLamportClock
+from contracts.i_cognitive_kernel import ILayeredMemory
 
 
 @dataclass
@@ -31,9 +32,13 @@ class KernelConfig:
     llm_client: Optional[Any] = None          # ILlm model port OR ILLMAdvisor
     live_metrics: Optional[Any] = None        # ILiveMetricsCollector
     bus: Optional[Any] = None                 # IEventBus (federation / runtime)
+    # ТЗ-LIVE-01: inject a pre-loaded memory store so a kernel can RESUME across restarts
+    # (state replayed from JsonMemoryStore). When None, a fresh in-memory store is built.
+    memory: Optional[ILayeredMemory] = None
 
     def merged(self, *, node_id: Any = None, clock: Any = None,
-               llm_client: Any = None, live_metrics: Any = None, bus: Any = None) -> "KernelConfig":
+               llm_client: Any = None, live_metrics: Any = None, bus: Any = None,
+               memory: Any = None) -> "KernelConfig":
         """Return a copy with any supplied kwargs overriding this config's fields.
 
         Used by the backward-compatible ``build_kernel(...)`` kwargs path: explicit kwargs
@@ -46,4 +51,5 @@ class KernelConfig:
             llm_client=llm_client if llm_client is not None else self.llm_client,
             live_metrics=live_metrics if live_metrics is not None else self.live_metrics,
             bus=bus if bus is not None else self.bus,
+            memory=memory if memory is not None else self.memory,
         )
