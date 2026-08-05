@@ -1387,6 +1387,37 @@ adrs:
   - TZ-FED-EXEC-01
   - TZ-FSE-01
 
+- id: ADR-084
+  title: Hardening the crypto layer — replay-protection, canonical version, size-limit, unicode NFC, ISigner/IVerifier split (ТЗ-CRYPTO-HARDEN-01)
+  status: accepted
+  relates_to:
+  - ADR-082
+  - ADR-075
+  - ADR-076
+  - ADR-066
+  - ADR-054
+  ports_added:
+  - ISigner
+  - IVerifier
+  ports_reused:
+  - ISignatureProvider
+  - IRemoteOrchestrator
+  - IRemoteExecutionListener
+  - INetworkTransport
+  - ITrustRegistry
+  laws_affected:
+  - K1
+  - K5
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-CRYPTO-HARDEN-01
+  - TZ-CRYPTO-01
+  - TZ-FSE-01
+
 
 
 
