@@ -63,7 +63,7 @@ class RemoteOutcomeResponse:
 # ---------------------------------------------------------------------------
 def encode_goal_request(req: RemoteGoalRequest) -> dict:
     goal = req.goal
-    causal = req.causal.to_dict() if (req.causal is not None and hasattr(req.causal, "to_dict")) else None
+    causal = req.causal.to_dict() if isinstance(req.causal, CausalMark) else None
     return {
         REQ_MARKER: True,
         "request_id": req.request_id,
@@ -85,7 +85,7 @@ def decode_goal_request(fact: dict) -> RemoteGoalRequest:
         request_id=fact["request_id"],
         node_id=fact["node_id"],
         author_id=fact["author_id"],
-        causal=None,  # CausalMark round-trip is non-scope (lesson Flag 1 LLM-01: keep simple)
+        causal=CausalMark.from_dict(fact.get("causal")),  # round-trip lamport for replay-key
         goal=OrchestrationGoal(
             goal_id=g["goal_id"],
             capability=g["capability"],
@@ -96,7 +96,7 @@ def decode_goal_request(fact: dict) -> RemoteGoalRequest:
 
 
 def encode_outcome_response(resp: RemoteOutcomeResponse) -> dict:
-    causal = resp.causal.to_dict() if (resp.causal is not None and hasattr(resp.causal, "to_dict")) else None
+    causal = resp.causal.to_dict() if isinstance(resp.causal, CausalMark) else None
     return {
         RESP_MARKER: True,
         "request_id": resp.request_id,
@@ -113,7 +113,7 @@ def decode_outcome_response(fact: dict) -> RemoteOutcomeResponse:
         request_id=fact["request_id"],
         node_id=fact["node_id"],
         author_id=fact["author_id"],
-        causal=None,
+        causal=CausalMark.from_dict(fact.get("causal")),  # round-trip lamport for replay-key
         outcome=TaskOutcome(success=o["success"], detail=o["detail"]),
     )
 

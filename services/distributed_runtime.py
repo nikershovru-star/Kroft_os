@@ -43,7 +43,11 @@ from contracts.i_memory import IMemoryStore
 from contracts.i_network_transport import INetworkTransport, SoftLayerItem
 from contracts.i_identity import ITrustRegistry
 from contracts.i_cognitive_kernel import ILayeredMemory
-from contracts.i_signature import ISignatureProvider, attach_signature, check_signature
+from contracts.i_signature import (
+    ISignatureProvider, attach_signature, check_signature, verify_envelope,
+)
+from contracts.cognitive_domain import CausalMark, NodeLamportClock
+from kernel.crypto import ReplayGuard
 from contracts.i_telemetry import ITelemetrySink
 from contracts.knowledge_graph import Node, NodeType
 
@@ -367,7 +371,8 @@ class FederationSoftMemorySync:
                  transport: "INetworkTransport", confidence_threshold: float = 0.5,
                  trust_registry: "Optional[ITrustRegistry]" = None,
                  trust_threshold: float = 0.0,
-                 signature_provider: "Optional[ISignatureProvider]" = None) -> None:
+                 signature_provider: "Optional[ISignatureProvider]" = None,
+                 replay_guard: "Optional[ReplayGuard]" = None) -> None:
         self._node_id = self_node_id
         self._memory = memory
         self._transport = transport
@@ -381,6 +386,9 @@ class FederationSoftMemorySync:
         # ТЗ-CRYPTO-01: when set, sign outgoing soft-layer items and verify incoming ones
         # before merge. None => legacy behaviour (no signing/verification).
         self._sig = signature_provider
+        # ТЗ-CRYPTO-HARDEN-01: per-origin replay window (shared between client+server on this node).
+        self._replay = replay_guard if replay_guard is not None else ReplayGuard()
+        self._clock = NodeLamportClock(self_node_id)  # monotonic seq source for outgoing items
         self._receiver_bound = True  # subscribed once in __init__; never re-bound
         # NOTE: we do NOT disable the receiver here. The NW-01 "flag 1" lock prevents
         # EXTERNAL re-binding of the receiver callback to a different target; the local
@@ -405,17 +413,20 @@ class FederationSoftMemorySync:
         items = []
         for f in memory.get_semantic():
             if f.confidence.value >= self._threshold:
+                # ТЗ-CRYPTO-HARDEN-01: DISTINCT monotonic seq per item (replay-key via CausalMark.lamport).
+                seq_mark = self._clock.tick()
                 items.append(attach_signature(SoftLayerItem(
                     kind="semantic", content=f.content, confidence=f.confidence.value,
-                    origin=origin, causal=_causal_to_dict(f.causal),
+                    origin=origin, causal=_causal_to_dict(seq_mark),
                     provenance=_prov_to_dict(f.confidence.provenance),
                     author_id=origin,  # ТЗ-IDT-01: author == learning node
                 ).to_wire(), self._sig))
         for p in memory.get_normative():
             if getattr(p, "layer", None) == "soft" and p.confidence.value >= self._threshold:
+                seq_mark = self._clock.tick()  # distinct seq per item (see above)
                 items.append(attach_signature(SoftLayerItem(
                     kind="soft_policy", content=p.body, confidence=p.confidence.value,
-                    origin=origin, causal=None,
+                    origin=origin, causal=_causal_to_dict(seq_mark),
                     provenance=_prov_to_dict(p.provenance),
                     author_id=origin,  # ТЗ-IDT-01: author == learning node
                 ).to_wire(), self._sig))
@@ -435,9 +446,10 @@ class FederationSoftMemorySync:
             if self._trust_registry.trust_score_of(sender) < self._trust_threshold:
                 return  # reject untrusted sender (low-trust items NEVER enter memory)
         for it in items:
-            # ТЗ-CRYPTO-01: verify origin/integrity BEFORE merge. An unverified (tampered /
-            # wrong-key / unsigned-when-verifier-set) item is dropped — it never enters memory.
-            if not check_signature(it, self._sig):
+            # ТЗ-CRYPTO-01 + HARDEN-01: verify origin/integrity/version/size AND replay BEFORE merge.
+            # An unverified (tampered / wrong-key / unsigned / version-mismatch / oversized / replayed)
+            # item is dropped — it never enters memory.
+            if not verify_envelope(it, self._sig, replay_guard=self._replay):
                 continue
             item = SoftLayerItem.from_wire(it)
             if item.confidence < self._threshold:

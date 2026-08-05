@@ -31,7 +31,11 @@ from contracts.i_federated_orchestrator import (
 from contracts.i_identity import ITrustRegistry
 from contracts.i_network_transport import INetworkTransport
 from contracts.i_orchestrator import IOrchestrator
-from contracts.i_signature import ISignatureProvider, attach_signature, check_signature
+from contracts.i_signature import (
+    ISignatureProvider, attach_signature, check_signature, verify_envelope,
+)
+from contracts.cognitive_domain import NodeLamportClock
+from kernel.crypto import ReplayGuard
 from kernel.federated_orchestrator import build_remote_orchestrator
 from kernel.orchestrator import build_orchestrator
 
@@ -52,11 +56,15 @@ class RemoteExecutionListener:
         orchestrator: IOrchestrator,
         node_id: str,
         signature_provider: Optional[ISignatureProvider] = None,
+        replay_guard: Optional[ReplayGuard] = None,
     ) -> None:
         self._t = transport
         self._orch = orchestrator
         self._node_id = node_id
         self._sig = signature_provider  # ТЗ-CRYPTO-01: verify incoming, sign outgoing (None = legacy)
+        # ТЗ-CRYPTO-HARDEN-01: per-origin replay window (shared with the client on this node).
+        self._replay = replay_guard if replay_guard is not None else ReplayGuard()
+        self._clock = NodeLamportClock(node_id)  # monotonic seq source for outgoing responses
         self._running = False
 
     def start(self) -> None:
@@ -74,10 +82,10 @@ class RemoteExecutionListener:
         for fact in facts:
             if not is_goal_request(fact):
                 continue
-            # ТЗ-CRYPTO-01: verify origin/integrity BEFORE executing. A forged/tampered/
-            # wrong-key/unsigned (when verifier set) request is dropped — we never execute
-            # or reply to an unauthenticated dispatch.
-            if not check_signature(fact, self._sig):
+            # ТЗ-CRYPTO-01 + HARDEN-01: verify origin/integrity/version/size AND replay BEFORE
+            # executing. A forged/tampered/wrong-key/unsigned/version-mismatch/oversized/replayed
+            # request is dropped — we never execute or reply to an unauthenticated dispatch.
+            if not verify_envelope(fact, self._sig, replay_guard=self._replay):
                 continue
             req = decode_goal_request(fact)
             # Filter: only requests addressed to THIS node (ignore others, K5/ТЗ gotcha).
@@ -85,12 +93,13 @@ class RemoteExecutionListener:
                 continue
             # Local real execution (reuses ReferenceOrchestrator.dispatch -> real outcome).
             outcome = self._orch.dispatch(req.goal)
+            causal = self._clock.tick()  # ТЗ-CRYPTO-HARDEN-01: monotonic seq on the response
             resp = RemoteOutcomeResponse(
                 request_id=req.request_id,
                 node_id=self._node_id,
                 outcome=outcome,
                 author_id=self._node_id,
-                causal=None,
+                causal=causal,
             )
             # Carrier: ship the response back via NW-01 send_facts (broadcast; client correlates).
             # ТЗ-CRYPTO-01: sign the outgoing response (attaches "signature" when provider set).
@@ -100,9 +109,13 @@ class RemoteExecutionListener:
 def build_remote_execution_listener(
     transport: INetworkTransport, orchestrator: IOrchestrator, node_id: str,
     signature_provider: Optional[ISignatureProvider] = None,
+    replay_guard: Optional[ReplayGuard] = None,
 ) -> RemoteExecutionListener:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated)."""
-    return RemoteExecutionListener(transport, orchestrator, node_id, signature_provider=signature_provider)
+    return RemoteExecutionListener(
+        transport, orchestrator, node_id,
+        signature_provider=signature_provider, replay_guard=replay_guard,
+    )
 
 
 def build_federated_node(
@@ -119,6 +132,7 @@ def build_federated_node(
     plugin_registry=None,
     action_log=None,
     signature_provider: Optional["ISignatureProvider"] = None,
+    replay_guard: Optional["ReplayGuard"] = None,
 ) -> "FederatedNode":
     """Integration glue (ТЗ-FED-EXEC-01 commit 3, Флаг C): a SERVICE node = client + server.
 
@@ -169,10 +183,11 @@ def build_federated_node(
     client = build_remote_orchestrator(
         transport, trust, trust_threshold=trust_threshold,
         trust_delta=trust_delta, local_node_id=node_id,
-        signature_provider=signature_provider,
+        signature_provider=signature_provider, replay_guard=replay_guard,
     )
     server = build_remote_execution_listener(
-        transport, orchestrator, node_id, signature_provider=signature_provider,
+        transport, orchestrator, node_id,
+        signature_provider=signature_provider, replay_guard=replay_guard,
     )
 
     # Internal fan-out delegate: a single on_facts subscription that forwards to both

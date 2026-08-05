@@ -36,13 +36,16 @@ from contracts.i_federated_orchestrator import (
     RemoteOutcomeResponse,
     decode_outcome_response,
     encode_goal_request,
-    encode_outcome_response,
     is_outcome_response,
 )
 from contracts.i_identity import ITrustRegistry
 from contracts.i_network_transport import INetworkTransport
 from contracts.i_orchestrator import OrchestrationGoal, TaskOutcome
-from contracts.i_signature import ISignatureProvider, attach_signature, check_signature
+from contracts.i_signature import (
+    ISignatureProvider, attach_signature, check_signature, verify_envelope,
+)
+from contracts.cognitive_domain import NodeLamportClock
+from kernel.crypto import ReplayGuard
 
 # Backwards-compat private aliases (ТЗ-FED-ORCH-01 tests / external callers may import these).
 _REQ_KEY = REQ_MARKER
@@ -66,6 +69,7 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         local_node_id: str = "local",
         response_timeout: float = 2.0,
         signature_provider: Optional[ISignatureProvider] = None,
+        replay_guard: Optional[ReplayGuard] = None,
     ) -> None:
         self._t = transport
         self._trust = trust
@@ -74,6 +78,11 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         self._local = local_node_id
         self._response_timeout = response_timeout  # SOFT tunable (O1, runtime reflection)
         self._sig = signature_provider  # ТЗ-CRYPTO-01: sign outgoing, verify incoming (None = legacy)
+        # ТЗ-CRYPTO-HARDEN-01: shared replay window. When None, a per-instance guard is created so
+        # the client still self-protects against replays of responses it sent. A caller may inject
+        # a SHARED guard (client+server on one node) so a replay caught by either handler is global.
+        self._replay = replay_guard if replay_guard is not None else ReplayGuard()
+        self._clock = NodeLamportClock(local_node_id)  # monotonic seq source for outgoing requests
         self._pending: Dict[str, dict] = {}
         self._t.on_facts(self._on_facts)
 
@@ -83,13 +92,16 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
             return TaskOutcome(success=False, detail=f"low-trust node excluded: {node_id}")
         request_id = f"req:{node_id}:{goal.goal_id}"
         self._pending[request_id] = {}
+        # ТЗ-CRYPTO-HARDEN-01: attach a monotonic CausalMark seq (Lamport) so the server can
+        # replay-protect the request; the receiver (server) will also attach its own seq on response.
+        causal = self._clock.tick()
         envelope = encode_goal_request(
             RemoteGoalRequest(
                 request_id=request_id,
                 node_id=node_id,
                 goal=goal,
                 author_id=self._local,
-                causal=None,
+                causal=causal,
             )
         )
         # ТЗ-CRYPTO-01: sign the outgoing request (attaches "signature" when provider set).
@@ -127,10 +139,11 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         for fact in facts:
             if not is_outcome_response(fact):
                 continue
-            # ТЗ-CRYPTO-01: verify origin/integrity BEFORE decoding/trusting. An unverified
-            # (tampered / wrong-key / unsigned-when-verifier-set) response is dropped — it
-            # MUST NOT move trust. Trust evolves ONLY from verified outcomes (acceptance).
-            if not check_signature(fact, self._sig):
+            # ТЗ-CRYPTO-01 + HARDEN-01: verify origin/integrity/version/size AND replay BEFORE
+            # decoding/trusting. An unverified (tampered / wrong-key / unsigned / version-mismatch /
+            # oversized / replayed) response is dropped — it MUST NOT move trust. Trust evolves ONLY
+            # from verified + non-replayed outcomes (acceptance).
+            if not verify_envelope(fact, self._sig, replay_guard=self._replay):
                 continue
             request_id = fact["request_id"]
             holder = self._pending.get(request_id)
@@ -147,10 +160,12 @@ def build_remote_orchestrator(
     local_node_id: str = "local",
     response_timeout: float = 2.0,
     signature_provider: Optional[ISignatureProvider] = None,
+    replay_guard: Optional[ReplayGuard] = None,
 ) -> ReferenceRemoteOrchestrator:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated)."""
     return ReferenceRemoteOrchestrator(
         transport, trust, trust_threshold=trust_threshold,
         trust_delta=trust_delta, local_node_id=local_node_id,
         response_timeout=response_timeout, signature_provider=signature_provider,
+        replay_guard=replay_guard,
     )
