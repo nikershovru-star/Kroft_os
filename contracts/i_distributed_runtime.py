@@ -45,6 +45,35 @@ class INodeDiscovery(ABC):
 
 
 # --------------------------------------------------------------------------
+# Routing Table (multi-hop next_hop) — ТЗ-NET-ROUTE-01 (ADR-086)
+# --------------------------------------------------------------------------
+class IRoutingTable(ABC):
+    """Deterministic next-hop resolution for multi-hop dispatch/soft-layer exchange.
+
+    Given the SET of known members (from INodeDiscovery) and THIS node's direct peers,
+    returns the next peer to forward an envelope toward `target`. Returns None when no
+    path is known (caller drops the envelope). Pure function of (members, direct_peers,
+    self_id, target) — deterministic (I-09), LLM-free.
+
+    The routing table MUST NOT re-sign forwarded envelopes: provenance/origin
+    authentication is preserved end-to-end (the ORIGIN signs once; each hop only
+    forwards). verify-before-trust + replay-guard still run at the FINAL destination.
+    """
+
+    @abstractmethod
+    def update(self, members: List[str], direct_peers: List[str]) -> None:
+        """Refresh the topology view (membership + this node's direct peers)."""
+        ...
+
+    @abstractmethod
+    def next_hop(self, target: str) -> Optional[str]:
+        """Return the direct peer to forward toward `target`, or None if no path."""
+        ...
+
+
+
+
+# --------------------------------------------------------------------------
 # Cluster Registry (node -> addr, CRDT-backed)
 # --------------------------------------------------------------------------
 class IClusterRegistry(ABC):

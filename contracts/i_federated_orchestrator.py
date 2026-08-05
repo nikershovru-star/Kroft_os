@@ -35,6 +35,23 @@ from contracts.i_orchestrator import OrchestrationGoal, TaskOutcome
 REQ_MARKER = "__fed_orch_req__"
 RESP_MARKER = "__fed_orch_resp__"
 
+# Multi-hop routing constants (ТЗ-NET-ROUTE-01).
+DEFAULT_ROUTE_TTL = 8  # max hops before an envelope is dropped (loop safety)
+
+
+@dataclass(frozen=True)
+class RoutingHeader:
+    """Multi-hop routing header (ТЗ-NET-ROUTE-01).
+
+    `target` is the FINAL destination (not the immediate hop). Intermediates forward the
+    SAME signed envelope toward `target` via IRoutingTable.next_hop, decrementing `ttl`.
+    The ORIGIN signs the envelope once; provenance/origin is preserved across hops — only
+    the destination verifies the original signature before executing/trusting.
+    """
+
+    target: str
+    ttl: int = DEFAULT_ROUTE_TTL
+
 
 @dataclass(frozen=True)
 class RemoteGoalRequest:
@@ -45,6 +62,7 @@ class RemoteGoalRequest:
     goal: OrchestrationGoal
     author_id: str
     causal: Optional[CausalMark] = None
+    route: Optional[RoutingHeader] = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +74,7 @@ class RemoteOutcomeResponse:
     outcome: TaskOutcome
     author_id: str
     causal: Optional[CausalMark] = None
+    route: Optional[RoutingHeader] = None
 
 
 # ---------------------------------------------------------------------------
@@ -64,12 +83,14 @@ class RemoteOutcomeResponse:
 def encode_goal_request(req: RemoteGoalRequest) -> dict:
     goal = req.goal
     causal = req.causal.to_dict() if isinstance(req.causal, CausalMark) else None
+    route = {"target": req.route.target, "ttl": req.route.ttl} if req.route is not None else None
     return {
         REQ_MARKER: True,
         "request_id": req.request_id,
         "node_id": req.node_id,
         "author_id": req.author_id,
         "causal": causal,
+        "route": route,
         "goal": {
             "goal_id": goal.goal_id,
             "capability": goal.capability,
@@ -81,11 +102,13 @@ def encode_goal_request(req: RemoteGoalRequest) -> dict:
 
 def decode_goal_request(fact: dict) -> RemoteGoalRequest:
     g = fact["goal"]
+    r = fact.get("route")
     return RemoteGoalRequest(
         request_id=fact["request_id"],
         node_id=fact["node_id"],
         author_id=fact["author_id"],
         causal=CausalMark.from_dict(fact.get("causal")),  # round-trip lamport for replay-key
+        route=RoutingHeader(target=r["target"], ttl=r["ttl"]) if r else None,
         goal=OrchestrationGoal(
             goal_id=g["goal_id"],
             capability=g["capability"],
@@ -97,23 +120,27 @@ def decode_goal_request(fact: dict) -> RemoteGoalRequest:
 
 def encode_outcome_response(resp: RemoteOutcomeResponse) -> dict:
     causal = resp.causal.to_dict() if isinstance(resp.causal, CausalMark) else None
+    route = {"target": resp.route.target, "ttl": resp.route.ttl} if resp.route is not None else None
     return {
         RESP_MARKER: True,
         "request_id": resp.request_id,
         "node_id": resp.node_id,
         "author_id": resp.author_id,
         "causal": causal,
+        "route": route,
         "outcome": {"success": resp.outcome.success, "detail": resp.outcome.detail},
     }
 
 
 def decode_outcome_response(fact: dict) -> RemoteOutcomeResponse:
     o = fact["outcome"]
+    r = fact.get("route")
     return RemoteOutcomeResponse(
         request_id=fact["request_id"],
         node_id=fact["node_id"],
         author_id=fact["author_id"],
         causal=CausalMark.from_dict(fact.get("causal")),  # round-trip lamport for replay-key
+        route=RoutingHeader(target=r["target"], ttl=r["ttl"]) if r else None,
         outcome=TaskOutcome(success=o["success"], detail=o["detail"]),
     )
 
