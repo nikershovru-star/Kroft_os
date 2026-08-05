@@ -3,13 +3,14 @@
 Targets >=30 tests, >=95% coverage. Includes negative tests (cross-tenant
 messaging, unauthorized healing, invalid FSM transition) as proof-of-fire.
 """
+from tests._repo_root import repo_root
 import pytest
 from pathlib import Path
 
 # cwd-independent base: this test file lives in tests/agent_orchestration/, so the
 # repo root is three levels up. Gate tests below write probe files and scan kernel/,
 # which must resolve relative to the repo root, not the current working directory.
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = repo_root()
 
 from contracts.agent_orchestration import (
     AgentMessage,

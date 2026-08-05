@@ -6,6 +6,8 @@ proof-of-fire (K1 port, K8 adapter).
 """
 from __future__ import annotations
 
+from tests._repo_root import repo_root
+
 import sys
 import threading
 from pathlib import Path
@@ -13,7 +15,7 @@ from pathlib import Path
 import pytest
 
 # cwd-independent base: these gate tests read source files by relative path.
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = repo_root()
 
 from contracts.i_execution_sandbox import IExecutionSandbox, ExecutionResult
 from adapters.subprocess_sandbox import SubprocessSandbox

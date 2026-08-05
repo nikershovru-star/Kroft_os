@@ -5,9 +5,10 @@ not import services; K6: supervisor does not import healing.py internals).
 """
 from __future__ import annotations
 
+from tests._repo_root import repo_root
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = repo_root()
 from typing import Optional
 
 import pytest

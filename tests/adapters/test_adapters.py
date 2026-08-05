@@ -1,4 +1,5 @@
 """Stage 7.5 - LocalFileSystemAdapter (IFileSystem) tests."""
+from tests._repo_root import repo_root
 import shutil
 
 import pytest
@@ -13,7 +14,7 @@ from pathlib import Path
 @pytest.fixture
 def fs_adapter():
     # temporary directory INSIDE the project tree; cleaned up after test.
-    base = Path(__file__).resolve().parent / ".sandbox"
+    base = repo_root() / ".sandbox"
     if base.exists():
         shutil.rmtree(base)
     base.mkdir(parents=True, exist_ok=True)

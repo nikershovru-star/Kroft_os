@@ -12,12 +12,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests._repo_root import repo_root
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = repo_root()
 FIX = ROOT / "tests" / "fixtures_violations"
 
 # Import detector helpers from the positive gate module.
-from tests.test_architecture import (
+from tests.common.test_architecture import (
     _check_file_imports,
     _file_package,
     _find_concrete_wiring_instantiation,

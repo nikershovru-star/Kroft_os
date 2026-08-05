@@ -4,6 +4,7 @@ InMemoryGraphBuilder + mock ILlm adapter.
 Proves the ADR-011 §2.2 chain end to end, offline:
     Router -> LLM -> Hypothesis -> Evaluation -> Fact -> Graph
 """
+from tests._repo_root import repo_root
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -189,7 +190,7 @@ def test_services_layer_has_no_adapter_imports():
     import ast
     from pathlib import Path
 
-    src = Path(__file__).resolve().parent.parent / "services" / "knowledge_platform.py"
+    src = repo_root() / "services" / "knowledge_platform.py"
     tree = ast.parse(src.read_text(encoding="utf-8"))
     imported = set()
     for node in ast.walk(tree):

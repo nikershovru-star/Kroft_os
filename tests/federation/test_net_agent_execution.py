@@ -28,7 +28,7 @@ from contracts.plugin import ICapabilityPlugin, PluginManifest, PluginResult
 
 from kernel.agent_executor import ReferenceAgentExecutor, build_agent_executor
 
-from tests.fed_tcp_helpers import (
+from tests.common.fed_tcp_helpers import (
     ensure_pair_connected,
     make_tcp_federated_pair,
     teardown_tcp_pair,

@@ -26,8 +26,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from tests._repo_root import repo_root
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = repo_root()
 AKB = ROOT / "docs" / "architecture" / "AKB"
 
 # --- Load matrix from AKB (single source of truth) -------------------------

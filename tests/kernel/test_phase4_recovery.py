@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from tests._repo_root import repo_root
+
 from contracts import IComponentController, ProcessState
 from runtime.i_process_impl import Process
 from runtime.component_registry import ComponentRegistry
@@ -112,7 +114,7 @@ def test_3_kernel_panic_snapshot_stop():
 
 def test_4_supervisor_imports_only_contracts_runtime():
     """LAW K8: Supervisor module imports only contracts/runtime (+stdlib)."""
-    path = Path(__file__).parent.parent / "runtime" / "supervisor"
+    path = repo_root() / "runtime" / "supervisor"
     allowed_pkgs = {"contracts", "infrastructure", "kernel", "runtime", "adapters",
                     "services", "cli"}
     forbidden_in_supervisor = {"services", "adapters", "plugins"}

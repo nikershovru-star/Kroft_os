@@ -1,4 +1,5 @@
 """Stage 8 - EventBus <-> Kernel integration tests."""
+from tests._repo_root import repo_root
 import pytest
 
 from infrastructure import DependencyContainer, InMemoryEventBus
@@ -40,7 +41,7 @@ def test_arch_gate_eventbus_keeps_axis():
     # It may import contracts and any stdlib module (incl. __future__).
     import ast
     from pathlib import Path
-    ROOT = Path(__file__).resolve().parent.parent
+    ROOT = repo_root()
     src = (ROOT / "infrastructure" / "eventbus.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     forbidden = {"kernel", "runtime", "adapters"}

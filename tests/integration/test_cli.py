@@ -1,4 +1,5 @@
 """Stage 13 - CLI unit tests (8)."""
+from tests._repo_root import repo_root
 import ast
 import json
 import os
@@ -87,7 +88,7 @@ def test_cli_uses_di_container(tmp_path):
 
 
 def test_cli_arch_no_adapters_import():
-    src = (Path(__file__).resolve().parent.parent / "cli" / "commands.py").read_text(encoding="utf-8")
+    src = (repo_root() / "cli" / "commands.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):

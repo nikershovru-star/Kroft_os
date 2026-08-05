@@ -1,4 +1,5 @@
 """Stage 7.6 - End-to-End assembly: container -> kernel -> real disk write."""
+from tests._repo_root import repo_root
 import os
 import shutil
 
@@ -15,7 +16,7 @@ from pathlib import Path
 
 @pytest.fixture
 def project_sandbox():
-    base = Path(__file__).resolve().parent / ".e2e_sandbox"
+    base = repo_root() / ".e2e_sandbox"
     if base.exists():
         shutil.rmtree(base)
     base.mkdir(parents=True, exist_ok=True)

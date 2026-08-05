@@ -1,4 +1,5 @@
 """Stage 9 - EventBus persistence via IFileSystem (JSONL) tests."""
+from tests._repo_root import repo_root
 import json
 import tempfile
 import os
@@ -95,7 +96,7 @@ def test_jsonl_format_human_readable(store):
 def test_arch_gate_no_new_dependencies():
     import ast
     from pathlib import Path
-    ROOT = Path(__file__).resolve().parent.parent
+    ROOT = repo_root()
     src = (ROOT / "infrastructure" / "eventbus.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     forbidden = {"kernel", "runtime", "adapters"}

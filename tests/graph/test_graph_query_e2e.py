@@ -1,4 +1,5 @@
 """Stage 11 - GraphQueryEngine E2E tests (4): service-to-service via shared port."""
+from tests._repo_root import repo_root
 import asyncio
 import ast
 from pathlib import Path
@@ -96,7 +97,7 @@ def test_service_isolation():
 
 
 def test_arch_services_no_cross_import():
-    ROOT = Path(__file__).resolve().parent.parent
+    ROOT = repo_root()
     src = (ROOT / "services" / "graph_query_engine.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     forbidden = {"kernel", "runtime", "adapters", "infrastructure"}

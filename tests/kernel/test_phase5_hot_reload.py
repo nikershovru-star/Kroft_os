@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from tests._repo_root import repo_root
+
 from contracts import IComponentController
 from runtime.i_process_impl import Process
 from runtime.component_registry import ComponentRegistry
@@ -125,7 +127,7 @@ def test_filewatcher_stdlib_only():
 
 def test_law_k8_hot_reload_imports_only_contracts_runtime():
     """LAW K8: runtime/hot_reload imports only contracts/runtime (+stdlib)."""
-    path = Path(__file__).parent.parent / "runtime" / "hot_reload.py"
+    path = repo_root() / "runtime" / "hot_reload.py"
     STDLIB = {"os","sys","pathlib","typing","abc","enum","functools","dataclasses",
               "collections","json","time","re","contextlib","threading","asyncio",
               "warnings","logging","argparse","signal","ctypes","__future__","inspect","math"}

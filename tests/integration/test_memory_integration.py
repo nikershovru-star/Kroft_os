@@ -5,6 +5,7 @@ Offline (mock ILlm). Proves ADR-012 §2.4 end to end:
     Session Memory -> consolidate() -> Long-Term -> Semantic retrieval
     Knowledge Graph facts -> Semantic retrieval (read-only)
 """
+from tests._repo_root import repo_root
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -168,7 +169,7 @@ def test_memory_service_imports_contracts_only():
     import ast
     from pathlib import Path
 
-    src = Path(__file__).resolve().parent.parent / "services" / "memory_platform.py"
+    src = repo_root() / "services" / "memory_platform.py"
     tree = ast.parse(src.read_text(encoding="utf-8"))
     mods = set()
     for node in ast.walk(tree):

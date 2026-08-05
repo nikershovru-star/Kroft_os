@@ -22,7 +22,7 @@ import threading
 from contracts.i_orchestrator import OrchestrationGoal
 from contracts.plugin import ICapabilityPlugin, PluginManifest, PluginResult
 
-from tests.fed_tcp_helpers import (
+from tests.common.fed_tcp_helpers import (
     ensure_pair_connected,
     make_tcp_federated_pair,
     teardown_tcp_pair,
