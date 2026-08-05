@@ -1359,6 +1359,34 @@ adrs:
   - TZ-AGENT-EXEC-01
   - FLAG-2-FED-EXEC
 
+- id: ADR-082
+  title: Authenticated origin for cross-node exchange (HMAC, stdlib; closes Trust Layer "digital signature", ТЗ-CRYPTO-01)
+  status: accepted
+  relates_to:
+  - ADR-075
+  - ADR-076
+  - ADR-066
+  - ADR-081
+  ports_added:
+  - ISignatureProvider
+  ports_reused:
+  - IRemoteOrchestrator
+  - IRemoteExecutionListener
+  - INetworkTransport
+  - ITrustRegistry
+  laws_affected:
+  - K1
+  - K5
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-CRYPTO-01
+  - TZ-FED-EXEC-01
+  - TZ-FSE-01
+
 
 
 
