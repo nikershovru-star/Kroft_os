@@ -35,6 +35,7 @@ from contracts.i_distributed_runtime import (
     IClusterRegistry,
     INetworkSupervisor,
     INodeDiscovery,
+    IRoutingTable,
     IRemoteAgentExecutor,
     ISharedContext,
 )
@@ -105,9 +106,62 @@ class CrdtClusterRegistry(IClusterRegistry):
         return dict(self._local)
 
 
-# --------------------------------------------------------------------------
+# -------------------------------------------------------------------------
+# Routing Table (multi-hop next_hop) — ТЗ-NET-ROUTE-01 (ADR-086)
+# -------------------------------------------------------------------------
+class ReferenceRoutingTable(IRoutingTable):
+    """Deterministic distance-vector-lite next_hop resolver (LLM-free, I-09).
+
+    Builds a ring from the sorted membership and forwards toward `target` by picking the
+    direct peer that makes the MOST forward progress toward `target` (strictly closer than
+    self). This guarantees loop-free progress in any connected graph that has a path to
+    `target` through direct peers; if no such peer exists, returns None (caller drops).
+
+    The routing table NEVER re-signs forwarded envelopes: provenance/origin authentication
+    is preserved end-to-end (the ORIGIN signs once). verify-before-trust + replay-guard run
+    only at the FINAL destination. Broadcast delivery + TTL + this progress rule make the
+    multi-hop forwarding safe without a global topology protocol.
+    """
+
+    def __init__(self, self_id: str = "") -> None:
+        self._self = self_id
+        self._members: List[str] = []
+        self._direct: set = set()
+
+    def update(self, self_id: str, members: List[str], direct_peers: List[str]) -> None:
+        self._self = self_id
+        self._members = sorted(members)
+        self._direct = set(direct_peers)
+
+    def next_hop(self, target: str) -> Optional[str]:
+        if not self._members or target not in self._members:
+            return None
+        if target in self._direct:
+            return target
+        if not self._direct or self._self not in self._members:
+            return None
+        pos = {m: i for i, m in enumerate(self._members)}
+        n = len(self._members)
+        t = pos[target]
+        s = pos[self._self]
+        fwd_self_to_target = (t - s) % n
+        if fwd_self_to_target == 0:
+            return None  # target is self
+        best, best_d = None, None
+        for p in self._direct:
+            if p not in pos:
+                continue
+            fwd_self_to_peer = (pos[p] - s) % n
+            # only peers that make strict forward progress toward target (and aren't self)
+            if 0 < fwd_self_to_peer <= fwd_self_to_target:
+                if best is None or fwd_self_to_peer < best_d:  # type: ignore[unreachable]
+                    best, best_d = p, fwd_self_to_peer
+        return best
+
+
+# -------------------------------------------------------------------------
 # Remote Agent Executor (msg-pass)
-# --------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 class MessagingRemoteAgentExecutor(IRemoteAgentExecutor):
     def submit_remote(self, node_id: str, goal: str, platform: IAgentPlatform) -> str:
         # msg-pass: route goal to remote node's platform; returns handle id
