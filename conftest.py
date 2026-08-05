@@ -27,3 +27,64 @@ def pytest_ignore_collect(collection_path: "Path", config) -> bool:
     if "archive" in str(collection_path) and "KnowledgeOS-v5" in str(collection_path):
         return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# ТЗ-RESTRUCTURE (D6): subsystem markers via path, independent of import-mode.
+# Each test file under tests/<sub>/ gets the matching marker so targeted runs work:
+#   pytest -m kernel | pytest -m "federation or integration" | pytest -m "not slow"
+# (pytestmark in __init__.py is unreliable under the default import mode, so we tag here.)
+# ---------------------------------------------------------------------------
+_SUBDIR_MARKER = {
+    "kernel": "kernel",
+    "contracts": "contracts",
+    "services": "services",
+    "adapters": "adapters",
+    "federation": "federation",
+    "architecture": "architecture",
+    "agent": "agent",
+    "agent_orchestration": "agent",
+    "graph": "graph",
+    "knowledge_graph": "graph",
+    "llm": "llm",
+    "security": "security",
+    "observability": "observability",
+    "memory": "memory",
+    "integration": "integration",
+    "common": "common",
+    "tenant": "kernel",
+}
+
+# Files that exercise the gate's negative proof-of-fire get the k8 marker too.
+_K8_NAMES = {"test_architecture_negative.py"}
+
+# Integration / TCP / network tests are tagged slow for quick local runs.
+_SLOW_NAMES = {
+    "test_federated_tcp_execution.py",
+    "test_net_agent_execution.py",
+    "test_network_federation.py",
+    "test_distributed_runtime.py",
+    "test_distributed_runtime_tz015.py",
+    "test_e2e_assembly.py",
+    "test_cli_e2e.py",
+}
+
+
+def pytest_collection_modifyitems(items):
+    import pytest as _pytest
+    for item in items:
+        parts = Path(str(item.path)).parts
+        # find the tests/<sub> segment
+        marker = None
+        for i, seg in enumerate(parts):
+            if seg == "tests" and i + 1 < len(parts):
+                sub = parts[i + 1]
+                marker = _SUBDIR_MARKER.get(sub)
+                break
+        if marker is None:
+            continue
+        item.add_marker(getattr(_pytest.mark, marker))
+        if item.name and item.path.name in _K8_NAMES:
+            item.add_marker(_pytest.mark.k8)
+        if item.path.name in _SLOW_NAMES:
+            item.add_marker(_pytest.mark.slow)
