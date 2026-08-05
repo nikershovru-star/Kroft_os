@@ -1330,6 +1330,36 @@ adrs:
   - FLAG-2-FED-EXEC
   - FLAG-2-SKILL-EVOLVE
 
+- id: ADR-081
+  title: Network multi-agent execution — remote node runs a real agent tick, trust from real network outcome (ТЗ-NET-AGENT-EXEC-01)
+  status: accepted
+  relates_to:
+  - ADR-080
+  - ADR-076
+  - ADR-075
+  - ADR-073
+  ports_added: []
+  ports_reused:
+  - IAgentExecutor
+  - IRemoteOrchestrator
+  - IRemoteExecutionListener
+  - IOrchestrator
+  - ITrustRegistry
+  laws_affected:
+  - K1
+  - K5
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-NET-AGENT-EXEC-01
+  - TZ-FED-EXEC-01
+  - TZ-AGENT-EXEC-01
+  - FLAG-2-FED-EXEC
+
+
 
 
 
