@@ -100,6 +100,38 @@ def extract_origin(envelope: dict) -> Optional[str]:
     return None
 
 
+class ReplayGuard:
+    """Per-origin monotonic seq window built on CausalMark lamport (ТЗ-CRYPTO-HARDEN-01).
+
+    `observe(envelope)` returns True iff the envelope is ACCEPTED (not a replay): its seq is
+    STRICTLY GREATER than the highest seq previously seen for its origin. A seq <= last-seen is
+    rejected (replay or stale duplicate). Origin = node_id/origin/author_id; seq = causal.lamport
+    (reused from the existing wire format — K5 no-dup). Stateless envelopes (no seq) are always
+    accepted (the guard cannot replay-protect what carries no seq; it degrades to no-op, never
+    silently rejects legitimate traffic). The guard is pure state (dict); it does NOT touch HARD/FSM.
+    Lives in contracts (K6): services may import it without depending on kernel.
+    """
+
+    def __init__(self) -> None:
+        self._last: Dict[str, int] = {}
+
+    def observe(self, envelope: dict) -> bool:
+        origin = extract_origin(envelope)
+        seq = extract_seq(envelope)
+        if origin is None or seq is None:
+            return True  # no replay key available -> cannot protect; accept (legacy-safe)
+        last = self._last.get(origin)
+        if last is not None and seq <= last:
+            return False  # replay or stale duplicate -> reject
+        # Accept and advance the window (strictly increasing per origin).
+        if last is None or seq > last:
+            self._last[origin] = seq
+        return True
+
+    def seen(self, origin: str) -> Optional[int]:
+        return self._last.get(origin)
+
+
 def attach_signature(envelope: dict, provider: "ISignatureProvider") -> dict:
     """Return a COPY of `envelope` with canonical_version + "signature" produced by `provider`.
 

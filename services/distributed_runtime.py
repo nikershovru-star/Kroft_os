@@ -47,7 +47,7 @@ from contracts.i_signature import (
     ISignatureProvider, attach_signature, check_signature, verify_envelope,
 )
 from contracts.cognitive_domain import CausalMark, NodeLamportClock
-from kernel.crypto import ReplayGuard
+from contracts.i_signature import ReplayGuard
 from contracts.i_telemetry import ITelemetrySink
 from contracts.knowledge_graph import Node, NodeType
 
