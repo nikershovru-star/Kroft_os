@@ -32,6 +32,7 @@ from contracts.i_identity import ITrustRegistry
 from contracts.i_network_transport import INetworkTransport
 from contracts.i_orchestrator import IOrchestrator
 from kernel.federated_orchestrator import build_remote_orchestrator
+from kernel.orchestrator import build_orchestrator
 
 
 class RemoteExecutionListener:
@@ -91,12 +92,17 @@ def build_remote_execution_listener(
 
 def build_federated_node(
     transport: INetworkTransport,
-    orchestrator: IOrchestrator,
+    orchestrator: Optional[IOrchestrator],
     trust: ITrustRegistry,
     node_id: str,
     trust_threshold: float = 0.2,
     trust_delta: float = 0.1,
     remote_nodes: Tuple[str, ...] = (),
+    *,
+    agent_executor: Optional["IAgentExecutor"] = None,
+    identity_registry=None,
+    plugin_registry=None,
+    action_log=None,
 ) -> "FederatedNode":
     """Integration glue (ТЗ-FED-EXEC-01 commit 3, Флаг C): a SERVICE node = client + server.
 
@@ -105,9 +111,47 @@ def build_federated_node(
     registry, and ONE transport between the client (IRemoteOrchestrator) and the server
     (IRemoteExecutionListener) — so dispatch and execution are coherent on the same substrate.
 
-    K5: reuses build_remote_orchestrator (client) + build_remote_execution_listener (server);
-    does NOT duplicate them. Standalone factory — НЕ in build_kernel.
+    K5 (commit 0, ТЗ-NET-AGENT-EXEC-01): НЕ дублирует порты. Разведка показала:
+    - `RemoteExecutionListener._on_facts` исполняет `self._orch.dispatch(req.goal)` —
+      ЛОКАЛЬНЫМ orchestrator'ом СЕРВЕРА. Значит УДАЛЁННЫЙ узел исполняет agent-routed цели
+      РЕАЛЬНЫМ агентом, ЕСЛИ его orchestrator собран с `agent_executor`
+      (ТЗ-AGENT-EXEC-01, уже поддерживает: ReferenceOrchestrator.dispatch строки 138-143).
+    - `IAgentExecutor` / `IRemoteOrchestrator` / `IRemoteExecutionListener` УЖЕ существуют
+      (ADR-080 / 075 / 076). НОВЫЙ порт НЕ нужен (one-port-per-boundary сохранён).
+    - Точка интеграции: composition-root (`tests/fed_tcp_helpers.py`) строит orchestrator —
+      достаточно передать `agent_executor` туда. `build_federated_node` принимает ГОТОВЫЙ
+      orchestrator (transport-agnostic glue). См. ТЗ-NET-AGENT-EXEC-01 commit 1/2: тонкое
+      расширение `build_federated_node` опц. `agent_executor` (Флаг C, reuse, без дублирования).
+
+    ТЗ-NET-AGENT-EXEC-01 (commit 1/2): `build_federated_node` принимает опц. `agent_executor`.
+    - Если `orchestrator` передан (существующие вызовы) — используется КАК ЕСТЬ (обратная
+      совместимость; executor внедряется вызывающим до построения orchestrator'а).
+    - Если `orchestrator is None` — строит ReferenceOrchestrator через `build_orchestrator`
+      из `identity_registry`/`plugin_registry`/`action_log` + `agent_executor` (reuse, НЕ
+      дублирует логику сборки). Это и есть «сборка удалённого узла принимает agent_executor»:
+      сервер исполняет agent-routed цели РЕАЛЬНЫМ agent tick'ом, trust эволюционирует из
+      реального исхода.
+
+    K5: reuses build_remote_orchestrator (client) + build_remote_execution_listener (server)
+    + build_orchestrator; does NOT duplicate them. Standalone factory — НЕ in build_kernel.
     O1: server does not mutate remote trust; the client updates local trust from real outcomes.
+    Детерминизм (I-09): LLM-free agent tick по умолчанию + correlation request_id в сети.
+    """
+    # ТЗ-NET-AGENT-EXEC-01 commit 2: если orchestrator не передан — построить с agent_executor
+    # (reuse build_orchestrator; НЕ дублирует). Иначе использовать переданный (backward-compat).
+    if orchestrator is None:
+        if identity_registry is None or plugin_registry is None or action_log is None:
+            raise ValueError(
+                "build_federated_node: when orchestrator is None, provide "
+                "identity_registry, plugin_registry, action_log (+ agent_executor)"
+            )
+        orchestrator = build_orchestrator(
+            identity_registry, plugin_registry, trust, action_log,
+            trust_threshold=trust_threshold, trust_delta=trust_delta,
+            remote_nodes=remote_nodes, agent_executor=agent_executor,
+        )
+    """
+    client = build_remote_orchestrator(
 
     REAL-TCP readiness (ТЗ-FED-TCP-01): this factory is transport-agnostic (Флаг 1 fix,
     commit 321fc21) and accepts the real `NetworkTransport` (adapters/network_transport.py, NW-01
