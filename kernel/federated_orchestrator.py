@@ -31,13 +31,16 @@ import time
 from contracts.i_federated_orchestrator import (
     REQ_MARKER,
     RESP_MARKER,
+    DEFAULT_ROUTE_TTL,
     IRemoteOrchestrator,
     RemoteGoalRequest,
     RemoteOutcomeResponse,
+    RoutingHeader,
     decode_outcome_response,
     encode_goal_request,
     is_outcome_response,
 )
+from contracts.i_distributed_runtime import IRoutingTable
 from contracts.i_identity import ITrustRegistry
 from contracts.i_network_transport import INetworkTransport
 from contracts.i_orchestrator import OrchestrationGoal, TaskOutcome
@@ -70,6 +73,8 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         response_timeout: float = 2.0,
         signature_provider: Optional[ISignatureProvider] = None,
         replay_guard: Optional[ReplayGuard] = None,
+        routing_table: Optional["IRoutingTable"] = None,
+        direct_peers: Optional[List[str]] = None,
     ) -> None:
         self._t = transport
         self._trust = trust
@@ -84,6 +89,13 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         self._replay = replay_guard if replay_guard is not None else ReplayGuard()
         self._clock = NodeLamportClock(local_node_id)  # monotonic seq source for outgoing requests
         self._pending: Dict[str, dict] = {}
+        self._seen: set = set()  # ТЗ-NET-ROUTE-01: loop-safety (don't reprocess same envelope id)
+        # ТЗ-NET-ROUTE-01: optional multi-hop routing. When None, dispatch is direct (backward-compat).
+        self._routing = routing_table
+        self._direct_peers = list(direct_peers or [])
+        if self._routing is not None:
+            # Seed an initial topology view (refreshed by the caller via routing.update).
+            self._routing.update(self._local, [self._local, *self._direct_peers], self._direct_peers)
         self._t.on_facts(self._on_facts)
 
     def dispatch_remote(self, node_id: str, goal: OrchestrationGoal) -> TaskOutcome:
@@ -95,6 +107,9 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         # ТЗ-CRYPTO-HARDEN-01: attach a monotonic CausalMark seq (Lamport) so the server can
         # replay-protect the request; the receiver (server) will also attach its own seq on response.
         causal = self._clock.tick()
+        route = None
+        if self._routing is not None:
+            route = RoutingHeader(target=node_id, ttl=DEFAULT_ROUTE_TTL)
         envelope = encode_goal_request(
             RemoteGoalRequest(
                 request_id=request_id,
@@ -102,6 +117,7 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
                 goal=goal,
                 author_id=self._local,
                 causal=causal,
+                route=route,
             )
         )
         # ТЗ-CRYPTO-01: sign the outgoing request (attaches "signature" when provider set).
@@ -137,19 +153,51 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
 
     def _on_facts(self, facts: List[dict], sender_node_id: str) -> None:
         for fact in facts:
-            if not is_outcome_response(fact):
+            # ТЗ-NET-ROUTE-01: multi-hop forwarding for BOTH directions (request + response).
+            # An envelope addressed to a non-local target is FORWARDED (not executed) toward it
+            # via the routing table. The ORIGINAL signature is preserved (no re-sign) so origin
+            # authentication survives every hop; verify-before-trust runs only at the destination.
+            if self._routing is not None and self._maybe_forward(fact):
                 continue
-            # ТЗ-CRYPTO-01 + HARDEN-01: verify origin/integrity/version/size AND replay BEFORE
-            # decoding/trusting. An unverified (tampered / wrong-key / unsigned / version-mismatch /
-            # oversized / replayed) response is dropped — it MUST NOT move trust. Trust evolves ONLY
-            # from verified + non-replayed outcomes (acceptance).
-            if not verify_envelope(fact, self._sig, replay_guard=self._replay):
-                continue
-            request_id = fact["request_id"]
-            holder = self._pending.get(request_id)
-            if holder is None:
-                continue
-            holder["outcome"] = decode_outcome_response(fact).outcome
+            if is_outcome_response(fact):
+                # ТЗ-CRYPTO-01 + HARDEN-01: verify origin/integrity/version/size AND replay BEFORE
+                # decoding/trusting. An unverified (tampered / wrong-key / unsigned / version-mismatch /
+                # oversized / replayed) response is dropped — it MUST NOT move trust. Trust evolves ONLY
+                # from verified + non-replayed outcomes (acceptance).
+                if not verify_envelope(fact, self._sig, replay_guard=self._replay):
+                    continue
+                request_id = fact["request_id"]
+                holder = self._pending.get(request_id)
+                if holder is None:
+                    continue
+                holder["outcome"] = decode_outcome_response(fact).outcome
+
+    def _maybe_forward(self, fact: dict) -> bool:
+        """Forward a non-local envelope one hop toward its route.target. Returns True if forwarded/dropped."""
+        route = fact.get("route")
+        if not route:
+            return False  # legacy/non-routed envelope: handled by the caller (local delivery)
+        target = route.get("target")
+        if target == self._local:
+            return False  # addressed to me -> deliver locally (caller proceeds)
+        # Loop-safety: don't reprocess an envelope we've already seen. Key includes the direction
+        # marker (request vs response) so a request and its response (same request_id + ttl @ a hop)
+        # are NOT mistaken for each other.
+        marker = "__fed_orch_resp__" if is_outcome_response(fact) else "__fed_orch_req__"
+        env_id = (marker, fact.get("request_id"), route.get("ttl"))
+        if env_id in self._seen:
+            return True  # already forwarded/dropped -> swallow (no loop)
+        self._seen.add(env_id)
+        nh = self._routing.next_hop(target)
+        if nh is None or nh == self._local:
+            return True  # no path -> drop
+        # Re-emit the SAME signed envelope toward the next hop (broadcast carrier). We MUST NOT
+        # mutate the body (e.g. decrement ttl) — that would break the ORIGINAL signature and the
+        # destination's verify-before-trust would reject a legitimately-originated envelope.
+        # Loop safety here is provided by the per-node `seen` set + the progress-only next_hop rule
+        # (a forward peer is always strictly closer to target), NOT by ttl mutation.
+        self._t.send_facts([fact], self._local)
+        return True
 
 
 def build_remote_orchestrator(
@@ -161,11 +209,13 @@ def build_remote_orchestrator(
     response_timeout: float = 2.0,
     signature_provider: Optional[ISignatureProvider] = None,
     replay_guard: Optional[ReplayGuard] = None,
+    routing_table: Optional["IRoutingTable"] = None,
+    direct_peers: Optional[List[str]] = None,
 ) -> ReferenceRemoteOrchestrator:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated)."""
     return ReferenceRemoteOrchestrator(
         transport, trust, trust_threshold=trust_threshold,
         trust_delta=trust_delta, local_node_id=local_node_id,
         response_timeout=response_timeout, signature_provider=signature_provider,
-        replay_guard=replay_guard,
+        replay_guard=replay_guard, routing_table=routing_table, direct_peers=direct_peers,
     )

@@ -27,6 +27,7 @@ from contracts.i_federated_orchestrator import (
     decode_goal_request,
     encode_outcome_response,
     RemoteOutcomeResponse,
+    RoutingHeader,
 )
 from contracts.i_identity import ITrustRegistry
 from contracts.i_network_transport import INetworkTransport
@@ -94,12 +95,19 @@ class RemoteExecutionListener:
             # Local real execution (reuses ReferenceOrchestrator.dispatch -> real outcome).
             outcome = self._orch.dispatch(req.goal)
             causal = self._clock.tick()  # ТЗ-CRYPTO-HARDEN-01: monotonic seq on the response
+            # ТЗ-NET-ROUTE-01: if the request arrived via multi-hop, route the response BACK to the
+            # ORIGINAL requester (req.author_id) through the same routing table. The ORIGINAL
+            # signature/auth is preserved end-to-end; ttl decremented so the return path is bounded.
+            resp_route = None
+            if req.route is not None:
+                resp_route = RoutingHeader(target=req.author_id, ttl=max(1, req.route.ttl - 1))
             resp = RemoteOutcomeResponse(
                 request_id=req.request_id,
                 node_id=self._node_id,
                 outcome=outcome,
                 author_id=self._node_id,
                 causal=causal,
+                route=resp_route,
             )
             # Carrier: ship the response back via NW-01 send_facts (broadcast; client correlates).
             # ТЗ-CRYPTO-01: sign the outgoing response (attaches "signature" when provider set).
@@ -133,6 +141,8 @@ def build_federated_node(
     action_log=None,
     signature_provider: Optional["ISignatureProvider"] = None,
     replay_guard: Optional["ReplayGuard"] = None,
+    routing_table: Optional["IRoutingTable"] = None,
+    direct_peers: Optional[List[str]] = None,
 ) -> "FederatedNode":
     """Integration glue (ТЗ-FED-EXEC-01 commit 3, Флаг C): a SERVICE node = client + server.
 
@@ -184,6 +194,7 @@ def build_federated_node(
         transport, trust, trust_threshold=trust_threshold,
         trust_delta=trust_delta, local_node_id=node_id,
         signature_provider=signature_provider, replay_guard=replay_guard,
+        routing_table=routing_table, direct_peers=direct_peers,
     )
     server = build_remote_execution_listener(
         transport, orchestrator, node_id,
