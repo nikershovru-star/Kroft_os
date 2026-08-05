@@ -42,6 +42,7 @@ from contracts.i_federated_orchestrator import (
 from contracts.i_identity import ITrustRegistry
 from contracts.i_network_transport import INetworkTransport
 from contracts.i_orchestrator import OrchestrationGoal, TaskOutcome
+from contracts.i_signature import ISignatureProvider, attach_signature, check_signature
 
 # Backwards-compat private aliases (ТЗ-FED-ORCH-01 tests / external callers may import these).
 _REQ_KEY = REQ_MARKER
@@ -64,6 +65,7 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         trust_delta: float = 0.1,
         local_node_id: str = "local",
         response_timeout: float = 2.0,
+        signature_provider: Optional[ISignatureProvider] = None,
     ) -> None:
         self._t = transport
         self._trust = trust
@@ -71,6 +73,7 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         self._delta = trust_delta
         self._local = local_node_id
         self._response_timeout = response_timeout  # SOFT tunable (O1, runtime reflection)
+        self._sig = signature_provider  # ТЗ-CRYPTO-01: sign outgoing, verify incoming (None = legacy)
         self._pending: Dict[str, dict] = {}
         self._t.on_facts(self._on_facts)
 
@@ -89,6 +92,8 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
                 causal=None,
             )
         )
+        # ТЗ-CRYPTO-01: sign the outgoing request (attaches "signature" when provider set).
+        envelope = attach_signature(envelope, self._sig)
         # Carrier: ship the request via NW-01 send_facts (broadcast; remote node responds).
         self._t.send_facts([envelope], self._local)
         # Deterministic WAIT for the correlated response (ТЗ-FED-TCP-01 / FSE-01 timing lesson):
@@ -122,6 +127,11 @@ class ReferenceRemoteOrchestrator(IRemoteOrchestrator):
         for fact in facts:
             if not is_outcome_response(fact):
                 continue
+            # ТЗ-CRYPTO-01: verify origin/integrity BEFORE decoding/trusting. An unverified
+            # (tampered / wrong-key / unsigned-when-verifier-set) response is dropped — it
+            # MUST NOT move trust. Trust evolves ONLY from verified outcomes (acceptance).
+            if not check_signature(fact, self._sig):
+                continue
             request_id = fact["request_id"]
             holder = self._pending.get(request_id)
             if holder is None:
@@ -136,10 +146,11 @@ def build_remote_orchestrator(
     trust_delta: float = 0.1,
     local_node_id: str = "local",
     response_timeout: float = 2.0,
+    signature_provider: Optional[ISignatureProvider] = None,
 ) -> ReferenceRemoteOrchestrator:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated)."""
     return ReferenceRemoteOrchestrator(
         transport, trust, trust_threshold=trust_threshold,
         trust_delta=trust_delta, local_node_id=local_node_id,
-        response_timeout=response_timeout,
+        response_timeout=response_timeout, signature_provider=signature_provider,
     )

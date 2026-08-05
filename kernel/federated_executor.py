@@ -31,6 +31,7 @@ from contracts.i_federated_orchestrator import (
 from contracts.i_identity import ITrustRegistry
 from contracts.i_network_transport import INetworkTransport
 from contracts.i_orchestrator import IOrchestrator
+from contracts.i_signature import ISignatureProvider, attach_signature, check_signature
 from kernel.federated_orchestrator import build_remote_orchestrator
 from kernel.orchestrator import build_orchestrator
 
@@ -45,10 +46,17 @@ class RemoteExecutionListener:
     K5: implements IRemoteExecutionListener contract; does NOT duplicate the client port.
     """
 
-    def __init__(self, transport: INetworkTransport, orchestrator: IOrchestrator, node_id: str) -> None:
+    def __init__(
+        self,
+        transport: INetworkTransport,
+        orchestrator: IOrchestrator,
+        node_id: str,
+        signature_provider: Optional[ISignatureProvider] = None,
+    ) -> None:
         self._t = transport
         self._orch = orchestrator
         self._node_id = node_id
+        self._sig = signature_provider  # ТЗ-CRYPTO-01: verify incoming, sign outgoing (None = legacy)
         self._running = False
 
     def start(self) -> None:
@@ -66,6 +74,11 @@ class RemoteExecutionListener:
         for fact in facts:
             if not is_goal_request(fact):
                 continue
+            # ТЗ-CRYPTO-01: verify origin/integrity BEFORE executing. A forged/tampered/
+            # wrong-key/unsigned (when verifier set) request is dropped — we never execute
+            # or reply to an unauthenticated dispatch.
+            if not check_signature(fact, self._sig):
+                continue
             req = decode_goal_request(fact)
             # Filter: only requests addressed to THIS node (ignore others, K5/ТЗ gotcha).
             if req.node_id != self._node_id:
@@ -80,14 +93,16 @@ class RemoteExecutionListener:
                 causal=None,
             )
             # Carrier: ship the response back via NW-01 send_facts (broadcast; client correlates).
-            self._t.send_facts([encode_outcome_response(resp)], self._node_id)
+            # ТЗ-CRYPTO-01: sign the outgoing response (attaches "signature" when provider set).
+            self._t.send_facts([attach_signature(encode_outcome_response(resp), self._sig)], self._node_id)
 
 
 def build_remote_execution_listener(
-    transport: INetworkTransport, orchestrator: IOrchestrator, node_id: str
+    transport: INetworkTransport, orchestrator: IOrchestrator, node_id: str,
+    signature_provider: Optional[ISignatureProvider] = None,
 ) -> RemoteExecutionListener:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated)."""
-    return RemoteExecutionListener(transport, orchestrator, node_id)
+    return RemoteExecutionListener(transport, orchestrator, node_id, signature_provider=signature_provider)
 
 
 def build_federated_node(
@@ -103,6 +118,7 @@ def build_federated_node(
     identity_registry=None,
     plugin_registry=None,
     action_log=None,
+    signature_provider: Optional["ISignatureProvider"] = None,
 ) -> "FederatedNode":
     """Integration glue (ТЗ-FED-EXEC-01 commit 3, Флаг C): a SERVICE node = client + server.
 
@@ -150,28 +166,14 @@ def build_federated_node(
             trust_threshold=trust_threshold, trust_delta=trust_delta,
             remote_nodes=remote_nodes, agent_executor=agent_executor,
         )
-    """
-    client = build_remote_orchestrator(
-
-    REAL-TCP readiness (ТЗ-FED-TCP-01): this factory is transport-agnostic (Флаг 1 fix,
-    commit 321fc21) and accepts the real `NetworkTransport` (adapters/network_transport.py, NW-01
-    localhost TCP) as `transport` — no new port required. The caller (test/composition-root, NOT
-    kernel/adapters cross-import) wires `NetworkTransport(node_id, port).connect(node_id, [peer])`
-    then passes it here; the single delegated on_facts handler fans out to client+server regardless
-    of whether the concrete transport fan-outs or single-slots. НЕ дублирует
-    INetworkTransport/IRemoteOrchestrator.
-
-    TRANSPORT-AGNOSTIC fan-out (Флаг 1 fix, 2026-08-04): `INetworkTransport.on_facts` does NOT
-    guarantee fan-out — a real NW-01 TCP transport overwrites its single subscriber slot, so
-    registering both the client and the server directly would lose one handler. Instead we
-    register ONE delegating handler that fans out to the client and server internally. This is
-    transport-agnostic: works for both SyncTransport (test) and real TCP NW-01.
-    """
     client = build_remote_orchestrator(
         transport, trust, trust_threshold=trust_threshold,
         trust_delta=trust_delta, local_node_id=node_id,
+        signature_provider=signature_provider,
     )
-    server = build_remote_execution_listener(transport, orchestrator, node_id)
+    server = build_remote_execution_listener(
+        transport, orchestrator, node_id, signature_provider=signature_provider,
+    )
 
     # Internal fan-out delegate: a single on_facts subscription that forwards to both
     # the client (response correlation) and the server (request handling).

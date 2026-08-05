@@ -43,6 +43,7 @@ from contracts.i_memory import IMemoryStore
 from contracts.i_network_transport import INetworkTransport, SoftLayerItem
 from contracts.i_identity import ITrustRegistry
 from contracts.i_cognitive_kernel import ILayeredMemory
+from contracts.i_signature import ISignatureProvider, attach_signature, check_signature
 from contracts.i_telemetry import ITelemetrySink
 from contracts.knowledge_graph import Node, NodeType
 
@@ -365,7 +366,8 @@ class FederationSoftMemorySync:
     def __init__(self, self_node_id: str, memory: "ILayeredMemory",
                  transport: "INetworkTransport", confidence_threshold: float = 0.5,
                  trust_registry: "Optional[ITrustRegistry]" = None,
-                 trust_threshold: float = 0.0) -> None:
+                 trust_threshold: float = 0.0,
+                 signature_provider: "Optional[ISignatureProvider]" = None) -> None:
         self._node_id = self_node_id
         self._memory = memory
         self._transport = transport
@@ -376,6 +378,9 @@ class FederationSoftMemorySync:
         # trust_score_of(sender) < trust_threshold.
         self._trust_registry = trust_registry
         self._trust_threshold = trust_threshold
+        # ТЗ-CRYPTO-01: when set, sign outgoing soft-layer items and verify incoming ones
+        # before merge. None => legacy behaviour (no signing/verification).
+        self._sig = signature_provider
         self._receiver_bound = True  # subscribed once in __init__; never re-bound
         # NOTE: we do NOT disable the receiver here. The NW-01 "flag 1" lock prevents
         # EXTERNAL re-binding of the receiver callback to a different target; the local
@@ -400,20 +405,20 @@ class FederationSoftMemorySync:
         items = []
         for f in memory.get_semantic():
             if f.confidence.value >= self._threshold:
-                items.append(SoftLayerItem(
+                items.append(attach_signature(SoftLayerItem(
                     kind="semantic", content=f.content, confidence=f.confidence.value,
                     origin=origin, causal=_causal_to_dict(f.causal),
                     provenance=_prov_to_dict(f.confidence.provenance),
                     author_id=origin,  # ТЗ-IDT-01: author == learning node
-                ).to_wire())
+                ).to_wire(), self._sig))
         for p in memory.get_normative():
             if getattr(p, "layer", None) == "soft" and p.confidence.value >= self._threshold:
-                items.append(SoftLayerItem(
+                items.append(attach_signature(SoftLayerItem(
                     kind="soft_policy", content=p.body, confidence=p.confidence.value,
                     origin=origin, causal=None,
                     provenance=_prov_to_dict(p.provenance),
                     author_id=origin,  # ТЗ-IDT-01: author == learning node
-                ).to_wire())
+                ).to_wire(), self._sig))
             # HARD (layer != 'soft'): skipped — O1, never federated
         if items:
             self._transport.send_soft_layer(items, origin)
@@ -430,6 +435,10 @@ class FederationSoftMemorySync:
             if self._trust_registry.trust_score_of(sender) < self._trust_threshold:
                 return  # reject untrusted sender (low-trust items NEVER enter memory)
         for it in items:
+            # ТЗ-CRYPTO-01: verify origin/integrity BEFORE merge. An unverified (tampered /
+            # wrong-key / unsigned-when-verifier-set) item is dropped — it never enters memory.
+            if not check_signature(it, self._sig):
+                continue
             item = SoftLayerItem.from_wire(it)
             if item.confidence < self._threshold:
                 continue  # receiver confidence-gate (double protection)
