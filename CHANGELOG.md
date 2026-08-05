@@ -3,6 +3,15 @@
 All notable changes to KROFT_OS are documented here, grouped by ТЗ (Technical Specification).
 Format: each ТЗ is one section; commits are atomic (see `git log`).
 
+## ТЗ-NET-ROUTE-01 — node discovery + multi-hop routing (ADR-086, 2026-08-05) — DONE
+- **K5:** `INodeDiscovery`+`GossipNodeDiscovery`, `IClusterRegistry`+`CrdtClusterRegistry`, `INetworkTransport` УЖЕ есть (TZ-015/ADR-044) → reuse. Новый порт `IRoutingTable` (next_hop) создан (не существовал).
+- **contract** (`contracts/i_distributed_runtime.py`, `contracts/i_federated_orchestrator.py`): `IRoutingTable` + `RoutingHeader(target,ttl)`; `RemoteGoalRequest`/`RemoteOutcomeResponse` + `route`; encode/decode несут route.
+- **impl** (`services/distributed_runtime.py`, `kernel/federated_orchestrator.py`, `kernel/federated_executor.py`): `ReferenceRoutingTable` (distance-vector-lite, deterministic, НЕ ре-сигнует forwarded envelope); `_maybe_forward` (форвард не-локального envelope с сохранённой подписью, per-node seen-set + progress-only next_hop = loop-safety); сервер ставит `route.target=req.author_id` (response маршрут НАЗАД).
+- **integration**: `routing_table`/`direct_peers` в `build_remote_orchestrator` + `build_federated_node`.
+- **tests** (`tests/test_net_routing.py`, 5 K8): discovery membership; A→C via B multi-hop; trust-gating; tampered/replayed/unsigned rejected; next_hop deterministic.
+- **docs**: ADR-086 + AKB (85→86) + CHANGELOG + PROJECT_STATUS.
+- **Constraints**: K1/K5/K6/K8/O1/I-09; Флаг C/1b. verify-before-trust + replay-guard на каждом hop сохранены.
+
 ## ТЗ-CAPSTONE-01 — end-to-end self-evolving federated cognitive OS (ADR-085, 2026-08-05) — DONE
 
 The integration culmination of the vision: two authenticated, self-evolving federated nodes where node A's

@@ -1451,6 +1451,31 @@ adrs:
   - TZ-CRYPTO-01
   - TZ-CRYPTO-HARDEN-01
 
+- id: ADR-086
+  title: Node discovery + multi-hop routing (ТЗ-NET-ROUTE-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    Масштабируемость Network Layer: узлы обнаруживают друг друга (gossip membership,
+    reuse INodeDiscovery/GossipNodeDiscovery) и маршрутизируют dispatch/soft-layer-обмен
+    через промежуточные узлы (IRoutingTable.next_hop) до не-прямого пира.
+  decision: >-
+    K5: INodeDiscovery + GossipNodeDiscovery + IClusterRegistry + CrdtClusterRegistry +
+    INetworkTransport уже существуют (TZ-015/ADR-044) -> переиспользуются. НОВЫЙ порт
+    IRoutingTable (next_hop) создан (не существовал). FED-конверты расширены RoutingHeader
+    (target+ttl); envelope форвардится с СОХРАНЕНИЕМ оригинальной подписи (provenance
+    end-to-end). ReferenceRoutingTable = deterministic distance-vector-lite: next_hop возвращает
+    direct-peer, делающий максимальный forward-progress к target (loop-free в connected-графе).
+    Loop-safety: per-node seen-set + progress-only next_hop (НЕ ttl-мутация, иначе ломается
+    оригинальная подпись).
+  consequences:
+  - Network Layer масштабируем (point-to-point -> multi-hop mesh).
+  - verify-before-trust + replay-guard сохранены на каждом hop (CRYPTO-01/HARDEN-01).
+  - trust эволюционирует из verified+non-replay исхода удалённого узла (через посредника).
+  evidence_level: V
+  addresses:
+  - TZ-NET-ROUTE-01
+
 
 
 
