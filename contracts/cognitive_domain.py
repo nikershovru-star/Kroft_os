@@ -157,6 +157,17 @@ class CausalMark:
         """Local event: advance own clock by 1."""
         return CausalMark(self.node_origin, self.lamport + 1)
 
+    def to_dict(self) -> dict:
+        """Serialize for wire (federated exchange / crypto replay-key)."""
+        return {"node_origin": self.node_origin, "lamport": self.lamport}
+
+    @classmethod
+    def from_dict(cls, d: Optional[dict]) -> Optional["CausalMark"]:
+        if not d:
+            return None
+        return CausalMark(node_origin=d.get("node_origin", "remote"),
+                         lamport=int(d.get("lamport", 0)))
+
     def receive(self, remote: "CausalMark") -> "CausalMark":
         """Receive event: clock = max(local, remote) + 1 (Lamport rule)."""
         return CausalMark(self.node_origin, max(self.lamport, remote.lamport) + 1)
