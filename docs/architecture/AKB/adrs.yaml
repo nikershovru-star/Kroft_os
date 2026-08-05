@@ -1418,6 +1418,39 @@ adrs:
   - TZ-CRYPTO-01
   - TZ-FSE-01
 
+- id: ADR-085
+  title: Capstone — end-to-end self-evolving federated cognitive OS (ТЗ-CAPSTONE-01)
+  status: accepted
+  relates_to:
+  - ADR-082
+  - ADR-084
+  - ADR-066
+  - ADR-074
+  - ADR-075
+  - ADR-076
+  - ADR-079
+  - ADR-054
+  ports_reused:
+  - IRemoteOrchestrator
+  - IRemoteExecutionListener
+  - INetworkTransport
+  - ITrustRegistry
+  - ISignatureProvider
+  - IPlanner
+  laws_affected:
+  - K1
+  - K5
+  - K6
+  - K8
+  - O1
+  - I-09
+  evidence_level: V
+  addresses:
+  - TZ-CAPSTONE-01
+  - TZ-FSE-01
+  - TZ-CRYPTO-01
+  - TZ-CRYPTO-HARDEN-01
+
 
 
 

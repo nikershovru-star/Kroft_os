@@ -3,6 +3,39 @@
 All notable changes to KROFT_OS are documented here, grouped by ТЗ (Technical Specification).
 Format: each ТЗ is one section; commits are atomic (see `git log`).
 
+## ТЗ-CAPSTONE-01 — end-to-end self-evolving federated cognitive OS (ADR-085, 2026-08-05) — DONE
+
+The integration culmination of the vision: two authenticated, self-evolving federated nodes where node A's
+self-evolution (experience → reflection → soft policy) is shipped to node B over a verified + replay-guarded
+channel, and B changes its behavior from A's knowledge. No new ports/layers — reuses the entire existing
+substrate (K5).
+
+- **`composition/capstone.py`** (Флаг C, standalone, NOT in build_kernel):
+  - `build_capstone_mesh(transport_a, transport_b, *, shared_key, use_real_llm, ...)` → `CapstoneMesh`:
+    two `build_kernel` nodes, each wired to a `FederationSoftMemorySync` (FSE-01) over the supplied
+    transports, sharing ONE `HmacSigner` (shared key) + per-node `ReplayGuard`. Real LLM is best-effort
+    optional (detected via `detect_local_ollama`, else LLM-free → deterministic).
+  - `run_capstone_self_evolution(mesh, ...)`: drives node A's self-evolution loop (forced failures on
+    `choose_red` → `avoid:decided:choose_red` soft policy), ships the SOFT layer to B (signed + per-item
+    monotonic seq), B verifies before merge and switches its next decision to the safe alternative. Returns
+    a result dict for assertions.
+- **Deterministic without LLM** (I-09): reference planner/executor are deterministic; the avoid policy is a
+  pure function of observed failures. Real LLM only augments the advisor.
+- **4 K8 tests** (`tests/test_capstone_self_evolution.py`, in-process loopback transport, no sockets):
+  end-to-end loop closes locally AND propagates to B; tampered/replayed/unsigned exchange rejected;
+  replayed soft layer not merged into B; deterministic without LLM.
+
+### Constraints honored
+K1/K5/K6 (composition.* → everything; reuses build_kernel, FederationSoftMemorySync, HmacSigner,
+ReplayGuard, build_llm_client; no new ports), K8 (verify-before-trust + replay-guard preserved at the
+FSE-01 boundary), O1 (self-evolution SOFT; HARD/FSM untouched), I-09 (deterministic without LLM), Флаг C
+(standalone factories).
+
+### Non-scope (post-MVP, documented in ADR-085)
+Asymmetric crypto (Ed25519/ECDSA/RSA), key rotation/PKI, multi-hop routing/discovery/consensus, multimodal.
+
+---
+
 ## ТЗ-CRYPTO-HARDEN-01 — hardening the crypto layer (ADR-084, 2026-08-05) — DONE
 
 Closes the serious MVP gaps flagged by the external audit of ТЗ-CRYPTO-01 (ADR-082).
