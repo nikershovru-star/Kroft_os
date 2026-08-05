@@ -1476,13 +1476,16 @@ adrs:
   addresses:
   - TZ-NET-ROUTE-01
 
-
-
-
-
-
-
-
-
-
-
+- id: ADR-087
+  title: Runnable launch + persistence + optional local LLM (ТЗ-LIVE-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    Ядро deterministic + self-evolving, но опыт in-memory терялся между перезапусками.
+    ТЗ-LIVE-01: JsonMemoryStore (stdlib json) персистит SOFT-слой (episodes/semantic/
+    normative + skills + trust); run_evolution.py строит ядро (+ опц. Ollama-advisor),
+    грузит/реплеит состояние, гоняет поток целей, печатает эволюцию, сохраняет. Опц.
+    локальный LLM skip-if-unavailable. Ядро эволюционирует между перезапусками.
+  evidence_level: V
+  addresses:
+  - TZ-LIVE-01

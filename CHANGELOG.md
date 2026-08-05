@@ -3,6 +3,25 @@
 All notable changes to KROFT_OS are documented here, grouped by ТЗ (Technical Specification).
 Format: each ТЗ is one section; commits are atomic (see `git log`).
 
+## ТЗ-LIVE-01 — runnable launch + persistence + optional local LLM (ADR-087, 2026-08-05) — DONE
+- **K5:** переиспользованы `InMemoryLayeredMemory`, `build_kernel`/`KernelConfig`/`KernelBuilder`,
+  `ReferenceExecutor`, `ReferenceTrustRegistry`, `InMemoryProceduralMemory`, `ProcedureConsolidator`,
+  `detect_local_ollama`/`build_llm_client`. Создан ровно один новый модуль `kernel/persistence.py`.
+- **persistence** (`kernel/persistence.py`): `JsonMemoryStore` (stdlib json, sort_keys, детерминированный
+  roundtrip) + `KernelState` (episodes/semantic/normative + skills + trust). Явная VO<->dict сериализация
+  (ConfidenceScore/Provenance/CausalMark/Enums), НЕ `dataclasses.asdict`.
+- **inject store** (`KernelConfig.memory` + `KernelBuilder`): ядро строится поверх загруженного стора и
+  RESUME самоэволюцию между перезапусками. Backward-compat (None -> fresh). `procedural` НЕ добавлен в
+  kernel (K3/K6: kernel не импортирует services; навыки живут в orchestrator/run_evolution).
+- **run_evolution.py** (Флаг C, standalone): build_kernel(+ опц. Ollama advisor, skip-if-unavailable) ->
+  load/replay состояния -> N тиков демо-потока (deterministic; choose_red fail -> ядро учит soft
+  avoid-политику) -> печать эволюции (policies/skills/trust) -> save.
+- **K8 tests** (`tests/test_live_persistence.py`): roundtrip идентичен; эволюция через 2 перезапуска
+  (6->10 эпизодов, soft-политика переживает restart); O1 HARD intact + immutable; детерминизм без LLM;
+  запуск без Ollama.
+- **O1/I-09:** load не мутирует HARD; без LLM запуск детерминирован (эволюция идентична). Флаг 1b: тесты
+  отдельным коммитом.
+
 ## ТЗ-NET-ROUTE-01 — node discovery + multi-hop routing (ADR-086, 2026-08-05) — DONE
 - **K5:** `INodeDiscovery`+`GossipNodeDiscovery`, `IClusterRegistry`+`CrdtClusterRegistry`, `INetworkTransport` УЖЕ есть (TZ-015/ADR-044) → reuse. Новый порт `IRoutingTable` (next_hop) создан (не существовал).
 - **contract** (`contracts/i_distributed_runtime.py`, `contracts/i_federated_orchestrator.py`): `IRoutingTable` + `RoutingHeader(target,ttl)`; `RemoteGoalRequest`/`RemoteOutcomeResponse` + `route`; encode/decode несут route.
