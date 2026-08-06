@@ -49,11 +49,12 @@ def test_dashboard_panel_shows_live_subsystem_counts():
     """ТЗ-RUN-01: the KROFT Desktop panel reflects REAL subsystem state, not empty defaults."""
     a = KroftApp(KroftConfig(node_id="n3b", llm="none", ticks=0))
     snap = a.dashboard.snapshot()
-    # agents / models / marketplace / notes / trust are seeded with real components
+    # agents / models / marketplace / trust are seeded with real components
     assert len(snap.agents) == 6
     assert len(snap.models) == 2
     assert snap.marketplace_skills == 52
-    assert snap.memory_notes == 245
+    # notes are LIVE now (ТЗ-DAILY-01): no vault -> 0 (graceful); not the old 245 seed
+    assert snap.memory_notes == 0
     assert abs(snap.trust_score - 0.97) < 1e-6
     # federation disabled by default -> 0 nodes
     assert snap.federation_nodes == 0
@@ -62,7 +63,8 @@ def test_dashboard_panel_shows_live_subsystem_counts():
     assert "KROFT Desktop" in text
     assert "6 active" in text
     assert "52 skills" in text
-    assert "245 notes" in text
+    # notes are LIVE now (ТЗ-DAILY-01): no vault -> "0 notes" (not seeded 245)
+    assert "0 notes" in text
     assert "0.97" in text
 
 
@@ -108,3 +110,58 @@ def test_panel_federation_nodes_when_enabled():
     assert a.distributor is not None
     assert snap.federation_nodes >= 0  # peers count is read from the distributor
     assert "Federation" in a.dashboard.render_text(snap)
+
+
+# === ТЗ-DAILY-01: live data instead of demo-seed + daily-use readiness ===
+
+def test_live_vault_ingestion(tmp_path):
+    """ТЗ-DAILY-01: a real vault path yields LIVE note counts (not seeded 245)."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "note-a.md").write_text("# Alpha\nlinks to [[Beta]]", encoding="utf-8")
+    (vault / "note-b.md").write_text("# Beta\nsome content", encoding="utf-8")
+    a = KroftApp(KroftConfig(node_id="d1", llm="none", ticks=0, vault=str(vault)))
+    snap = a.dashboard.snapshot()
+    # 2 markdown files -> graph nodes (doc + wikilink target) -> live memory_notes > 0
+    assert snap.memory_notes >= 2
+    assert snap.memory_notes != 245  # NOT the old demo-seed count
+
+
+def test_graceful_no_vault():
+    """ТЗ-DAILY-01: missing vault -> 0 notes, no crash (graceful degradation)."""
+    a = KroftApp(KroftConfig(node_id="d2", llm="none", ticks=0, vault=None))
+    snap = a.dashboard.snapshot()
+    assert snap.memory_notes == 0
+
+
+def test_task_store_live():
+    """ТЗ-DAILY-01: real TaskStore reflects genuine queued tasks in the dashboard."""
+    a = KroftApp(KroftConfig(node_id="d3", llm="none", ticks=0))
+    assert len(a.dashboard.snapshot().tasks) == 0
+    a.task_store.add("real-task-1", "queued")
+    snap = a.dashboard.snapshot()
+    assert len(snap.tasks) == 1
+    assert ("real-task-1", "queued") in snap.tasks
+
+
+def test_interactive_query_answers_from_vault(tmp_path):
+    """ТЗ-DAILY-01: interactive contour answers a query from the LIVE vault via agent loop."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "kroft.md").write_text("# KROFT_OS\nautonomous intelligence operating system", encoding="utf-8")
+    a = KroftApp(KroftConfig(node_id="d4", llm="none", ticks=0, vault=str(vault)))
+    ans = a.interactive_query("KROFT_OS")
+    assert "KROFT_OS" in ans  # live answer references the ingested note (header node)
+    # a real task was enqueued + completed
+    assert len(a.task_store.list()) == 1
+    assert a.task_store.get("task-1").status == "done"
+
+
+def test_interactive_query_deterministic(tmp_path):
+    """ТЗ-DAILY-01: identical query -> identical answer (I-09)."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "x.md").write_text("# Topic\nrepeated content", encoding="utf-8")
+    a = KroftApp(KroftConfig(node_id="d5", llm="none", ticks=0, vault=str(vault)))
+    assert a.interactive_query("Topic") == a.interactive_query("Topic")
+
