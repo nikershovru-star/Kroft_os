@@ -100,6 +100,23 @@ class KroftApp:
         # search over the live knowledge graph (ТЗ-SEARCH-01) — reused for the interactive contour
         from kernel.search import ReferenceSearchService
         self.search = ReferenceSearchService(self.memory, self.graph)
+        # 6b) Agents v0.1 (ADR-102, ТЗ-AGENT-BEHAVIOUR-01): wire the Research Agent into the
+        # existing Orchestrator dispatch path. ResearchAgent reuses the live search service;
+        # LLM is optional (graceful, I-09). No new port/layer — composition-only wiring.
+        from contracts.i_orchestrator import OrchestrationGoal
+        from kernel.orchestrator import build_orchestrator
+        from kernel.identity import ReferenceActionLog
+        from kernel.plugin import ReferencePluginRegistry
+        from services.research_agent import ResearchAgent, ResearchAgentExecutor
+        research_agent = ResearchAgent(search=self.search, llm=self.llm, top_k=5)
+        self.research_executor = ResearchAgentExecutor(research_agent)
+        self.orchestrator = build_orchestrator(
+            identity_registry=self.identity,
+            plugin_registry=ReferencePluginRegistry(),
+            trust_registry=self.trust,
+            action_log=ReferenceActionLog(),
+            agent_executor=self.research_executor,
+        )
         # 5) optional federation (graceful degradation: disabled by default)
         self.distributor: Any = None
         if self.config.federation:
@@ -232,15 +249,26 @@ class KroftApp:
         return snaps
 
     def interactive_query(self, query: str) -> str:
-        """ТЗ-DAILY-01: minimal interactive contour — query -> agent loop (kernel tick) + live search.
+        """ТЗ-DAILY-01: minimal interactive contour + Agents v0.1 (ADR-102).
 
-        Enqueues a real task, advances the kernel FSM, then answers from the LIVE knowledge graph
-        (ReferenceSearchService over the ingested vault). Deterministic; LLM-free by default (I-09).
+        Research intents are routed through the REAL Orchestrator.dispatch -> Research Agent
+        (Goal -> Orchestrator -> ResearchAgent -> KnowledgeEngine/ReferenceSearchService -> AgentResult).
+        Other intents keep the original kernel-tick + live-search path (backward compatible).
+        Deterministic; LLM-free by default (I-09).
         """
         from contracts.cognitive_domain import ConfidenceScore, Provenance
+        from contracts.i_orchestrator import OrchestrationGoal
         task_id = f"task-{len(self.task_store.list()) + 1}"
         self.task_store.add(task_id, "running")
-        # agent loop: advance the kernel FSM with the user's intent
+        # Agents v0.1: route research intents through the agent dispatch path (real outcome).
+        if self._is_research_intent(query):
+            goal = OrchestrationGoal(goal_id=task_id, capability="research", payload=query)
+            outcome = self.orchestrator.dispatch(goal)
+            self.task_store.update(task_id, "done" if outcome.success else "failed")
+            if outcome.success:
+                return outcome.detail
+            return f"[no answer] {outcome.detail}"
+        # Backward-compatible path for non-research intents.
         self.kernel.tick(Intent(id=task_id, text=query, confidence=ConfidenceScore(0.8),
                                 provenance=Provenance(source="interactive", actor="user")))
         self.task_store.update(task_id, "done")
@@ -251,6 +279,14 @@ class KroftApp:
         lines = [f"[answer] {h.source} (conf={h.confidence.value:.2f}, rel={h.relevance})"
                  for h in hits]
         return "\n".join(lines)
+
+    @staticmethod
+    def _is_research_intent(query: str) -> bool:
+        """Heuristic: research intents ask about the knowledge base / concepts."""
+        q = (query or "").lower()
+        markers = ("what is", "what are", "explain", "research", "search",
+                   "find", "how does", "kroft", "adr", "architecture", "agent")
+        return any(tok in q for tok in markers)
 
     def run_interactive(self) -> None:
         """ТЗ-DAILY-01: read queries from stdin, answer via the agent loop + live search."""
