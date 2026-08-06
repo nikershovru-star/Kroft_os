@@ -500,3 +500,9 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **Тесты (K8):** `tests/agent_runtime/test_wave_c6.py` (5: sensitive denied/default-deny, approve passes, timeout default-deny без livelock, audit logged, backward-compat).
 - **arch-gate:** 22 passed (без регрессий). `run_kroft --agent-runtime --no-demo` стартует с gate.
 - **Статус Phase C:** C1->C2->C3->C6 реализованы. C4 (Strategies) и C5 (Review Loop + partitioned bus + workflow-store) ОТЛОЖЕНЫ до реальных сценариев (product-mode). Далее — ежедневное использование -> v0.2 из реальных проблем.
+
+## Product-mode fix (2026-08-06) — реальный интерактивный approver + route fix (Флаг 1 C6)
+- **Честно найден и исправлен баг:** при `--agent-runtime` routed-capability (finance/coding) уходил в legacy `orchestrator.dispatch` ДО блока coordinator, поэтому Approval Gate НЕ срабатывал на sensitive actions (предохранитель фактически выключен). Исправлено: routed-capability при `--agent-runtime` делегируется через `AgentRuntime.delegate_step` (консультирует gate).
+- `--interactive` включает human-in-the-loop approver (спрашивает `одобрить? [y/N]` в stdin, TTL 300s); без `--interactive` остаётся demo auto-approve (CI/boot).
+- `docs/OPERATIONS_LOG.md` — журнал болей product-mode (формат + известные заметки из вердиктов C1-C6).
+- **Верификация:** ad-hoc скрипт подтверждает routed finance -> delegate_step(capability=finance) -> gate deny/allow; arch-gate 22, tests/agent_runtime 20, boot OK.

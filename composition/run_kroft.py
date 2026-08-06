@@ -147,13 +147,27 @@ class KroftApp:
             from kernel.identity import ReferenceActionLog
             blackboard = InMemoryBlackboard()
             delegation = DelegationService(max_depth=8)
-            # Wave C6: Approval Gate (default-deny semantics). Demo approver = auto-approve;
-            # реальный HITL-механизм подключается через тот же IApprovalGate порт позже.
+            # Wave C6: Approval Gate (default-deny semantics).
+            # Интерактивный (HITL) approver включается при --interactive (product-mode Флаг 1 C6):
+            # предохранитель РЕАЛЬНО спрашивает человека. В demo-режиме (без --interactive)
+            # остаётся auto-approve для обратной совместимости CI/boot.
+            if getattr(self.config, "interactive", False):
+                def _human_approver(req):
+                    ans = input(
+                        f"[approval] чувствительное действие '{req.capability}' "
+                        f"({req.action_id}): одобрить? [y/N] "
+                    ).strip().lower()
+                    return ans in ("y", "yes", "д", "да")
+                _approver = _human_approver
+                _ttl = 300.0  # человеку нужно время ответить; иначе default-deny по таймауту
+            else:
+                _approver = lambda req: True
+                _ttl = 5.0
             approval_gate = ApprovalGate(
-                approver=lambda req: True,
+                approver=_approver,
                 action_log=ReferenceActionLog(),
                 sensitive_capabilities={"finance", "coding"},
-                ttl_sec=5.0,
+                ttl_sec=_ttl,
             )
             self.agent_runtime = AgentRuntime(
                 executor=self.agent_executor,
@@ -321,8 +335,16 @@ class KroftApp:
         from contracts.i_orchestrator import OrchestrationGoal
         task_id = f"task-{len(self.task_store.list()) + 1}"
         self.task_store.add(task_id, "running")
-        # Agents v0.1: route recognised agent intents through the agent dispatch path.
+        # Agents v0.1: route recognised agent intents.
         capability = self._route_capability(query)
+        # Phase C (Wave C6): при --agent-runtime routed-capability делегируется через
+        # AgentRuntime.delegate_step (консультирует Approval Gate для sensitive capabilities).
+        # Иначе — legacy orchestrator.dispatch (без --agent-runtime).
+        if capability is not None and getattr(self, "agent_runtime", None) is not None:
+            goal = OrchestrationGoal(goal_id=task_id, capability=capability, payload=query)
+            outcome = self.agent_runtime.delegate_step(task_id, goal)
+            self.task_store.update(task_id, "done" if outcome.success else "failed")
+            return outcome.detail if outcome.success else f"[no answer] {outcome.detail}"
         if capability is not None and getattr(self, "agent_executor", None) is not None \
                 and capability in self.agent_executor._by_capability:
             goal = OrchestrationGoal(goal_id=task_id, capability=capability, payload=query)
