@@ -323,3 +323,27 @@ Phase C превращает этот набор в **Agent Runtime** — сис
 - `IReviewLoop` (C5), `IApprovalGate` (C6), partitioned bus (C5-late) — по мере сценариев.
 - Workflow persistence/store для resume/retry (Флаг 2 C2 light — Wave C5+).
 - Multi-step планирование goal (Флаг 1 C2 light — Wave C4+).
+
+---
+
+## 17. Wave C6 — Status: IMPLEMENTED (2026-08-06)
+
+**Approval Gate — человеческий предохранитель перед ежедневным использованием.** Последняя build-волна Phase C; далее — product-mode (ежедневное использование -> журнал болей -> v0.2 из реальных проблем).
+
+### Созданные артефакты
+- **Порт (contracts):** `i_approval_gate.py` (`IApprovalGate` + frozen `ApprovalRequest`/`ApprovalDecision`). Без новых фундаментальных абстракций — переиспользует `IActionLog` (IDT-01) для audit. `IPolicy`/`PolicyContext`/`PolicyDecision` НЕ дублированы (те для model-selection, другой boundary).
+- **Сервис (services, только contracts):** `approval_gate.py` (`ApprovalGate` — async request + TTL + default-deny; non-blocking через `ThreadPoolExecutor` + `shutdown(wait=False)`, чтобы event loop не блокировался на slow approver; audit каждого решения в `IActionLog.append`).
+- **Интеграция:** `AgentRuntime.delegate_step` консультирует `IApprovalGate` для чувствительных capabilities (список инжектится); без gate — no-op (backward-compat). `run_kroft --agent-runtime` инжектит `ApprovalGate` (sensitive=finance/coding, demo auto-approve; реальный HITL — через тот же порт позже).
+- **Тесты (K8):** `tests/agent_runtime/test_wave_c6.py` (5: sensitive denied/default-deny, approve passes, timeout default-deny без livelock, audit logged, backward-compat).
+
+### Результаты верификации
+- `pytest tests/agent_runtime/test_wave_c6.py` -> **5 passed**.
+- Полный arch-gate -> **22 passed** (без регрессий; services/approval_gate импортирует только contracts, K6).
+- `run_kroft --agent-runtime --no-demo` стартует с gate.
+
+### Честно обработанные нюансы
+- **Non-blocking**: первый вариант с `with ThreadPoolExecutor` блокировал выход до завершения slow-потока (shutdown(wait=True)). Исправлено на `shutdown(wait=False)` — таймаут срабатывает через ttl_sec, не дожидаясь human/slow approver.
+- **Fail-closed**: любой сбой approver или таймаут -> default-deny (НЕ allow).
+
+### Статус Phase C (итог)
+C1 (foundation) -> C2 (workflow binding) -> C3 (trust-delta+telemetry) -> C6 (approval gate) реализованы. C4 (Strategies: Sequential/Hierarchical) и C5 (Review Loop + partitioned bus + workflow-store) — ОТЛОЖЕНЫ до реальных сценариев (product-mode discipline). Архитектура готова к ежедневному использованию автономных агентов с предохранителем.

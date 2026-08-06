@@ -490,3 +490,13 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **Тесты (K8):** `tests/agent_runtime/test_wave_c3.py` (5: trust-delta success↑/failure↓ через current_trust, telemetry events, backward-compat, determinism I-09).
 - **arch-gate:** 22 passed (без регрессий). `run_kroft --agent-runtime --no-demo` стартует с trust+telemetry.
 - **Light-флаги C2 (заметки, не блокируют):** one-step Workflow (multi-step в C4+); Workflow не персистится (store в C5+).
+
+## Phase C Wave C6 — Approval Gate (ADR-103, 2026-08-06) — DONE (последняя build-волна Phase C)
+- **Человеческий предохранитель перед ежедневным использованием.** Без новых фундаментальных абстракций (K5): переиспользован `IActionLog` (IDT-01) для audit; `IPolicy`/`PolicyContext`/`PolicyDecision` НЕ дублированы.
+- `contracts/i_approval_gate.py`: `IApprovalGate` + frozen `ApprovalRequest`/`ApprovalDecision` (request_approval + is_sensitive; default-deny, non-blocking, audit).
+- `services/approval_gate.py`: `ApprovalGate` — async request + TTL + default-deny; non-blocking через `ThreadPoolExecutor` + `shutdown(wait=False)` (event loop не блокируется на slow approver); audit каждого решения в `IActionLog.append`; fail-closed.
+- `services/agent_runtime.py`: `delegate_step` консультирует `IApprovalGate` для чувствительных capabilities (список инжектится); без gate — no-op (backward-compat).
+- `composition/run_kroft.py`: `--agent-runtime` инжектит `ApprovalGate` (sensitive=finance/coding, demo auto-approve; реальный HITL — через тот же порт позже).
+- **Тесты (K8):** `tests/agent_runtime/test_wave_c6.py` (5: sensitive denied/default-deny, approve passes, timeout default-deny без livelock, audit logged, backward-compat).
+- **arch-gate:** 22 passed (без регрессий). `run_kroft --agent-runtime --no-demo` стартует с gate.
+- **Статус Phase C:** C1->C2->C3->C6 реализованы. C4 (Strategies) и C5 (Review Loop + partitioned bus + workflow-store) ОТЛОЖЕНЫ до реальных сценариев (product-mode). Далее — ежедневное использование -> v0.2 из реальных проблем.
