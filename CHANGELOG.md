@@ -325,3 +325,22 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   services->contracts only (K6); read-only (O1-safe, structurally cannot mutate); frozen VO + json sort_keys
   determinism (I-09); Флаг C (НЕ в build_kernel). Замыкает ВСЕ 7 capability-этапов + 2 капстоуна. Non-scope
   (post-MVP): pyautogui-GUI, Ed25519/PKI/key-distribution, live-refresh loop.
+
+## ТЗ-KEYDIST-01 — Key distribution + rotation/revocation for per-author HMAC keys (ADR-098, 2026-08-05) — DONE
+- **K5:** IAuthorKeyRegistry/ISignatureProvider (CRYPTO-01) УЖЕ есть — переиспользуем (НЕ дублируем). canonical_bytes/
+  check_signature (i_signature) переиспользуются для bootstrap-подписи KeyRecord. KeyRecord + IKeyDistribution — НОВЫЙ шов.
+- **contract (contracts/i_key_distribution.py):** KeyRecord (frozen VO: author, key, version, signed_by, signature, revoked)
+  + IKeyDistribution (publish_key/fetch_key/is_revoked/revoke/get_signer).
+- **impl (composition/key_distribution_service.py, Флаг C):** KeyDistributionService — bootstrap trust-anchor (pre-shared HMAC-ключ,
+  MVP допущение) HMAC-подписывает key-records через HmacSigner(bootstrap_key) + canonical_bytes/check_signature (reuse i_signature);
+  fetch_key верифицирует bootstrap-подпись (tampered -> None, O1); rotation (version > existing, ValueError иначе); revoke
+  (fetch/get_signer -> None, is_revoked True). get_signer возвращает HmacSigner(rec.key).
+- **integration (services/skill_marketplace.py, K6: services->contracts only):** SkillRepository + key_distribution параметр;
+  verify приоритет: valid+не-revoked distributed key -> author_key_registry -> shared signer (backward-compat с MARKETPLACE/
+  FED-REPL/CAPSTONE). build_skill_repository расширен.
+- **K8 tests** (tests/security/test_key_distribution.py, Флаг 1b): publish/fetch с bootstrap-подписью; tampered -> rejected;
+  rotation supersedes (non-increasing -> ValueError); revoked -> rejected; SkillRepository verify via distribution (revoked -> reject);
+  backward-compat локальный registry без distribution; determinism; existing AUTHOR-KEYS/MARKETPLACE/FED-REPL целы (21 passed).
+- **K1/K5/K6/O1/I-09:** stdlib hmac (K1); IKeyDistribution НЕ дублирует IAuthorKeyRegistry/ISignatureProvider (K5); services->contracts
+  only (K6); tampered/revoked/unknown -> safe deny (O1); HMAC детерминизм (I-09); Флаг C (НЕ в build_kernel). Закрывает security-долг
+  AUTHOR-KEYS-01 (Флаг 2: key distribution). Ed25519/PKI, реальный bootstrap, OCSP-like revocation — post-MVP.

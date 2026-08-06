@@ -1782,3 +1782,25 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-DESKTOP-01
+
+- id: ADR-098
+  title: Key distribution + rotation/revocation for per-author HMAC keys (ТЗ-KEYDIST-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    AUTHOR-KEYS-01 привязал автора к HMAC-ключу, но ключи сиделись in-process — multi-node узлы не могли
+    узнать ключи друг друга, ротация/отзыв отсутствовали. KEYDIST-01 даёт lightweight key-distribution:
+    bootstrap trust-anchor (pre-shared HMAC-ключ, MVP допущение) HMAC-подписывает key-records; узел
+    верифицирует bootstrap-подпись перед принятием ключа; ротация (version bump supersedes) и отзыв
+    (revoked -> reject). K5: IAuthorKeyRegistry/ISignatureProvider (CRYPTO-01) УЖЕ есть — переиспользуем
+    (НЕ дублируем). canonical_bytes/check_signature (i_signature) переиспользуются для bootstrap-подписи
+    KeyRecord. contracts/i_key_distribution.py: KeyRecord (frozen VO: author, key, version, signed_by,
+    signature, revoked) + IKeyDistribution (publish_key/fetch_key/is_revoked/revoke/get_signer).
+    composition/key_distribution_service.py (Флаг C): KeyDistributionService — bootstrap-signed KeyRecord
+    через HmacSigner(bootstrap_key), fetch_key верифицирует bootstrap-подпись (tampered -> None), rotation
+    (version > existing, ValueError иначе), revoke (fetch/get_signer -> None). SkillRepository.verify (services,
+    K6: services->contracts only) приоритет: valid+не-revoked distributed key -> author_key_registry -> shared
+    signer (backward-compat). Ed25519/PKI — post-MVP.
+  evidence_level: V
+  addresses:
+  - TZ-KEYDIST-01
