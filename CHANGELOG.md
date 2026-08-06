@@ -109,3 +109,21 @@ serialization, multi-hop routing / discovery / consensus.
 Established the crypto substrate: `ISignatureProvider` (new port) + `HmacSigner` (stdlib HMAC-SHA256,
 pre-shared per-node key). Sign outgoing facts/outcomes; verify origin + integrity BEFORE merge/trust.
 Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in hardening by ADR-084.
+
+## ТЗ-LIVE-01 extended — living core: background autosave + SIGINT + live mode (ADR-088, 2026-08-05) — DONE
+- **K5:** переиспользованы JsonMemoryStore, build_kernel, detect_local_ollama/build_llm_client,
+  ProcedureConsolidator, ReferenceExecutor, ReferenceTrustRegistry, InMemoryProceduralMemory.
+  НОВЫХ портов/классов НЕ создано (расширение entry-point run_evolution.py).
+- **run_evolution.py (extended):** --state-dir (default ./kroft_state) -> <dir>/kernel_state.json
+  (mkdir при старте); --llm {auto,none} (auto = detect_local_ollama -> build_llm_client, иначе
+  LLM-free; none = форс LLM-free); --ticks 0 = LIVE/forever (блок до SIGINT), N = N тиков + exit/save.
+- **background autosave** (stdlib threading.Timer, --autosave-sec default 30; 0 выкл): периодический
+  save защищает эволюцию при долгой работе; stop_autosave() отменяет таймер.
+- **graceful SIGINT:** signal handler -> stop_autosave(); save(); sys.exit(0).
+- **--bg-consolidate** (off by default, deterministic): задел для фонового consolidation/reflection.
+- **K8 tests** (tests/kernel/test_live_core.py, Флаг 1b): save->load roundtrip; эволюция через 2
+  перезапуска (4->8 эпизодов, soft-политика переживает restart); autosave пишет файл; SIGINT
+  graceful save; --llm none детерминирован.
+- **K1/K6:** composition-root (cross-layer imports) + stdlib threading/signal; НЕ тянет V3
+  runtime/kernel_runtime.py. I-09: LLM-free детерминирован. O1: autosave/load НЕ мутируют HARD.
+- Note: ТЗ указывал ADR-081-live, но ADR-081 уже занят в repo (K5 baseline stale) -> ADR-088.
