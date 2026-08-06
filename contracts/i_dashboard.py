@@ -23,11 +23,16 @@ from typing import Callable, Tuple
 
 @dataclass(frozen=True)
 class DashboardSnapshot:
-    """Frozen, read-only structural snapshot of the kernel (ТЗ-DESKTOP-01).
+    """Frozen, read-only structural snapshot of the kernel (ТЗ-DESKTOP-01, extended by ТЗ-RUN-01).
 
     All fields are immutable tuples/dicts captured at snapshot time. `captured_at` is a
     monotonic sequence (Lamport tick or a provided counter) for display ordering only — it is
     NOT a wall-clock timestamp and never feeds back into the kernel (K5 determinism, no time base).
+
+    The dashboard answers "what is the current structural STATE of the whole system?" — kernel
+    FSM, agents, tasks, models, marketplace skills, federation nodes, memory notes, trust, logs.
+    Counts are derived by the renderer (len of tuple fields) plus explicit aggregate fields for the
+    panel (marketplace_skills, federation_nodes, memory_notes, trust_score).
     """
     node_id: str
     kernel_state: str
@@ -36,6 +41,12 @@ class DashboardSnapshot:
     trust: Tuple[Tuple[str, float], ...]   # (author_id, trust_score) pairs
     models: Tuple[str, ...]               # declared model ids
     tasks: Tuple[Tuple[str, str], ...]     # (task_id, status) pairs
+    # --- ТЗ-RUN-01 panel aggregates (reuse existing component accessors, no new port) ---
+    marketplace_skills: int = 0           # installed skills in the local marketplace
+    federation_nodes: int = 0             # reachable federation peers
+    memory_notes: int = 0                 # knowledge-graph notes / semantic facts
+    trust_score: float = 0.0              # aggregate trust (mean of registered authors)
+    logs: Tuple[str, ...] = ()            # recent log lines (ring buffer)
     captured_at: int = 0
 
 
