@@ -126,6 +126,7 @@ class _LivingCore:
         self._stop = threading.Event()
         self._autosave_timer: Optional[threading.Timer] = None
 
+        os.makedirs(state_dir, exist_ok=True)
         self.store = JsonMemoryStore()
         self.mem = InMemoryLayeredMemory()
         self.proc = InMemoryProceduralMemory()
