@@ -368,9 +368,8 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   trust 0.97) → панель "KROFT Desktop" показывает ЖИВЫЕ цифры (Kernel/Agents/Tasks/Models/Marketplace/
   Federation/Memory/Trust/Logs). K6: services→contracts only. O1/I-09: read-only, детерминизм.
 - **Тесты:** tests/desktop/test_dashboard.py (8) + test_run_kroft.py (8) — PASS. akb-lint 98→99 ADR.
-- **Стратегия:** переход к v0.1 release track (продукт, которым пользуются ежедневно), не новые ТЗ-абстракции.
-
 ## ТЗ-RUN-01 — Bootable KROFT_OS: single entry point lifting the whole stack (ADR-099, 2026-08-05) — DONE
+
 - **K5:** PURE COMPOSITION over existing components — NO new contract/port. Reuses build_kernel (kernel/cognitive_kernel.py,
   CognitiveKernel with FSM tick), SkillEvolver (EVOLUTION-01), InMemoryLayeredMemory + InMemoryProceduralMemory,
   build_default_dashboard (DESKTOP-01), build_llm_client/OmniRouter (OMNI-01), SkillDistributor + SkillRepository +
@@ -388,3 +387,24 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **K1/K5/K6/O1/I-09:** stdlib + contracts (composition imports everything, K6-clean for services it reuses); determinism
   (I-09); read-only dashboard (O1/DESKTOP-01). Culmination of the capability+security ТЗ series — ALL 7 capability
   stages + 2 capstones + security core (AUTHOR-KEYS-01 + KEYDIST-01) CLOSED.
+
+## Agents v0.1 (Research Agent First) — Agent Behaviour Layer (ADR-102, 2026-08-06) — DONE
+- **K5 GO:** Не новый Agent Framework. K5-разведка: инфраструктура агентов УЖЕ полна (IAgent/IAgentLoop/
+  IAgentExecutor/IAgentPlatform, ReferenceAgentExecutor, AgentPlatform, Orchestrator.dispatch по
+  capability x trust, KnowledgeEngine + ReferenceSearchService). НОВЫЙ порт/слой НЕ создан.
+- **Этап 0 (K5):** зафиксировано — Orchestrator выбирает агента по `goal.capability in agent.specialization`,
+  скоринг = trust; agent-путь зовёт подключённый IAgentExecutor. specialization = str (research/architecture/
+  coding/writing/finance/sales), совпадает с AgentIdentity.specialization.
+- **Этап 1 (ADR):** ADR-102 «Agent Behaviour Layer» — поведение = реализация IAgentPlatform/IAgentExecutor,
+  инъецирующая доменные сервисы; НЕ новый уровень архитектуры.
+- **Этап 2 (Research Agent):** services/research_agent.py — ResearchAgent(IAgentPlatform) реально зовёт
+  ReferenceSearchService по живому графу vault (НЕ fixed answer), LLM опционален (graceful, I-09);
+  ResearchAgentExecutor(IAgentExecutor) монтирует агента в Orchestrator.dispatch.
+- **Этап 3 (интеграция):** run_kroft строит Orchestrator + вешает ResearchAgentExecutor; interactive_query
+  маршрутизирует research-интенты через dispatch (Goal -> Orchestrator -> ResearchAgent ->
+  KnowledgeEngine/ReferenceSearchService -> AgentResult). Dashboard показывает agent.research как active.
+- **Этап 4 (тесты):** tests/agent/test_research_agent.py (6 K8): surface/dispatch/research-cycle/graceful/
+  optional-LLM/backward-compat. Arch-gate 17 passed (K5/K6: services импортирует только contracts).
+  akb-lint 100->101 ADR.
+- **K1/K5/K6/K8/O1/I-09:** stdlib + contracts; 0 новых портов; 0 новых слоёв; read-only orchestrator;
+  детерминизм. Следующие агенты (Architect/Programmer/Writer/Finance/Sales) = тот же паттерн, ядро НЕ меняется.
