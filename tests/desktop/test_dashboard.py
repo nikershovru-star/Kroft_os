@@ -91,8 +91,8 @@ def test_missing_components_graceful():
     assert snap.models == ()
     assert snap.tasks == ()
     assert snap.memory_counts == (0, 0, 0)
-    # renderer still works
-    assert "node=nodeA" in dash.render_text(snap)
+    # renderer still works (KROFT Desktop panel layout, ТЗ-RUN-01)
+    assert "KROFT Desktop" in dash.render_text(snap)
     assert "nodeA" in dash.render_json(snap)
 
 
@@ -104,3 +104,64 @@ def test_idashboard_contract():
     snap = dash.snapshot()
     assert isinstance(snap, DashboardSnapshot)
     assert dash.render_json(snap)  # renders without error
+
+
+# 6) ТЗ-RUN-01 panel aggregates: marketplace / federation / notes / trust_score / logs
+def test_panel_aggregates_wired():
+    tr = ReferenceTrustRegistry()
+    tr.seed("alice", 0.97)
+    repo = SimpleNamespace(_installed={"skill.1": {}, "skill.2": {}})
+    graph = SimpleNamespace(nodes=lambda: [SimpleNamespace(id=f"n{i}") for i in range(5)])
+    logs = ["boot ok", "tick 1", "tick 2"]
+    dash = build_default_dashboard(
+        kernel=_fake_kernel(), trust_registry=tr,
+        skill_repository=repo, graph_engine=graph, logs_buffer=list(logs),
+        distributor=SimpleNamespace(_peers={"p1", "p2", "p3"}),
+    )
+    snap = dash.snapshot()
+    assert snap.marketplace_skills == 2
+    assert snap.federation_nodes == 3
+    assert snap.memory_notes == 5
+    assert abs(snap.trust_score - 0.97) < 1e-6
+    assert snap.logs[-1] == "tick 2"
+
+
+# 7) ТЗ-RUN-01 panel renders the KROFT Desktop at-a-glance layout
+def test_panel_render_layout():
+    # trust seeded (0.97) so the panel aggregate trust shows the seeded score
+    tr = ReferenceTrustRegistry()
+    tr.seed("alice", 0.97)
+    ir = ReferenceIdentityRegistry()
+    ir.register(AgentIdentity(agent_id="agent-1", specialization="general", trust_level=0.8))
+    dash2 = build_default_dashboard(
+        kernel=_fake_kernel(), trust_registry=tr,
+        skill_repository=SimpleNamespace(_installed={"s1": {}}),
+        graph_engine=SimpleNamespace(nodes=lambda: [SimpleNamespace(id="x")]),
+        logs_buffer=["ln"],
+        identity_registry=ir,
+        model_registry=SimpleNamespace(catalog=lambda: [SimpleNamespace(id="qwen3.5")]),
+    )
+    snap = dash2.snapshot()
+    text = dash2.render_text(snap)
+    assert "KROFT Desktop" in text
+    assert "✓ Running" in text or "Running" in text
+    assert "Marketplace" in text and "1 skills" in text
+    assert "Memory" in text and "1 notes" in text
+    assert "Trust" in text and "0.97" in text
+    assert "Logs" in text
+
+
+# 8) ТЗ-RUN-01 missing components -> panel still renders with zero/default aggregates
+def test_panel_aggregates_graceful():
+    dash = build_default_dashboard(kernel=_fake_kernel())
+    snap = dash.snapshot()
+    assert snap.marketplace_skills == 0
+    assert snap.federation_nodes == 0
+    assert snap.memory_notes == 0
+    assert snap.trust_score == 0.0
+    assert snap.logs == ()
+    text = dash.render_text(snap)
+    assert "KROFT Desktop" in text
+    assert "0 skills" in text
+    assert "0 notes" in text
+    assert "0.00" in text

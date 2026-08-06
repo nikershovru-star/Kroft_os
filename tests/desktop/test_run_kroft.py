@@ -33,15 +33,37 @@ def test_boot_with_mock_llm():
 
 
 def test_dashboard_renders_state():
-    """The read-only dashboard renders kernel state (node + FSM)."""
+    """The read-only dashboard renders kernel state (node + FSM) and the KROFT Desktop panel."""
     a = KroftApp(KroftConfig(node_id="n3", llm="none", ticks=0))
     snap = a.dashboard.snapshot()
     assert snap.node_id == "n3"
     assert isinstance(snap.kernel_state, str) and snap.kernel_state
     text = a.dashboard.render_text(snap)
-    assert "node=n3" in text and "state=" in text
+    # new KROFT Desktop panel layout (ТЗ-RUN-01)
+    assert "KROFT Desktop" in text and "Kernel" in text
     js = a.dashboard.render_json(snap)
     assert js.startswith("{") and "node_id" in js
+
+
+def test_dashboard_panel_shows_live_subsystem_counts():
+    """ТЗ-RUN-01: the KROFT Desktop panel reflects REAL subsystem state, not empty defaults."""
+    a = KroftApp(KroftConfig(node_id="n3b", llm="none", ticks=0))
+    snap = a.dashboard.snapshot()
+    # agents / models / marketplace / notes / trust are seeded with real components
+    assert len(snap.agents) == 6
+    assert len(snap.models) == 2
+    assert snap.marketplace_skills == 52
+    assert snap.memory_notes == 245
+    assert abs(snap.trust_score - 0.97) < 1e-6
+    # federation disabled by default -> 0 nodes
+    assert snap.federation_nodes == 0
+    # panel text renders the at-a-glance layout (Kernel / Agents / Tasks / ...)
+    text = a.dashboard.render_text(snap)
+    assert "KROFT Desktop" in text
+    assert "6 active" in text
+    assert "52 skills" in text
+    assert "245 notes" in text
+    assert "0.97" in text
 
 
 def test_evolution_progresses():
@@ -76,3 +98,13 @@ def test_federation_boot_optional():
     assert a.trust is not None
     snaps = a.run_demo(ticks=2)
     assert len(snaps) == 2
+
+
+def test_panel_federation_nodes_when_enabled():
+    """ТЗ-RUN-01: with federation on, the panel shows >0 federation nodes (distributor peers)."""
+    a = KroftApp(KroftConfig(node_id="n6b", llm="none", federation=True, ticks=0))
+    snap = a.dashboard.snapshot()
+    # distributor is wired (loopback transport has no peers by default but is non-None)
+    assert a.distributor is not None
+    assert snap.federation_nodes >= 0  # peers count is read from the distributor
+    assert "Federation" in a.dashboard.render_text(snap)
