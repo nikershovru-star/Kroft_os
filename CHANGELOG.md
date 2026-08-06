@@ -482,3 +482,11 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   возвращает capability как executor_id (capability-index, документировано). Флаг 3 (light): StigmergyStrategy
   next_step тривиален для C1, реальная готовность в C2+/позднее.
 - **arch-gate:** 22 passed (без регрессий). `run_kroft --agent-runtime --no-demo` стартует.
+
+## Phase C Wave C3 — Delegation trust-delta + telemetry (ADR-103, 2026-08-06) — DONE
+- **Без новых портов (K5):** переиспользованы `ITrustRegistry.record_outcome` (SOFT) + `ITelemetrySink.record`.
+- `services/agent_runtime.py`: `AgentRuntime` принимает опц. `trust_registry` + `telemetry`; `delegate_step` после исхода эволюционирует trust исполнителя и пишет telemetry-событие `agent_runtime.delegation` (1.0 success / 0.0 fail, tags=capability+executor). Без deps — no-op (backward-compat).
+- `composition/run_kroft.py`: `--agent-runtime` инжектит `self.trust` + `InMemoryTelemetrySink` в AgentRuntime.
+- **Тесты (K8):** `tests/agent_runtime/test_wave_c3.py` (5: trust-delta success↑/failure↓ через current_trust, telemetry events, backward-compat, determinism I-09).
+- **arch-gate:** 22 passed (без регрессий). `run_kroft --agent-runtime --no-demo` стартует с trust+telemetry.
+- **Light-флаги C2 (заметки, не блокируют):** one-step Workflow (multi-step в C4+); Workflow не персистится (store в C5+).

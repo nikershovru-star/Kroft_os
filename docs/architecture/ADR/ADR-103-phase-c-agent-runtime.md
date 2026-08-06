@@ -302,3 +302,24 @@ Phase C превращает этот набор в **Agent Runtime** — сис
 - `IWorkflowCoordinator.run` пока 1-step workflow (root capability); multi-step fan-out по DAG — когда появится сценарий (C3/C4).
 - `SequentialStrategy`/`HierarchicalStrategy` — слоты (аудит #3).
 - `IReviewLoop` (C5), `IApprovalGate` (C6), partitioned bus (C5-late) — по мере сценариев.
+
+---
+
+## 16. Wave C3 — Status: IMPLEMENTED (2026-08-06)
+
+**Delegation trust-delta + telemetry.** Без новых портов (K5 — переиспользованы `ITrustRegistry.record_outcome` + `ITelemetrySink.record`).
+
+### Изменения
+- `services/agent_runtime.py`: `AgentRuntime` принимает опц. `trust_registry` + `telemetry`; `delegate_step` ПОСЛЕ исхода вызывает `trust.record_outcome(executor_id, success)` (SOFT, delta=0.1) и `telemetry.record("agent_runtime.delegation", 1.0/0.0, tags={capability, executor})`. Без deps — no-op guard (backward-compat, поведение неизменно).
+- `composition/run_kroft.py`: `--agent-runtime` инжектит `trust_registry=self.trust` + `telemetry=InMemoryTelemetrySink()` в `AgentRuntime`.
+- `tests/agent_runtime/test_wave_c3.py` (5): success повышает trust (`current_trust`), failure понижает; telemetry-события записаны; без deps поведение неизменно; determinism (I-09).
+
+### Результаты верификации
+- `pytest tests/agent_runtime/test_wave_c3.py` -> **5 passed**.
+- Полный arch-gate -> **22 passed** (без регрессий; services/agent_runtime импортирует только contracts, включая i_identity/i_telemetry — K6 matrix допускает contracts).
+- `run_kroft --agent-runtime --no-demo` стартует с trust+telemetry.
+
+### Что НЕ сделано (следующие волны)
+- `IReviewLoop` (C5), `IApprovalGate` (C6), partitioned bus (C5-late) — по мере сценариев.
+- Workflow persistence/store для resume/retry (Флаг 2 C2 light — Wave C5+).
+- Multi-step планирование goal (Флаг 1 C2 light — Wave C4+).
