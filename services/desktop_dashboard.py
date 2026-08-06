@@ -37,6 +37,11 @@ class DashboardSnapshotter(IDashboard):
       - trust:          () -> Sequence[(author_id, score)]
       - models:         () -> Sequence[str]
       - tasks:          () -> Sequence[(task_id, status)]
+      - marketplace_skills: () -> int   (installed skills in local marketplace)
+      - federation_nodes:   () -> int   (reachable federation peers)
+      - memory_notes:       () -> int   (knowledge-graph notes / semantic facts)
+      - trust_score:        () -> float (aggregate trust, mean of authors)
+      - logs:               () -> Sequence[str]  (recent log lines)
     Each provider is read-only; the snapshotter writes nothing back (O1-style safe observation).
     """
 
@@ -53,6 +58,11 @@ class DashboardSnapshotter(IDashboard):
         trust = tuple(_safe(self._providers.get("trust", lambda: ()), ()))
         models = tuple(_safe(self._providers.get("models", lambda: ()), ()))
         tasks = tuple(_safe(self._providers.get("tasks", lambda: ()), ()))
+        marketplace = int(_safe(self._providers.get("marketplace_skills", lambda: 0), 0))
+        federation = int(_safe(self._providers.get("federation_nodes", lambda: 0), 0))
+        notes = int(_safe(self._providers.get("memory_notes", lambda: 0), 0))
+        trust_score = float(_safe(self._providers.get("trust_score", lambda: 0.0), 0.0))
+        logs = tuple(_safe(self._providers.get("logs", lambda: ()), ()))
         # Normalize memory_counts to a 3-tuple of ints (defensive against provider shape drift).
         try:
             mem_t = tuple(int(x) for x in mem[:3])
@@ -68,20 +78,48 @@ class DashboardSnapshotter(IDashboard):
             trust=tuple((str(a), float(s)) for a, s in trust),
             models=tuple(str(m) for m in models),
             tasks=tuple((str(t), str(st)) for t, st in tasks),
+            marketplace_skills=marketplace,
+            federation_nodes=federation,
+            memory_notes=notes,
+            trust_score=trust_score,
+            logs=tuple(str(l) for l in logs),
             captured_at=self._captured_at,
         )
 
     def render_text(self, snap: DashboardSnapshot) -> str:
+        """Render the KROFT Desktop control panel (ТЗ-RUN-01): system-at-a-glance layout."""
+        model_lines = [f"  {m}" for m in sorted(snap.models)] if snap.models else ["  -"]
+        log_lines = ["  " + l for l in snap.logs[-5:]] if snap.logs else ["  ..."]
         lines = [
-            f"KROFT-OS Dashboard  node={snap.node_id}  state={snap.kernel_state}",
-            f"  memory: episodes={snap.memory_counts[0]} "
-            f"semantic={snap.memory_counts[1]} normative={snap.memory_counts[2]}",
-            f"  agents ({len(snap.agents)}): {', '.join(sorted(snap.agents)) or '-'}",
-            f"  trust ({len(snap.trust)}): " +
-            ", ".join(f"{a}={s:.2f}" for a, s in sorted(snap.trust)) or "-",
-            f"  models ({len(snap.models)}): {', '.join(sorted(snap.models)) or '-'}",
-            f"  tasks ({len(snap.tasks)}): " +
-            ", ".join(f"{t}:{st}" for t, st in sorted(snap.tasks)) or "-",
+            "KROFT Desktop",
+            "──────────────────────────",
+            "Kernel",
+            f"  {'✓ Running' if snap.kernel_state not in ('STOPPED', 'FAILED') else '✗ ' + snap.kernel_state}",
+            "",
+            "Agents",
+            f"  {len(snap.agents)} active",
+            "",
+            "Tasks",
+            f"  {len(snap.tasks)} queued",
+            "",
+            "Models",
+            *model_lines,
+            "",
+            "Marketplace",
+            f"  {snap.marketplace_skills} skills",
+            "",
+            "Federation",
+            f"  {snap.federation_nodes} nodes",
+            "",
+            "Memory",
+            f"  {snap.memory_notes} notes",
+            "",
+            "Trust",
+            f"  {snap.trust_score:.2f}",
+            "",
+            "Logs",
+            *log_lines,
+            "──────────────────────────",
         ]
         return "\n".join(lines)
 
@@ -98,6 +136,11 @@ class DashboardSnapshotter(IDashboard):
             "trust": {a: s for a, s in sorted(snap.trust)},
             "models": sorted(snap.models),
             "tasks": {t: st for t, st in sorted(snap.tasks)},
+            "marketplace_skills": snap.marketplace_skills,
+            "federation_nodes": snap.federation_nodes,
+            "memory_notes": snap.memory_notes,
+            "trust_score": snap.trust_score,
+            "logs": list(snap.logs[-5:]),
             "captured_at": snap.captured_at,
         }
         # sort_keys -> deterministic byte output (I-09). separators compact.
