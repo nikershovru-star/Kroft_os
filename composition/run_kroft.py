@@ -142,6 +142,7 @@ class KroftApp:
             from services.delegation_service import DelegationService
             from services.coordination_strategy import StigmergyStrategy
             from services.workflow_coordinator import WorkflowCoordinator
+            from adapters.in_memory_telemetry import InMemoryTelemetry
             blackboard = InMemoryBlackboard()
             delegation = DelegationService(max_depth=8)
             self.agent_runtime = AgentRuntime(
@@ -149,6 +150,8 @@ class KroftApp:
                 blackboard=blackboard,
                 delegation=delegation,
                 root_capability="research",
+                trust_registry=self.trust,
+                telemetry=InMemoryTelemetry(),
             )
             self.workflow_coordinator = WorkflowCoordinator(
                 runtime=self.agent_runtime,
