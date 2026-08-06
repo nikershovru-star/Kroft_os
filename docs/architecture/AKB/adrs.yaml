@@ -1489,3 +1489,28 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-LIVE-01
+
+- id: ADR-088
+  title: Living core — background autosave, SIGINT graceful shutdown, live mode (ТЗ-LIVE-01 extended)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    ТЗ-LIVE-01 (ADR-087) дал persistence + launch, но ядро стартовало и останавливалось
+    после N тиков. Расширение делает его живой системой: --state-dir (./kroft_state),
+
+    --llm {auto,none} (auto = detect_local_ollama -> build_llm_client, none = LLM-free),
+
+    --ticks 0 = live/forever (блок до SIGINT), фоновый autosave-таймер (threading.Timer,
+
+    --autosave-sec default 30), опц. bg-consolidate (выкл по умолчанию), graceful SIGINT
+
+    (save+stop+exit 0). Ядро можно запустить и не выключать; состояние накапливается
+
+    между перезапусками (resume через JsonMemoryStore). K5: переиспользованы JsonMemoryStore,
+
+    build_kernel, detect_local_ollama/build_llm_client, ReferenceExecutor, ReferenceTrustRegistry;
+
+    НОВЫХ портов нет. K1/K6: composition-root + stdlib threading/signal.
+  evidence_level: V
+  addresses:
+  - TZ-LIVE-01
