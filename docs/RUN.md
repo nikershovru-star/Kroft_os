@@ -42,6 +42,29 @@ PYTHONPATH=. python composition/run_kroft.py --federation --ticks 2
 PYTHONPATH=. python composition/run_kroft.py --no-demo
 ```
 
+## Daily-use: живые данные из Obsidian (ТЗ-DAILY-01)
+
+Панель больше НЕ кормится demo-seed. Реальные заметки vault попадают в граф → `Memory` показывает
+живое число notes. Интерактивный контур позволяет задавать вопросы и получать ответы из живого графа.
+
+```bash
+# поднять с реальным vault (живые notes)
+PYTHONPATH=. python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\Obsidian Vault"
+
+# интерактивный режим: вводите запросы, Ctrl-D для выхода
+PYTHONPATH=. python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\Obsidian Vault" --interactive
+# kroft> KROFT_OS architecture
+# [answer] graph:.../ADR-001 Kernel.md (conf=0.50, rel=1.0)
+# ...
+
+# без --vault: Memory = 0 (graceful, не падает)
+```
+
+- `ObsidianVaultReader` читает `*.md` рекурсивно (stdlib `pathlib`, поддержка путей с пробелами).
+- `KnowledgeEngine.ingest` (переиспользован) наполняет граф; `ReferenceSearchService` отвечает на запросы.
+- `TaskStore` — реальные задачи (0 пока agent loop не использует интерактивно; интерактивный контур
+  уже создаёт задачу на каждый query).
+
 ## Панель KROFT Desktop
 
 После boot'а `run_kroft` печатает панель на каждом tick:

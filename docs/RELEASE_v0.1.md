@@ -116,4 +116,18 @@ pytest -q            # полный прогон (0 failed)
 pytest tests/desktop # dashboard + run_kroft
 ```
 
-Arch-gate (K1/K3/K6/K8 + F1–F6): 14 positive + 6 negative. akb-lint: 99 ADR PASSED.
+Arch-gate (K1/K3/K6/K8 + F1–F6): 14 positive + 6 negative. akb-lint: 100 ADR PASSED.
+
+## v0.1.1 — Daily-use (ТЗ-DAILY-01)
+
+Панель больше НЕ demo-seed. Живые данные:
+
+- `Memory` = реальное число заметок vault (`--vault <path>` → ObsidianVaultReader → KnowledgeEngine → граф).
+  Реальный Obsidian Vault → ~16000+ notes (живые). Без `--vault` → 0 (graceful).
+- `Tasks` = реальные задачи из `TaskStore` (интерактивный контур создаёт задачу на каждый query).
+- Интерактивный контур `--interactive`: query → kernel FSM tick → `ReferenceSearchService` отвечает
+  из живого графа (поиск по реальным заметкам vault).
+
+```bash
+PYTHONPATH=. python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\Obsidian Vault" --interactive
+```

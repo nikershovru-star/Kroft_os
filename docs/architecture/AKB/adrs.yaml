@@ -1844,3 +1844,24 @@ adrs:
   addresses:
   - TZ-RUN-01
   - KROFT-DESKTOP-v0.1
+
+- id: ADR-101
+  title: Daily-use pipeline — live vault data + interactive contour (ТЗ-DAILY-01)
+  status: accepted
+  date: 2026-08-06
+  summary: >-
+    ТЗ-DAILY-01: панель кормилась demo-seed (245 notes, trust 0.97) — composition-level scaffolding,
+    не живая активность. ТЗ заменяет seed ЖИВЫМИ данными. K5: ObsidianVaultReader (stdlib pathlib,
+    НОВЫЙ узкий шов — vault reader ещё не было) читает *.md; KnowledgeEngine.ingest (ТЗ-KNOWLEDGE-ENGINE-01,
+    ADR-091, ПЕРЕИСПОЛЬЗОВАН, НЕ дублирован) наполняет граф -> dashboard memory_notes = реальное число
+    заметок vault (graceful: нет vault -> 0). TaskStore (services/task_store.py, НОВЫЙ — существующего
+    НЕ было) = реальные queued задачи (0 пока agent loop не использует). run_kroft: --vault <path> +
+    --interactive (query -> kernel FSM tick -> ReferenceSearchService (ТЗ-SEARCH-01) отвечает из живого
+    графа). agents/models/marketplace остаются demo для наглядности. K1/K5/K6/K8/O1/I-09: stdlib read
+    vault; reuse KnowledgeEngine/ContentIndex/ReferenceSearchService; services->contracts; graceful
+    degradation; детерминизм. Флаг 2 (light): dashboard читает приватные _installed/_peers/_state —
+    duck-typed OK, перевести на публичные аксессоры когда появятся. Non-scope: GUI, поведенческие loop'ы
+    агентов, Enterprise Security (Ed25519/PKI) — post-MVP.
+  evidence_level: V
+  addresses:
+  - TZ-DAILY-01

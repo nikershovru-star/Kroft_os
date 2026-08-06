@@ -345,6 +345,19 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   only (K6); tampered/revoked/unknown -> safe deny (O1); HMAC детерминизм (I-09); Флаг C (НЕ в build_kernel). Закрывает security-долг
   AUTHOR-KEYS-01 (Флаг 2: key distribution). Ed25519/PKI, реальный bootstrap, OCSP-like revocation — post-MVP.
 
+## ТЗ-DAILY-01 — Daily-use pipeline: live vault data + interactive contour (ADR-101, 2026-08-06) — DONE
+- **K5:** Замена demo-seed ЖИВЫМИ данными. ObsidianVaultReader (stdlib pathlib, НОВЫЙ узкий шов) читает
+  *.md; KnowledgeEngine.ingest (ТЗ-KNOWLEDGE-ENGINE-01, ADR-091, ПЕРЕИСПОЛЬЗОВАН) наполняет граф ->
+  dashboard memory_notes = реальное число заметок vault (graceful: нет vault -> 0). TaskStore
+  (services/task_store.py, НОВЫЙ — существовавшего НЕ было) = реальные queued задачи. run_kroft:
+  --vault <path> + --interactive (query -> kernel FSM tick -> ReferenceSearchService (ТЗ-SEARCH-01)
+  отвечает из живого графа). agents/models/marketplace остаются demo для наглядности.
+- **K1/K5/K6/K8/O1/I-09:** stdlib read vault; reuse KnowledgeEngine/ContentIndex/ReferenceSearchService;
+  services->contracts; graceful degradation; детерминизм. Флаг 2 (light): dashboard читает приватные
+  _installed/_peers/_state (duck-typed OK, перевести на публичные когда появятся).
+- **Тесты:** tests/desktop/test_run_kroft.py (13: 8 RUN-01 + 5 DAILY) PASS; ad-hoc реальный vault ->
+  memory_notes=16139 (живые). akb-lint 99->100 ADR.
+
 ## ТЗ-RUN-01 ext — KROFT Desktop control panel (ADR-100, 2026-08-06) — DONE
 - **K5:** Расширение DESKTOP-01 (ADR-097), НЕ новый порт. DashboardSnapshot (frozen VO) расширен
   полями marketplace_skills / federation_nodes / memory_notes / trust_score / logs. DashboardSnapshotter
