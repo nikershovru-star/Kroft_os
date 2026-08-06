@@ -1892,3 +1892,23 @@ adrs:
   evidence_level: III
   addresses:
   - TZ-AGENT-BEHAVIOUR-01
+- id: ADR-103
+  title: Phase C — Agent Runtime (мультиагентная система на существующем substrate)
+  status: proposed
+  date: 2026-08-06
+  summary: >-
+    Phase C превращает существующих 6 агентов (Research/Architect/Programmer/Writer/Planner/
+    Finance) в рабочую мультиагентную систему БЕЗ новых специализированных агентов. K5-разведка:
+    substrate УЖЕ покрывает все 10 пунктов (EventBus/Workflow/LayeredMemory+Evolution/PolicyEngine+
+    Approval/Trust/Supervisor/Skills). Ревью-аудит (10 пунктов) устронил god-object (AgentRuntime =
+    тонкий facade; оркестрация в фокусных координаторах за портами), thread-safety (IBlackboard
+    versioned+single-writer), delegation-cycle (IDelegationService DAG+cycle+max_depth), idempotency,
+    scalability (stigmergy, не broadcast), approval-security (async+TTL+default-deny), K6 (facade только
+    порты), SOLID (ICoordinationStrategy объекты), event-driven (агенты не вызывают друг друга).
+    Дисциплина: порт объявляется ТОЛЬКО в волне с реализацией. Wave C1 (DONE): IAgentRuntime/IBlackboard/
+    IDelegationService + StigmergyStrategy; сквозной тест A->B через blackboard + cycle proof-of-fire;
+    arch-gate K6 + facade-не-god-object -> 9 passed. Позднее: IWorkflowCoordinator(C2), IReviewLoop(C5),
+    IApprovalGate(C6); Sequential/Hierarchical — слоты.
+  evidence_level: III
+  addresses:
+  - PHASE-C-AGENT-RUNTIME

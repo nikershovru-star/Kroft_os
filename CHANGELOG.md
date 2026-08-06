@@ -454,3 +454,17 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **Итог Agents v0.1:** 6 агентов (Research/Architect/Programmer/Writer/Planner/Finance), все через
   единый `MultiAgentExecutor` на `Orchestrator.dispatch`. 0 новых портов, 0 новых слоёв, K5/K6/O1/I-09.
   Следующие агенты (Sales и др.) = тот же шов.
+
+## Phase C Wave C1 — Agent Runtime фундамент (ADR-103, 2026-08-06) — DONE
+- **Фундамент Phase C** без god-object и прямых вызовов между агентами. K5/K6-clean.
+- **Порты (contracts):** `i_blackboard.py` (`IBlackboard` versioned+single-writer), `i_delegation.py`
+  (`IDelegationService` DAG+cycle+max_depth), `i_agent_runtime.py` (`IAgentRuntime` facade),
+  `i_coordination_strategy.py` (`ICoordinationStrategy` + Stigmergy-слот).
+- **Сервисы (services, только contracts):** `blackboard.py`, `delegation_service.py`,
+  `coordination_strategy.py` (`StigmergyStrategy`), `agent_runtime.py` (`AgentRuntime` facade).
+- **Тесты (K8):** `tests/agent_runtime/test_wave_c1.py` (4: end-to-end через blackboard, cycle
+  proof-of-fire A->B->A, versioned single-writer, facade-only-ports) + `tests/architecture/
+  test_phase_c_wave_c1.py` (5: K6 gate на Wave C1 + facade-не-god-object).
+- **arch-gate:** 22 passed (было 17, +5). `run_kroft --no-demo` стартует.
+- **Дисциплина:** порт объявляется ТОЛЬКО в волне с реализацией; IWorkflowCoordinator/IReviewLoop/
+  IApprovalGate — следующие волны; Sequential/Hierarchical — слоты (не реализованы).

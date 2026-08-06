@@ -268,3 +268,5 @@ services импортирует только contracts; 0 новых порто�
 - [x] **Finance Agent** — `services/finance_agent.py` (capability=`finance`) ✅ DONE (внешний exchange-адаптер moneygen/MarketMind — out-of-scope v0.1, K6-адаптер позже)
 - [ ] **Sales Agent** — следующий по тому же шву (pending)
 Тесты: tests/agent/test_{research,architect,programmer,writer,planner,finance}_agent.py (27 K8 суммарно) + arch-gate 17.
+
+**Phase C Wave C1 — Agent Runtime фундамент (2026-08-06, DONE):** ADR-103. Без god-object, без прямых вызовов агентов. Порты: `IBlackboard` (versioned+single-writer), `IDelegationService` (DAG+cycle+max_depth), `IAgentRuntime` (facade), `ICoordinationStrategy` (Stigmergy). Сервисы: `blackboard.py`, `delegation_service.py`, `coordination_strategy.py`, `agent_runtime.py`. Тесты: test_wave_c1 (4) + test_phase_c_wave_c1 (5 K6). arch-gate 22 passed. Следующие волны: IWorkflowCoordinator(C2), IReviewLoop(C5), IApprovalGate(C6).
