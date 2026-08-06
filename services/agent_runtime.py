@@ -10,6 +10,7 @@ IBlackboard (delegate_step пишет результат шага в team-scope,
 
 from __future__ import annotations
 
+import hashlib
 from typing import List, Optional, Tuple
 
 from contracts.i_agent_runtime import IAgentRuntime, WorkflowResult
@@ -35,7 +36,8 @@ class AgentRuntime(IAgentRuntime):
         self._root_capability = root_capability
 
     def run_workflow(self, goal: str, root_goal_id: Optional[str] = None) -> WorkflowResult:
-        rid = root_goal_id or f"root:{abs(hash(goal)) % 10_000}"
+        # I-09: стабильная деривация (HE hash() — рандомизован per-process via PYTHONHASHSEED).
+        rid = root_goal_id or f"root:{hashlib.sha256(goal.encode('utf-8')).hexdigest()[:12]}"
         root_goal = OrchestrationGoal(goal_id=rid, capability=self._root_capability, payload=goal)
         outcome = self.delegate_step(rid, root_goal)
         return WorkflowResult(
@@ -48,6 +50,9 @@ class AgentRuntime(IAgentRuntime):
     def delegate_step(self, parent_goal_id: str, child_goal: OrchestrationGoal) -> TaskOutcome:
         # capability-index через публичный can_execute порта (O(1) lookup в MultiAgentExecutor)
         def resolver(cap: str) -> Optional[str]:
+            # Флаг 2 (light): executor_id = capability (capability-index, приемлемо для C1,
+            # т.к. capability уникален на executor). Когда появится неоднозначность
+            # (2 executor на 1 capability), вернуть реальный id исполнителя из registry.
             probe = OrchestrationGoal(goal_id=f"probe:{cap}", capability=cap)
             if self._executor.can_execute(probe):
                 return cap

@@ -88,3 +88,14 @@ def test_runtime_facade_depends_only_on_ports():
     assert isinstance(rt, AgentRuntime)
     # delegation через IDelegationService (не прямой dispatch ядра)
     assert rt._delegation.depth_of("root") == 0
+
+
+def test_root_goal_id_deterministic_I09():
+    """Флаг 1 fix: root_goal_id стабилен между прогонами (sha256, НЕ hash())."""
+    rt = _runtime()
+    r1 = rt.run_workflow("agent behaviour")
+    r2 = rt.run_workflow("agent behaviour")
+    assert r1.root_goal_id == r2.root_goal_id
+    # формат root:<12 hex>
+    assert r1.root_goal_id.startswith("root:")
+    assert len(r1.root_goal_id) == len("root:") + 12
