@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from contracts.i_identity import ITrustRegistry
 from contracts.i_author_keys import IAuthorKeyRegistry
+from contracts.i_key_distribution import IKeyDistribution
 from contracts.i_memory import Procedure
 from contracts.i_marketplace import ISkillRepository, SkillPackage
 from contracts.i_signature import attach_signature, canonical_bytes, check_signature
@@ -82,13 +83,18 @@ class SkillRepository(ISkillRepository):
     """In-memory/local-dir SkillRepository with signature verify + trust gate (ТЗ-MARKETPLACE-01)."""
 
     def __init__(self, signer: "Any" = None, store_dir: Optional[str] = None,
-                 author_key_registry: Optional[IAuthorKeyRegistry] = None) -> None:
+                 author_key_registry: Optional[IAuthorKeyRegistry] = None,
+                 key_distribution: Optional[IKeyDistribution] = None) -> None:
         # signer (ISignatureProvider) injected; store_dir optional for local-dir persistence
         self._signer = signer
         # ТЗ-AUTHOR-KEYS-01: per-author HMAC keys. When an author is registered, its OWN key
         # authenticates the package; otherwise verify falls back to the shared `signer` (backward-compat
         # with MARKETPLACE/FED-REPL/CAPSTONE shared-key usage).
         self._author_keys = author_key_registry
+        # ТЗ-KEYDIST-01: distributed keys (bootstrap-signed, rotation/revocation aware). A valid,
+        # non-revoked distributed key takes PRIORITY over the local registry; otherwise fall back to
+        # the local registry, then to the shared signer (backward-compat).
+        self._key_distribution = key_distribution
         self._store_dir = store_dir
         self._packages: Dict[str, SkillPackage] = {}  # id -> pkg
         self._installed: Dict[str, Any] = {}  # name -> installed payload (latest)
@@ -101,9 +107,13 @@ class SkillRepository(ISkillRepository):
             self._persist(pkg)
 
     def verify(self, pkg: SkillPackage, signer: "Any" = None) -> bool:
-        # ТЗ-AUTHOR-KEYS-01: prefer the author's OWN registered key; fall back to the shared signer
-        # when the author is unregistered (backward-compat with shared-key MARKETPLACE/FED-REPL/CAPSTONE).
+        # ТЗ-KEYDIST-01 (priority) -> ТЗ-AUTHOR-KEYS-01 (local registry) -> shared signer (legacy).
+        # A distributed key that is valid (bootstrap-signed) and NOT revoked authenticates the
+        # package; a revoked/tampered/unknown distributed author falls through to the local registry
+        # or shared signer (backward-compat).
         prov = signer
+        if prov is None and self._key_distribution is not None:
+            prov = self._key_distribution.get_signer(pkg.author)
         if prov is None and self._author_keys is not None and self._author_keys.has(pkg.author):
             prov = self._author_keys.get_signer(pkg.author)
         if prov is None:
@@ -171,7 +181,9 @@ class SkillRepository(ISkillRepository):
 
 def build_skill_repository(signer: "Any" = None,
                            store_dir: Optional[str] = None,
-                           author_key_registry: Optional[IAuthorKeyRegistry] = None) -> "SkillRepository":
+                           author_key_registry: Optional[IAuthorKeyRegistry] = None,
+                           key_distribution: Optional[IKeyDistribution] = None) -> "SkillRepository":
     """Standalone factory (Флаг C) — wire a SkillRepository. NOT in build_kernel (opt-in)."""
     return SkillRepository(signer=signer, store_dir=store_dir,
-                          author_key_registry=author_key_registry)
+                          author_key_registry=author_key_registry,
+                          key_distribution=key_distribution)
