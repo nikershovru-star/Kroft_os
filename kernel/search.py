@@ -34,6 +34,44 @@ from contracts.knowledge_graph import IGraphEngine, Node
 
 _TOKEN_RE = re.compile(r"[a-z0-9_]+")
 
+# Search Quality v0.1 (Product Mode): minimal ranking boosts, no new layer/port.
+# A) title match weights more than body match; B) architecture docs (ADR/RFC/KEH/KES/
+#    architecture) get a type boost; C) stop-files excluded by name.
+_STOP_NAMES = {
+    "license", "readme", "makefile", "dockerfile", "__init__", "setup",
+    "node_modules", ".git", "changelog", "contributing",
+}
+_DOC_TYPE_HINT = re.compile(
+    r"(adr-|architecture|rfc-|keh|kes|krm|kera|keh\W|architecture adr|obsidian\s*vault)",
+    re.IGNORECASE,
+)
+_TITLE_BOOST = 0.5    # +0.5*title_overlap on top of body overlap
+_DOC_TYPE_BOOST = 1.3  # multiplicative boost for architecture-class documents
+
+
+def _is_stop_file(label: str) -> bool:
+    """Exclude utility/root files by bare name (Search Quality v0.1, task C)."""
+    base = label.replace("\\", "/").split("/")[-1].lower()
+    base = re.sub(r"\.(md|txt|py|rst)$", "", base)
+    return base in _STOP_NAMES
+
+
+def _doc_type_boost(label: str) -> float:
+    """Architecture-class documents rank above incidental notes (task B).
+
+    Boost by FILE NAME (not folder/path): a file literally named 'ADR-043 ...'
+    is an architecture decision; a note merely *mentioning* 'ADR-043' in its body
+    must NOT inherit the boost. Folder 'architecture/...' gets a milder boost
+    (everything there is architecture-relevant).
+    """
+    fname = label.replace("\\", "/").split("/")[-1].lower()
+    fname = re.sub(r"\.(md|txt|py|rst)$", "", fname)
+    if re.search(r"^(adr-|rfc-)", fname):
+        return _DOC_TYPE_BOOST          # explicit decision/request doc
+    if _DOC_TYPE_HINT.search(label or ""):
+        return 1.15                      # milder boost for architecture-class folders
+    return 1.0
+
 
 def _tokenize(text: str) -> List[str]:
     """Deterministic lowercase tokenization (LLM-free). Short tokens (<2 chars) dropped
@@ -93,6 +131,8 @@ class ReferenceSearchService(ISearchService):
                 hits.extend(self._match_policy(p, q_tokens))
         if SearchScope.GRAPH in want and self._graph is not None:
             for n in self._graph.nodes():
+                if _is_stop_file(n.label):
+                    continue  # task C: skip utility/root files
                 hits.extend(self._match_node(n, q_tokens))
         return hits
 
@@ -151,6 +191,11 @@ class ReferenceSearchService(ISearchService):
         rel = self._overlap(q_tokens, text)
         if rel <= 0.0:
             return []
+        # Search Quality v0.1: title match boosts more than body; doc-type boosts
+        # architecture-class docs (ADR/RFC/KEH/KES/architecture) above incidental notes.
+        title_rel = self._overlap(q_tokens, n.label)
+        boost = (1.0 + _TITLE_BOOST * title_rel) * _doc_type_boost(n.label)
+        rel = rel * boost
         # Флаг D: graph nodes have no confidence/causal -> neutral defaults so ranking
         # is uniform with the other (confidence-carrying) layers.
         return [SearchHit(

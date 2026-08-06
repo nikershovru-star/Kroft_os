@@ -547,3 +547,10 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **Operator-режим (Паттерн 1):** добавлен `--query "<cap>:<вопрос>"` one-shot в `composition/run_kroft.py` (KroftConfig.query + main) — Hermes-desktop вызывает KROFT_OS как инструмент без stdin. Поддержан также pipe в `--interactive`.
 - **Верификация:** `--query` по всем 6 capabilities (research/architecture/coding/writing/planning/finance) → реальный синтез-ответ от `llama3.1:8b`. Тесты: arch 22 / desktop 21 / agent_runtime 20 зелёные.
 - Доки: `docs/RUN.md` (Operator-команда), `docs/OPERATIONS_LOG.md` (баг + Operator).
+
+## Product Mode — Search Quality v0.1 (2026-08-07)
+- **Цель:** повысить релевантность `ReferenceSearchService` без новых слоёв/портов (K5/K6).
+- **Анализ (ДО):** `_overlap` считал релевантность только по телу; не было буста типа документа (ADR/RFC имели conf 0.5 как случайные заметки); запрос «ADR» выдавал шумные заметки с упоминанием «ADR-043» наравне с реальными ADR.
+- **Фикс (только `kernel/search.py`, standalone-сервис):** (A) `_TITLE_BOOST=0.5` — совпадение токена в `n.label` весит больше тела; (B) `_doc_type_boost` по **имени файла** (`^(adr-|rfc-)` ×1.3, папка architecture ×1.15) — файл «ADR-043 ...» бустится, заметка с упоминанием «ADR-043» в теле — нет; (C) `_is_stop_file` исключает license/readme/__init__/... по имени.
+- **Результат (ПОСЛЕ):** «ADR» → ADR-001..004 (реальные решения, шум вытеснен); federation/agent loop/desktop имеют градацию ADR(1.95) > ТЗ(1.725) > тело(1.5). «blackboard pattern» не улучшился — в vault нет документа с «blackboard» в заголовке (дефицит контента, не баг поиска).
+- **Тесты:** arch-gate 22 / desktop 21 / agent_runtime 20 зелёные (K6 соблюдён: search standalone, kernel не зависит).
