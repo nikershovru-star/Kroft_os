@@ -259,3 +259,22 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   determinism. Existing FED/MARKETPLACE/IDT тесты целы.
 - **K1/K5/K6/O1/I-09:** stdlib hmac (K1); services->contracts (K6, transport/repository/trust injected); untrusted/
   tampered -> safe deny (O1); HMAC детерминизм (I-09). Флаг C/1b.
+
+## ТЗ-CAPSTONE-02 — Distributed skill-evolution capstone: end-to-end self-evolution (ADR-095, 2026-08-05) — DONE
+- **K5:** PURE COMPOSITION — НИЧЕГО нового не создаётся (капстоун). Переиспользованы SkillEvolver (EVOLUTION-01),
+  SkillPackager/SkillRepository (MARKETPLACE-01), SkillDistributor (FED-REPL-01), ITrustRegistry (IDT-01),
+  ISignatureProvider/HmacSigner (CRYPTO-01), SubprocessSandbox (ADR-039), InMemoryProceduralMemory, INetworkTransport
+  (NW-01). НЕТ новых портов/контрактов.
+- **composition/capstone_distributed.py (Флаг C, НЕ в build_kernel):** LoopbackTransport (INetworkTransport,
+  in-process, shared bus) + DistributedNode (оборачивает evolver+repo+distributor+trust, injected sandbox/memory) +
+  build_distributed_capstone() (2 узла A,B, shared signer+trust+bus). DistributedNode.evolve_and_publish (sender:
+  evolve -> package -> publish_remote) + use_skill (receiver: выполняет установленный Procedure через sandbox ->
+  success_rate = поведение B).
+- **composition/capstone_scenario.py (Флаг C):** run_capstone_scenario() — A: low-eff skill -> evolve -> package ->
+  publish_remote -> B: install -> use_skill (behavior changes). Deterministic (I-09).
+- **K8 tests** (tests/capstone/test_distributed_capstone.py, Флаг 1b): end-to-end A улучшает -> B получает ->
+  поведение B меняется (None -> 1.0); untrusted author -> rejected (O1); tampered payload -> rejected (O1);
+  version supersede между узлами; determinism. Existing EVOLUTION/MARKETPLACE/FED-REPL тесты целы (28 passed).
+- **K1/K5/K6/O1/I-09:** stdlib hmac (K1); composition-only, ZERO new ports (K5); services stay axis-clean, composition
+  imports services+adapters+kernel (K6); untrusted/tampered -> safe deny (O1); LLM-free evolver + HMAC детерминизм (I-09).
+  Флаг C/1b. Поведение B РЕАЛЬНО меняется (не просто install).

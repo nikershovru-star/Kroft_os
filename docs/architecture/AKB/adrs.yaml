@@ -1712,3 +1712,25 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-FED-REPL-01
+
+- id: ADR-095
+  title: Distributed skill-evolution capstone — end-to-end self-evolution across nodes (ТЗ-CAPSTONE-02)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    EVOLUTION-01 (улучшение навыков), MARKETPLACE-01 (упаковка/подпись/установка), FED-REPL-01 (кросс-узловая
+    репликация) готовы по отдельности. Капстоун доказывает их СОВМЕСТНУЮ работу end-to-end: узел A улучшает
+    навык через SkillEvolver, упаковывает через SkillPackager, реплицирует через SkillDistributor узлу B;
+    B верифицирует подпись + гейтит по trust + устанавливает (version supersede); поведение B меняется из
+    улучшенного навыка A. Кульминация распределённой самоэволюции (Этапы 5–7). K5: НИЧЕГО нового не создаётся
+    (капстоун — композиция). Переиспользуются SkillEvolver (EVOLUTION-01), SkillPackager/SkillRepository
+    (MARKETPLACE-01), SkillDistributor (FED-REPL-01), ITrustRegistry (IDT-01), ISignatureProvider/HmacSigner
+    (CRYPTO-01), SubprocessSandbox (ADR-039), InMemoryProceduralMemory, INetworkTransport (NW-01). composition/
+    capstone_distributed.py строит 2 узла (DistributedNode: evolver+repo+distributor+trust) поверх in-process
+    LoopbackTransport. composition/capstone_scenario.py run_capstone_scenario прогоняет цикл. Флаг C: composition
+    only, НЕ в build_kernel. НЕТ новых портов. Поведение B РЕАЛЬНО меняется (use_skill выполняет установленный
+    Procedure через sandbox -> success_rate). O1: untrusted/tampered -> B rejects (inherited trust+signature gate).
+    I-09: LLM-free evolver + HMAC -> reproducible.
+  evidence_level: V
+  addresses:
+  - TZ-CAPSTONE-02
