@@ -26,6 +26,7 @@ class NodeType(str, Enum):
     VIDEO = "VIDEO"
     AUDIO = "AUDIO"
     IMAGE = "IMAGE"
+    NOTE = "NOTE"              # ТЗ-KNOWLEDGE-ENGINE-01: ingested document / Obsidian note
 
 
 class EdgeType(str, Enum):
@@ -38,6 +39,7 @@ class EdgeType(str, Enum):
     PROVES = "PROVES"
     REFERENCES = "REFERENCES"
     CONTAINS = "CONTAINS"
+    BACKLINKS = "BACKLINKS"    # ТЗ-KNOWLEDGE-ENGINE-01: reverse wikilink edge
 
 
 def _now() -> str:
