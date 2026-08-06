@@ -147,3 +147,26 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **K1/K6:** OmniRouter в composition/ (импортирует adapters — разрешено import_matrix); домен без
   SDK; сеть через IHttpTransport (stdlib urllib). I-09: детерминизм. O1: роутер — советник, fallback
   защищает (LLM-01), ядро LLM-free по конструкции.
+
+## ТЗ-AGENT-LOOP-01 — Agent Loop: итеративный goal-driven цикл поверх ядра (ADR-090, 2026-08-05) — DONE
+- **K5:** IAgentPlatform.run (ADR-014) — single-shot mission (нет budget, нет inter-step feedback);
+  IAgentExecutor.execute (ADR-080) — один tick; ReferenceAgentExecutor — один tick. НИ ОДИН НЕ
+  итеративный loop -> IAgentLoop НОВЫЙ шов (НЕ дублирует IAgentPlatform/IAgentExecutor/ILlm/ILLMAdvisor).
+  Переиспользованы build_kernel, CognitiveKernel.tick, ReferenceExecutor, ReferenceAgentExecutor,
+  IAgentExecutor/TaskOutcome/OrchestrationGoal.
+- **contract (contracts/i_agent_loop.py):** IAgentLoop (run(goal, budget) -> AgentLoopResult) +
+  AgentLoopResult (frozen VO: success, steps_taken, final_outcome, memory_delta).
+- **impl (kernel/agent_loop.py, K6: kernel->kernel):** AgentLoop итерирует build_kernel + kernel.tick
+  с observation-feedback (intent.text = goal + prior observations -> planner ре-планирует); stop на
+  budget ИЛИ отсутствии плана (цель достигнута); LLM-free (I-09 детерминизм); memory_delta = observations
+  + world-fact count (публичный kernel.snapshot(), без private); опц. injected kernel (тесты/resume);
+  all-fail -> AgentLoopResult(success=False, error), не crash.
+- **integration (kernel/agent_executor.py):** LoopAgentExecutor(IAgentExecutor) обёртывает AgentLoop
+  за портом IAgentExecutor (orchestrator dispatch принимает без изменений); маппит AgentLoopResult ->
+  TaskOutcome; failure -> TaskOutcome(success=False). build_loop_agent_executor. ReferenceAgentExecutor
+  (single-tick) НЕ тронут (backward-compat).
+- **K8 tests** (tests/agent_orchestration/test_agent_loop.py, Флаг 1b): цикл итерирует до budget;
+  budget-limit (budget=1 -> 1 шаг); observation кормит репланирование (feedback trail растёт);
+  память обновляется между шагами (episodes накапливаются); детерминизм (I-09); all-fail graceful;
+  LoopAgentExecutor -> TaskOutcome; existing AGENT-EXEC тесты целы (40 passed).
+- **K1/K6/O1/I-09:** kernel->kernel (K6); LLM-free детерминизм (I-09); failure -> graceful result (O1).

@@ -1540,3 +1540,31 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-OMNI-01
+
+- id: ADR-090
+  title: Agent Loop — iterative goal-driven agent cycle over the kernel (ТЗ-AGENT-LOOP-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    Текущий агент = один tick. ТЗ-AGENT-LOOP-01 добавляет итеративный goal-driven цикл
+
+    (Цель->План->Действие->Наблюдение->Рефлексия->Обновление памяти->Следующий шаг) с
+
+    observation-feedback и budget-limit. K5: IAgentPlatform.run (ADR-014) — single-shot mission
+
+    (нет budget/feedback); IAgentExecutor.execute (ADR-080) — один tick; НИ ОДИН НЕ loop ->
+
+    IAgentLoop НОВЫЙ шов (НЕ дублирует IAgentPlatform/IAgentExecutor/ILlm). AgentLoop
+
+    (kernel/agent_loop.py) итерирует build_kernel + kernel.tick; intent.text несёт prior
+
+    observations (feedback); stop на budget ИЛИ отсутствии плана; LLM-free (I-09). AgentLoopResult
+
+    (frozen VO): success, steps_taken, final_outcome, memory_delta. LoopAgentExecutor(IAgentExecutor)
+
+    обёртывает AgentLoop; ReferenceAgentExecutor (single-tick) неизменён (backward-compat).
+
+    O1: failure -> AgentLoopResult(success=False), не crash.
+  evidence_level: V
+  addresses:
+  - TZ-AGENT-LOOP-01
