@@ -255,3 +255,16 @@ WorldState-управляемого) как самостоятельного м�
 **Agents v0.1 cont. — Planner Agent (2026-08-06, DONE):** `services/planner_agent.py::PlannerAgent(IAgentPlatform)` + `PlannerAgentExecutor` (`capability="planning"`). Тот же шаблон; регистрируется в `MultiAgentExecutor`; `interactive_query` роутит planning-интенты через `dispatch`. Тесты: test_planner_agent.py (4 K8). Ядро НЕ меняется.
 
 **Agents v0.1 cont. — Finance Agent (2026-08-06, DONE):** `services/finance_agent.py::FinanceAgent(IAgentPlatform)` + `FinanceAgentExecutor` (`capability="finance"`). Тот же шаблон; регистрируется в `MultiAgentExecutor`; `interactive_query` роутит finance-интенты через `dispatch`. Внешний exchange-адаптер (moneygen/MarketMind) — out-of-scope v0.1. Тесты: test_finance_agent.py (4 K8). **ИТОГ Agents v0.1:** 6 агентов (Research/Architect/Programmer/Writer/Planner/Finance) через единый `MultiAgentExecutor` на `Orchestrator.dispatch`, 0 новых портов/слоёв. Ядро НЕ меняется.
+
+## Roadmap агентов (Agents v0.1, ADR-102)
+Все агенты реализуются через ЕДИНЫЙ `MultiAgentExecutor(IAgentExecutor)` на `Orchestrator.dispatch`
+(capability → executor map). Ядро (`contracts`/`kernel`/`orchestrator`) НЕ меняется. K5/K6/O1/I-09 соблюдены:
+services импортирует только contracts; 0 новых портов; 0 новых слоёв.
+- [x] **Research Agent** — `services/research_agent.py` (capability=`research`) ✅ DONE (ADR-102, ТЗ-AGENT-BEHAVIOUR-01)
+- [x] **Architect Agent** — `services/architect_agent.py` (capability=`architecture`) ✅ DONE (+`MultiAgentExecutor` шов)
+- [x] **Programmer Agent** — `services/programmer_agent.py` (capability=`coding`) ✅ DONE
+- [x] **Writer Agent** — `services/writer_agent.py` (capability=`writing`) ✅ DONE
+- [x] **Planner Agent** — `services/planner_agent.py` (capability=`planning`) ✅ DONE
+- [x] **Finance Agent** — `services/finance_agent.py` (capability=`finance`) ✅ DONE (внешний exchange-адаптер moneygen/MarketMind — out-of-scope v0.1, K6-адаптер позже)
+- [ ] **Sales Agent** — следующий по тому же шву (pending)
+Тесты: tests/agent/test_{research,architect,programmer,writer,planner,finance}_agent.py (27 K8 суммарно) + arch-gate 17.
