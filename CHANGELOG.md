@@ -530,4 +530,12 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **Патч (≤1 модуль, K6):** `_build_llm("auto")` теперь opt-in собирает `OmniRouter` из `ProviderSpec`, если задана env `KROFT_LLM_BASE_URL` (keyless, `api_key_env=""`). Без переменной — прежний Ollama-путь (дефолт НЕ меняем, backward-compat). Модель — `KROFT_LLM_MODEL` (default `auto`).
 - **Graceful degradation (LLM-01):** gateway недоступен → `LLMError` → retrieval-only, не crash. OmniRouter — `ILlm`, kernel принимает без изменений.
 - **Верификация (ad-hoc hermes-verify-omni.py, 4/4 PASS):** V1 `--llm auto` без env → Ollama-клиент (дефолт не сломан); V2 с env, gateway down → OmniRouter построен, не crash; V3 с mock OpenAI-сервером → синтез-ответ (не raw graph); V4 `none`/`mock` → без изменений.
-- Доки: `docs/RUN.md` (секция OmniRoute opt-in), `docs/OPERATIONS_LOG.md` (переменные запуска).
+
+## Product-mode fix: локальный LLM-синтез через Ollama заработал (2026-08-06)
+- **Симптом:** при `--llm auto` агент возвращал сырые `graph:`-строки, не синтез. Корень — три бага:
+  1. `_build_llm` игнорировал `KROFT_LLM_MODEL` в дефолтном (Ollama) пути → клиент шёл с `model="auto"`, который Ollama не знает (HTTP 404) → LLM-вызов падал, агент тихо фоллбэчил к raw hits.
+  2. `OpenAiCompatibleClient.complete` не шлёт `max_tokens` → Ollama без лимита виснет (socket timeout). Добавлен `max_tokens: 512`.
+  3. `qwen3.5:9b` — reasoning-модель: ответ кладёт в `reasoning`, `content` пуст → синтез пустой. Рекомендована non-thinking модель (`llama3.1:8b` / `llama3:latest`).
+- **Патч (K6):** `composition/run_kroft.py` `_build_llm` пробрасывает `KROFT_LLM_MODEL` + `KROFT_LLM_TIMEOUT` (default 120s) в дефолтный Ollama-путь и в OmniRouter-путь; `adapters/openai_compatible.py` шлёт `max_tokens`.
+- **Верификация:** `KroftApp(llm="auto", KROFT_LLM_MODEL="llama3.1:8b").llm.complete(...)` → реальный синтез-ответ ("The KROFT_OS blackboard pattern... centralized knowledge repository..."). Тесты: arch 22 / desktop 21 / agent_runtime 20 зелёные.
+- Доки: `docs/RUN.md` (выбор модели + таймаут), `docs/OPERATIONS_LOG.md` (переменные).

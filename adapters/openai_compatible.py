@@ -59,6 +59,7 @@ class OpenAiCompatibleClient(ILlm):
             "model": self._model,
             "messages": [{"role": "user", "content": query.prompt}],
             "temperature": 0.2,
+            "max_tokens": 512,  # Ollama висит без явного лимита (генерирует до контекста)
         }
         if query.json_mode:
             payload["response_format"] = {"type": "json_object"}

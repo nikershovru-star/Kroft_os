@@ -267,9 +267,15 @@ class KroftApp:
         from composition.llm_client_factory import build_llm_client
         from contracts.i_model_router import ProviderSpec
         base_url = os.environ.get("KROFT_LLM_BASE_URL")
+        model = os.environ.get("KROFT_LLM_MODEL")  # None -> дефолт factory (Ollama "auto")
+        # Таймаут 120s: холодная загрузка локальной модели (qwen3.5:9b ~6.5GB) превышает дефолт 30s.
+        timeout = float(os.environ.get("KROFT_LLM_TIMEOUT", "120"))
         if not base_url:
+            # Дефолтный Ollama-путь. model из KROFT_LLM_MODEL (если задана), иначе auto.
             try:
-                return build_llm_client()
+                if model:
+                    return build_llm_client(model=model, timeout=timeout)
+                return build_llm_client(timeout=timeout)
             except Exception:
                 return None
         spec = ProviderSpec(
@@ -280,7 +286,7 @@ class KroftApp:
             model=os.environ.get("KROFT_LLM_MODEL", "auto"),
         )
         try:
-            return build_llm_client(providers=[spec])
+            return build_llm_client(providers=[spec], timeout=timeout)
         except Exception:
             return None
 

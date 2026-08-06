@@ -11,7 +11,7 @@ PYTHONPATH=. python composition/run_kroft.py \
 - `--no-agent-runtime` — явный opt-out: legacy `orchestrator.dispatch` (без gate/blackboard/delegation).
 - `--interactive` включает human-in-the-loop approver: чувствительные действия (finance/coding) спрашивают `одобрить? [y/N]` в stdin. Без `--interactive` — demo auto-approve (только для CI/boot).
 - Чувствительные capabilities: `finance`, `coding`. При отказе / таймауте (300s) / сбое approver → default-deny (fail-closed).
-- **LLM-синтез (opt-in):** по умолчанию агент = pure retrieval (сырые `graph:`-строки). Чтобы получить синтез-ответ, поднимите keyless OmniRoute (напр. `localhost:20128/v1`) и задайте env `KROFT_LLM_BASE_URL` (модель — `KROFT_LLM_MODEL`, по умолчанию `auto`); запуск с `--llm auto`. Без переменной — прежний Ollama-путь. Gateway недоступен → graceful retrieval-only (LLM-01), не crash. K6: правка только в composition root.
+- **LLM-синтез (opt-in):** по умолчанию агент = pure retrieval (сырые `graph:`-строки). Чтобы получить синтез-ответ, задайте модель через env `KROFT_LLM_MODEL` (напр. `llama3.1:8b`; **НЕ** `qwen3.5:9b` — это reasoning-модель, кладёт ответ в `reasoning`, `content` пуст → синтез пустой). Для OmniRoute — `KROFT_LLM_BASE_URL` (keyless, `api_key` не нужен). Запуск с `--llm auto`. Без переменной `KROFT_LLM_BASE_URL` — дефолтный Ollama-путь (`localhost:11434/v1`), model берётся из `KROFT_LLM_MODEL`. Gateway недоступен → graceful retrieval-only (LLM-01), не crash. `KROFT_LLM_TIMEOUT` (default 120s) — на холодную загрузку модели. K6: правка только в composition root (+ `max_tokens` в adapter).
 
 ## Формат записи боли
 | Дата | Что делал | Что не понравилось | Частота | Приоритет |

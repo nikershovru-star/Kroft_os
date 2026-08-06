@@ -90,9 +90,14 @@ PYTHONPATH=. python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\
   `LLMError` → kernel fallback к retrieval-only (не crash, поведение не хуже текущего).
 - **Безопасность:** OmniRouter — это `ILlm`, поэтому kernel принимает его без изменений; keyless gateway
   не требует `api_key`. K6 соблюдён: правка только в composition root (`run_kroft._build_llm`).
-- **PowerShell:**
+- **Важно — выбор модели:** дефолт `model="auto"` Ollama **не понимает** (HTTP 404). Задайте явно через
+  `KROFT_LLM_MODEL`. Рекомендуется **non-thinking** модель (напр. `llama3.1:8b`, `llama3:latest`) —
+  reasoning-модели (напр. `qwen3.5:9b`) кладут ответ в поле `reasoning`, а `content` оставляют пустым,
+  поэтому синтез будет пустым. Также клиент шлёт `max_tokens: 512` (Ollama без лимита виснет).
+- **Таймаут:** `KROFT_LLM_TIMEOUT` (default 120s) — холодная загрузка локальной модели может превысить дефолт.
+- **PowerShell (локальный Ollama, синтез):**
   ```powershell
-  $env:PYTHONPATH="."; $env:KROFT_LLM_BASE_URL="http://localhost:20128/v1"
+  $env:PYTHONPATH="."; $env:KROFT_LLM_MODEL="llama3.1:8b"
   cd "C:\Users\Nikita\Documents\Obsidian Vault\02-Projects\KROFT_OS"
   python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\Obsidian Vault" --interactive --llm auto
   ```
