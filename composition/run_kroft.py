@@ -112,15 +112,19 @@ class KroftApp:
         from services.research_agent import ResearchAgent, ResearchAgentExecutor
         from services.architect_agent import ArchitectAgent, ArchitectAgentExecutor
         from services.programmer_agent import ProgrammerAgent, ProgrammerAgentExecutor
+        from services.writer_agent import WriterAgent, WriterAgentExecutor
         from services.multi_agent_executor import MultiAgentExecutor
         research_agent = ResearchAgent(search=self.search, llm=self.llm, top_k=5)
         architect_agent = ArchitectAgent(search=self.search, llm=self.llm, top_k=5)
         programmer_agent = ProgrammerAgent(search=self.search, llm=self.llm, top_k=5)
+        writer_agent = WriterAgent(search=self.search, llm=self.llm, top_k=5)
         self.research_executor = ResearchAgentExecutor(research_agent)
         self.architect_executor = ArchitectAgentExecutor(architect_agent)
         self.programmer_executor = ProgrammerAgentExecutor(programmer_agent)
+        self.writer_executor = WriterAgentExecutor(writer_agent)
         self.agent_executor = MultiAgentExecutor([
             self.research_executor, self.architect_executor, self.programmer_executor,
+            self.writer_executor,
         ])
         self.orchestrator = build_orchestrator(
             identity_registry=self.identity,
@@ -306,6 +310,9 @@ class KroftApp:
         if any(tok in q for tok in ("code", "function", "implement", "class", "bug",
                                      "refactor", "programming", "coding", "python")):
             return "coding"
+        if any(tok in q for tok in ("write", "document", "draft", "blog", "article",
+                                     "summary", "documentation", "writing")):
+            return "writing"
         if any(tok in q for tok in ("what is", "what are", "explain", "research", "search",
                                      "find", "how does", "kroft", "agent")):
             return "research"

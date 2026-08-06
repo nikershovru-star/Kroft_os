@@ -429,3 +429,10 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   (`capability="coding"`, фокус на code/implementation). `run_kroft` регистрирует в `MultiAgentExecutor`.
 - `interactive_query` роутит coding-интенты (code/function/implement/class/bug/refactor/python) через `dispatch`.
 - **Тесты:** tests/agent/test_programmer_agent.py (4 K8): real-search / routing / scope / graceful. K1/K5/K6/K8/O1/I-09.
+
+## Agents v0.1 cont. — Writer Agent (ADR-102, 2026-08-06) — DONE
+- **Продолжение** Agents v0.1 без изменения ядра. Тот же паттерн что предыдущие агенты.
+- **Writer Agent:** `services/writer_agent.py::WriterAgent(IAgentPlatform)` + `WriterAgentExecutor`
+  (`capability="writing"`, фокус на docs/writing). `run_kroft` регистрирует в `MultiAgentExecutor`.
+- `interactive_query` роутит writing-интенты (write/document/draft/blog/article/summary/writing) через `dispatch`.
+- **Тесты:** tests/agent/test_writer_agent.py (4 K8): real-search / routing / scope / graceful. K1/K5/K6/K8/O1/I-09.
