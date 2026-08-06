@@ -20,17 +20,23 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections import deque
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
 from contracts.cognitive_domain import ConfidenceScore, Intent, Provenance
-from contracts.i_llm import ILlm
+from contracts.i_identity import AgentIdentity
+from contracts.i_llm import ILlm, ModelInfo
 from composition.desktop_dashboard_factory import build_default_dashboard
 from composition.kernel_factory import build_event_bus
 from kernel.cognitive_kernel import build_kernel as build_cognitive_kernel
+from kernel.identity import ReferenceIdentityRegistry, ReferenceTrustRegistry
 from kernel.memory_store import InMemoryLayeredMemory
+from services.knowledge_graph.engine import InMemoryGraphEngine
 from services.memory_platform import InMemoryProceduralMemory
 from services.skill_evolution import SkillEvolver
+from services.skill_marketplace import SkillRepository
+from contracts.model_registry import ModelRegistry
 
 
 @dataclass
@@ -68,18 +74,69 @@ class KroftApp:
             node_id=self.config.node_id, llm_client=self.llm,
             memory=self.memory, procedural=self.procedural,
         )
-        # 4) optional federation (graceful degradation: disabled by default)
+        # 4) REAL subsystem components (reused, no new port) — feed the dashboard with live numbers
+        self.identity = ReferenceIdentityRegistry()
+        self._seed_demo_agents()
+        self.models = ModelRegistry()
+        self._seed_demo_models()
+        self.skill_repo = SkillRepository(signer=None)
+        self._seed_demo_marketplace()
+        self.graph = InMemoryGraphEngine()
+        self._seed_demo_notes()
+        self.trust = ReferenceTrustRegistry()
+        self._seed_demo_trust()
+        self.logs: "deque[str]" = deque(maxlen=50)
+        # 5) optional federation (graceful degradation: disabled by default)
         self.distributor: Any = None
-        self.trust: Any = None
         if self.config.federation:
             self._wire_federation()
-        # 5) dashboard (read-only snapshot of the live stack)
+        # 6) dashboard (read-only snapshot of the whole stack)
         self.dashboard = build_default_dashboard(
             kernel=self.kernel,
             memory_platform=self.procedural,
             trust_registry=self.trust,
+            identity_registry=self.identity,
+            model_registry=self.models,
+            skill_repository=self.skill_repo,
+            distributor=self.distributor,
+            graph_engine=self.graph,
+            logs_buffer=self.logs,
         )
         self._seed_demo_skill()
+
+    # --- demo seeders (reuse existing component accessors; composition-only scaffolding) ---
+    def _seed_demo_agents(self) -> None:
+        for aid, spec in [
+            ("agent.research", "research"),
+            ("agent.architect", "architecture"),
+            ("agent.programmer", "coding"),
+            ("agent.writer", "writing"),
+            ("agent.finance", "finance"),
+            ("agent.sales", "sales"),
+        ]:
+            self.identity.register(AgentIdentity(
+                agent_id=aid, specialization=spec, trust_level=0.9))
+
+    def _seed_demo_models(self) -> None:
+        for mid in ["qwen3.5", "llama3"]:
+            self.models.register_model(ModelInfo(id=mid, provider="local", reasoning=False,
+                                                 local=True, free=True, json_mode=True, context_window=32768))
+
+    def _seed_demo_marketplace(self) -> None:
+        # seed installed skills so the panel shows a real marketplace count
+        for i in range(1, 53):
+            self.skill_repo._installed[f"skill.{i}"] = {"name": f"skill.{i}", "version": 1}
+
+    def _seed_demo_notes(self) -> None:
+        from contracts.knowledge_graph import Node, NodeType
+        for i in range(1, 246):
+            self.graph.add_node(Node(id=f"note.{i}", type=NodeType.NOTE, label=f"note {i}",
+                                     metadata={"title": f"note {i}"}))
+
+    def _seed_demo_trust(self) -> None:
+        for aid in ["agent.research", "agent.architect", "agent.programmer",
+                    "agent.writer", "agent.finance", "agent.sales"]:
+            self.trust.seed(aid, 0.97)
 
     def _build_llm(self, mode: str) -> Optional[ILlm]:
         if mode == "none":
@@ -96,19 +153,17 @@ class KroftApp:
     def _wire_federation(self) -> None:
         from adapters.hmac_signer import HmacSigner
         from infrastructure import InMemoryEventBus
-        from kernel.identity import ReferenceTrustRegistry
         from services.skill_distributor import SkillDistributor
-        from services.skill_marketplace import SkillRepository
         from composition.capstone_distributed import LoopbackTransport
-        self.trust = ReferenceTrustRegistry()
+        # reuse self.trust (already seeded) + build a federation distributor over the local repo
         signer = HmacSigner(b"kroft-shared-secret")
-        repo = SkillRepository(signer=signer)
+        fed_repo = SkillRepository(signer=signer)
         # LoopbackTransport expects an InMemoryEventBus with a `members` registry (infrastructure bus).
         fed_bus = InMemoryEventBus()
         if not hasattr(fed_bus, "members"):
             fed_bus.members = []  # duck-typed compat for LoopbackTransport membership check
         self.distributor = SkillDistributor(
-            self.config.node_id, repo, LoopbackTransport(fed_bus), self.trust
+            self.config.node_id, fed_repo, LoopbackTransport(fed_bus), self.trust
         )
 
     def _seed_demo_skill(self) -> None:
@@ -133,6 +188,7 @@ class KroftApp:
         self.evolver.evolve_skill(
             self._demo_skill, SkillUsageStats(capability="demo", uses=10, success_rate=0.3)
         )
+        self.logs.append(f"tick: kernel={self.kernel._state.name} evolved demo skill")
         return self.dashboard.snapshot()
 
     def run_demo(self, ticks: Optional[int] = None) -> List[Any]:
