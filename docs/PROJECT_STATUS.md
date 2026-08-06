@@ -251,3 +251,5 @@ WorldState-управляемого) как самостоятельного м�
 **Agents v0.1 cont. — Programmer Agent (2026-08-06, DONE):** `services/programmer_agent.py::ProgrammerAgent(IAgentPlatform)` + `ProgrammerAgentExecutor` (`capability="coding"`). Тот же шаблон что Architect/Research; регистрируется в `MultiAgentExecutor` в `run_kroft`; `interactive_query` роутит coding-интенты через `dispatch`. Тесты: test_programmer_agent.py (4 K8). Ядро НЕ меняется.
 
 **Agents v0.1 cont. — Writer Agent (2026-08-06, DONE):** `services/writer_agent.py::WriterAgent(IAgentPlatform)` + `WriterAgentExecutor` (`capability="writing"`). Тот же шаблон; регистрируется в `MultiAgentExecutor`; `interactive_query` роутит writing-интенты через `dispatch`. Тесты: test_writer_agent.py (4 K8). Ядро НЕ меняется.
+
+**Agents v0.1 cont. — Planner Agent (2026-08-06, DONE):** `services/planner_agent.py::PlannerAgent(IAgentPlatform)` + `PlannerAgentExecutor` (`capability="planning"`). Тот же шаблон; регистрируется в `MultiAgentExecutor`; `interactive_query` роутит planning-интенты через `dispatch`. Тесты: test_planner_agent.py (4 K8). Ядро НЕ меняется.

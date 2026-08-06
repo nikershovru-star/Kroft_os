@@ -436,3 +436,10 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   (`capability="writing"`, фокус на docs/writing). `run_kroft` регистрирует в `MultiAgentExecutor`.
 - `interactive_query` роутит writing-интенты (write/document/draft/blog/article/summary/writing) через `dispatch`.
 - **Тесты:** tests/agent/test_writer_agent.py (4 K8): real-search / routing / scope / graceful. K1/K5/K6/K8/O1/I-09.
+
+## Agents v0.1 cont. — Planner Agent (ADR-102, 2026-08-06) — DONE
+- **Продолжение** Agents v0.1 без изменения ядра. Тот же паттерн что предыдущие агенты.
+- **Planner Agent:** `services/planner_agent.py::PlannerAgent(IAgentPlatform)` + `PlannerAgentExecutor`
+  (`capability="planning"`, фокус на roadmap/planning). `run_kroft` регистрирует в `MultiAgentExecutor`.
+- `interactive_query` роутит planning-интенты (plan/roadmap/milestone/sprint/timeline/planning) через `dispatch`.
+- **Тесты:** tests/agent/test_planner_agent.py (4 K8): real-search / routing / scope / graceful. K1/K5/K6/K8/O1/I-09.
