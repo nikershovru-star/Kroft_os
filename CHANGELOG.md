@@ -127,3 +127,23 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **K1/K6:** composition-root (cross-layer imports) + stdlib threading/signal; НЕ тянет V3
   runtime/kernel_runtime.py. I-09: LLM-free детерминирован. O1: autosave/load НЕ мутируют HARD.
 - Note: ТЗ указывал ADR-081-live, но ADR-081 уже занят в repo (K5 baseline stale) -> ADR-088.
+
+## ТЗ-OMNI-01 — OmniRouter: мульти-провайдерный роутинг с автовыбором и fallback (ADR-089, 2026-08-05) — DONE
+- **K5:** переиспользованы IHttpTransport/HttpTransport, OpenAiCompatibleClient, build_llm_client/
+  detect_local_ollama, ILLMAdvisor/adapter_for. НЕ дублирован adapters/router.py (Wave 5 PolicyEngine-
+  роутер, другой слой). НОВЫХ портов НЕ создано (IModelRouter расширяет ILlm, KROFT one-port-per-boundary).
+- **contract (contracts/i_model_router.py):** IModelRouter(ILlm) + ProviderSpec (frozen VO: name,
+  base_url, api_key_env, priority, model). providers property + route(query)->ILlm.
+- **impl (composition/omni_router.py):** OmniRouter(IModelRouter) — упорядоченный список
+  OpenAiCompatibleClient по priority (стабильная сортировка, I-09); complete()/stream() перебирают
+  по priority, fallback на LLMError/LLMTimeout; все сбои -> LLMError (retrieval-only, LLM-01).
+  build_omni_router: локальный Ollama первым (detect_local_ollama, priority -100); облачные только
+  при наличии api_key_env (иначе пропускаются).
+- **integration:** build_llm_client(providers=...) возвращает OmniRouter (backward-compat: без
+  providers — прежний одиночный клиент). Роутер сам ILlm -> adapter_for/ядро принимают без изменений.
+- **K8 tests** (tests/llm/test_omni_router.py, Флаг 1b): первый здоровый выбирается; fallback при
+  сбое; все сбои -> LLMError (retrieval-only); детерминизм (priority); K6 (нет SDK в домене, сеть
+  через IHttpTransport); пустой роутер (нет ключей/модели) бросает LLMError, не crash.
+- **K1/K6:** OmniRouter в composition/ (импортирует adapters — разрешено import_matrix); домен без
+  SDK; сеть через IHttpTransport (stdlib urllib). I-09: детерминизм. O1: роутер — советник, fallback
+  защищает (LLM-01), ядро LLM-free по конструкции.

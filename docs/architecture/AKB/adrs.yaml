@@ -1514,3 +1514,29 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-LIVE-01
+
+- id: ADR-089
+  title: OmniRouter — multi-provider LLM routing with auto-select + fallback (ТЗ-OMNI-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    ТЗ-LLM-LIVE-01 дал один Ollama-эндпоинт. ТЗ-OMNI-01 расширяет до упорядоченного списка
+
+    провайдеров: IModelRouter(ILlm) (contracts/i_model_router.py) + OmniRouter(composition/).
+
+    complete() перебирает OpenAiCompatibleClient по priority, fallback на LLMError/LLMTimeout,
+
+    все сбои -> LLMError (retrieval-only, LLM-01). Локальный Ollama первым (detect_local_ollama,
+
+    priority -100); облачные только при наличии api_key_env. build_llm_client(providers=...)
+
+    возвращает OmniRouter. K5: переиспользованы HttpTransport/OpenAiCompatibleClient/
+
+    detect_local_ollama/build_llm_client/adapter_for; НЕ дублирован adapters/router.py. K6:
+
+    composition->adapters (gate rule); домен без SDK; сеть через IHttpTransport. I-09:
+
+    детерминированный priority-порядок.
+  evidence_level: V
+  addresses:
+  - TZ-OMNI-01
