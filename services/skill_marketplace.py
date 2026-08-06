@@ -125,9 +125,10 @@ class SkillRepository(ISkillRepository):
         # 4) version supersede (old version SUPERSEDED for traceability)
         prev = self._installed.get(pkg.name)
         if prev is not None and getattr(prev, "version", 0) < pkg.version:
-            old_pkg = self._packages.get(f"{pkg.author}/{pkg.name}@v{getattr(prev, 'version', 0)}")
-            if old_pkg is not None:
-                self._superseded.setdefault(pkg.name, []).append(old_pkg)
+            # The previously-installed payload is demoted to SUPERSEDED. We store the decoded
+            # payload (Procedure/PluginManifest) itself — it is always present regardless of whether
+            # this node published the package locally (federation installs arrive without _packages).
+            self._superseded.setdefault(pkg.name, []).append(prev)
         self._installed[pkg.name] = installed
         return installed
 
