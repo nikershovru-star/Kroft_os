@@ -52,6 +52,7 @@ class KroftConfig:
     run_demo: bool = True      # execute the live-demo loop on __main__
     vault: Optional[str] = None  # Obsidian vault path for live note ingestion (ТЗ-DAILY-01)
     interactive: bool = False    # ТЗ-DAILY-01: read queries from stdin -> agent loop -> answer
+    agent_runtime: bool = True   # Phase C: AgentRuntime дефолтно подключён к ядру (--no-agent-runtime для legacy path)
 
 
 class KroftApp:
@@ -132,11 +133,13 @@ class KroftApp:
             self.research_executor, self.architect_executor, self.programmer_executor,
             self.writer_executor, self.planner_executor, self.finance_executor,
         ])
-        # Phase C (Wave C1/C2): Agent Runtime composition root (default OFF).
-        # Без флага --agent-runtime поведение run_kroft НЕИЗМЕННО (legacy orchestrator path).
+        # Phase C (Wave C1/C2/C3/C6): Agent Runtime — дефолтно подключён к ядру
+        # (product-mode: больше не опциональный флаг). Routed capabilities всегда идут
+        # через AgentRuntime.delegate_step (blackboard + delegation + trust + telemetry + gate).
+        # Legacy path (orchestrator.dispatch) доступен только при --no-agent-runtime.
         self.agent_runtime: Any = None
         self.workflow_coordinator: Any = None
-        if getattr(self.config, "agent_runtime", False):
+        if getattr(self.config, "agent_runtime", True):
             from services.agent_runtime import AgentRuntime
             from services.blackboard import InMemoryBlackboard
             from services.delegation_service import DelegationService
@@ -337,9 +340,9 @@ class KroftApp:
         self.task_store.add(task_id, "running")
         # Agents v0.1: route recognised agent intents.
         capability = self._route_capability(query)
-        # Phase C (Wave C6): при --agent-runtime routed-capability делегируется через
-        # AgentRuntime.delegate_step (консультирует Approval Gate для sensitive capabilities).
-        # Иначе — legacy orchestrator.dispatch (без --agent-runtime).
+        # Phase C (Wave C6): routed-capability делегируется через AgentRuntime.delegate_step
+        # (консультирует Approval Gate для sensitive capabilities). При --no-agent-runtime
+        # self.agent_runtime is None -> legacy orchestrator.dispatch ниже.
         if capability is not None and getattr(self, "agent_runtime", None) is not None:
             goal = OrchestrationGoal(goal_id=task_id, capability=capability, payload=query)
             outcome = self.agent_runtime.delegate_step(task_id, goal)
@@ -433,9 +436,12 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
     p.add_argument("--federation", action="store_true", help="enable SkillDistributor federation layer")
     p.add_argument("--ticks", type=int, default=5)
     p.add_argument("--no-demo", action="store_true", help="boot only, do not run the demo loop")
-    p.add_argument("--agent-runtime", action="store_true",
-                   help="Phase C: wire AgentRuntime+WorkflowCoordinator (default OFF; "
-                        "legacy orchestrator path unchanged when absent)")
+    p.add_argument("--agent-runtime", dest="agent_runtime", action="store_true", default=True,
+                   help="Phase C: AgentRuntime дефолтно подключён к ядру (routed capabilities "
+                        "идут через runtime+gate). Включено по умолчанию.")
+    p.add_argument("--no-agent-runtime", dest="agent_runtime", action="store_false",
+                   help="Отключить AgentRuntime: routed capabilities идут через legacy "
+                        "orchestrator.dispatch (без blackboard/delegation/gate).")
     p.add_argument("--vault", default=None, help="Obsidian vault path for live note ingestion (ТЗ-DAILY-01)")
     p.add_argument("--interactive", action="store_true",
                    help="ТЗ-DAILY-01: read queries from stdin -> agent loop -> live answer")
@@ -443,6 +449,7 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
     return KroftConfig(
         node_id=a.node_id, llm=a.llm, federation=a.federation,
         ticks=a.ticks, run_demo=not a.no_demo, vault=a.vault, interactive=a.interactive,
+        agent_runtime=a.agent_runtime,
     )
 
 

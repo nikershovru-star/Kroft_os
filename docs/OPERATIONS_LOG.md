@@ -5,9 +5,10 @@
 ## Ежедневный запуск
 ```
 PYTHONPATH=. python composition/run_kroft.py \
-  --vault "C:\Users\Nikita\Documents\Obsidian Vault" --agent-runtime --interactive
+  --vault "C:\Users\Nikita\Documents\Obsidian Vault" --interactive
 ```
-- `--agent-runtime` включает мультиагентный контур (AgentRuntime + blackboard + delegation + coordinator + trust + telemetry + approval gate).
+- `--agent-runtime` теперь **включён по умолчанию** (подключён к ядру, product-mode). Routed capabilities (finance/coding/...) идут через `AgentRuntime.delegate_step` (blackboard + delegation + trust + telemetry + approval gate).
+- `--no-agent-runtime` — явный opt-out: legacy `orchestrator.dispatch` (без gate/blackboard/delegation).
 - `--interactive` включает human-in-the-loop approver: чувствительные действия (finance/coding) спрашивают `одобрить? [y/N]` в stdin. Без `--interactive` — demo auto-approve (только для CI/boot).
 - Чувствительные capabilities: `finance`, `coding`. При отказе / таймауте (300s) / сбое approver → default-deny (fail-closed).
 

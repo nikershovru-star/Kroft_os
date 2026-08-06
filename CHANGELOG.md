@@ -506,3 +506,9 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - `--interactive` включает human-in-the-loop approver (спрашивает `одобрить? [y/N]` в stdin, TTL 300s); без `--interactive` остаётся demo auto-approve (CI/boot).
 - `docs/OPERATIONS_LOG.md` — журнал болей product-mode (формат + известные заметки из вердиктов C1-C6).
 - **Верификация:** ad-hoc скрипт подтверждает routed finance -> delegate_step(capability=finance) -> gate deny/allow; arch-gate 22, tests/agent_runtime 20, boot OK.
+
+## Product-mode: AgentRuntime подключён к ядру (default ON) — «подключи ядро» (2026-08-06)
+- `--agent-runtime` больше не опциональный флаг: AgentRuntime **дефолтно подключён к ядру** в composition root (product-mode). Routed capabilities всегда идут через `AgentRuntime.delegate_step` (blackboard + delegation + trust-delta + telemetry + approval gate).
+- `--no-agent-runtime` — явный opt-out: legacy `orchestrator.dispatch` (без gate/blackboard/delegation), сохранён для backward-compat.
+- K6 соблюдён: изменения только в composition root (который импортирует services); kernel остаётся contracts-only. `interactive_query` переключается на legacy path при `agent_runtime=None`.
+- Тесты: tests/desktop (13) + tests/agent_runtime (20) + arch-gate (22) зелёные; boot default и --no-agent-runtime проверены.
