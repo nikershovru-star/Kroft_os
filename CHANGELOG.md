@@ -170,3 +170,22 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   память обновляется между шагами (episodes накапливаются); детерминизм (I-09); all-fail graceful;
   LoopAgentExecutor -> TaskOutcome; existing AGENT-EXEC тесты целы (40 passed).
 - **K1/K6/O1/I-09:** kernel->kernel (K6); LLM-free детерминизм (I-09); failure -> graceful result (O1).
+
+## ТЗ-KNOWLEDGE-ENGINE-01 — Knowledge Engine: инжестия документов -> граф (ADR-091, 2026-08-05) — DONE
+- **K5:** проверено, что contracts/i_knowledge.py УЖЕ имеет IEntityExtractor/IKnowledgeGraph +
+  Entity/Relation/Hypothesis/Fact/IngestReport; knowledge_graph УЖЕ имеет IGraphEngine + Node/Edge.
+  IKnowledgeEngine (doc -> extraction -> graph update) и KnowledgeExtraction НЕ существовали ->
+  НОВЫЙ шов (НЕ дублирует i_knowledge.py). KnowledgeExtraction переиспользует Entity/Relation/Fact.
+- **contract (contracts/i_knowledge_engine.py):** IKnowledgeEngine (ingest(doc_id, text) ->
+  KnowledgeExtraction) + KnowledgeExtraction (frozen VO: entities, relations, facts).
+- **impl (services/knowledge_engine.py, K6: services->contracts; graph+content_index+extractor
+  ИНЪЕКТИРУЮТСЯ):** LLM-free эвристика (# headers + [[wikilink]]); relations -> REFERENCES +
+  BACKLINKS edges; facts из relations; идемпотент (get_node check + idempotent add_edge); опц.
+  LLM-advisor (IEntityExtractor) non-blocking. enum расширен: NodeType.NOTE, EdgeType.BACKLINKS.
+- **integration (composition/knowledge_engine_factory.py, Флаг C):** build_default_engine +
+  ingest_file (stdlib read, БЕЗ SDK) — Obsidian-источник = явный ingest (live-watcher post-MVP).
+- **K8 tests** (tests/knowledge_graph/test_knowledge_engine.py, Флаг 1b): ingest -> граф растёт
+  (nodes/edges); отношения из wikilinks; backlinks (reverse edges); детерминизм (I-09); LLM-free
+  работает; дубликат-инжест идемпотентен; малформированный doc -> пустая extraction (O1);
+  optional LLM-extractor обогащает; existing knowledge_graph/graph тесты целы (246 passed).
+- **K1/K6/O1/I-09:** services->contracts (K6); LLM-free детерминизм (I-09); malformed -> graceful (O1).

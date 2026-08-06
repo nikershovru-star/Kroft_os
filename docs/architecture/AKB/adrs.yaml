@@ -1568,3 +1568,33 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-AGENT-LOOP-01
+
+- id: ADR-091
+  title: Knowledge Engine — document ingestion -> knowledge extraction -> graph (ТЗ-KNOWLEDGE-ENGINE-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    Граф/SEARCH/RESEARCH есть, но нет ingestion-слоя. ТЗ-KNOWLEDGE-ENGINE-01 даёт Knowledge
+
+    Engine: read -> extract -> link -> update graph -> backlinks. K5: contracts/i_knowledge.py
+
+    УЖЕ имеет IEntityExtractor/IKnowledgeGraph + Entity/Relation/Hypothesis/Fact/IngestReport;
+
+    knowledge_graph УЖЕ имеет IGraphEngine + Node/Edge. НЕТ IKnowledgeEngine/KnowledgeExtraction ->
+
+    НОВЫЙ шов (НЕ дублирует i_knowledge.py). KnowledgeEngine (services/knowledge_engine.py, K6:
+
+    services->contracts; graph+content_index+extractor инъектируются) извлекает entities (# headers
+
+    + [[wikilink]]) и relations (REFERENCES + BACKLINKS), LLM-free детерминизм (I-09 regex), опц.
+
+    LLM-advisor (IEntityExtractor) non-blocking; facts из relations; идемпотентен (get_node check +
+
+    idempotent add_edge). Obsidian-источник (stdlib file-read, БЕЗ SDK) в composition/
+
+    knowledge_engine_factory.py. O1: малформированный doc -> пустая extraction. enum расширен:
+
+    NodeType.NOTE, EdgeType.BACKLINKS.
+  evidence_level: V
+  addresses:
+  - TZ-KNOWLEDGE-ENGINE-01
