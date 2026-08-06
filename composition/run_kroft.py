@@ -34,8 +34,10 @@ from kernel.identity import ReferenceIdentityRegistry, ReferenceTrustRegistry
 from kernel.memory_store import InMemoryLayeredMemory
 from services.knowledge_graph.engine import InMemoryGraphEngine
 from services.memory_platform import InMemoryProceduralMemory
+from services.obsidian_vault_reader import ObsidianVaultReader
 from services.skill_evolution import SkillEvolver
 from services.skill_marketplace import SkillRepository
+from services.task_store import TaskStore
 from contracts.model_registry import ModelRegistry
 
 
@@ -48,6 +50,8 @@ class KroftConfig:
     federation: bool = False    # enable SkillDistributor federation layer
     ticks: int = 5             # demo loop iterations
     run_demo: bool = True      # execute the live-demo loop on __main__
+    vault: Optional[str] = None  # Obsidian vault path for live note ingestion (ТЗ-DAILY-01)
+    interactive: bool = False    # ТЗ-DAILY-01: read queries from stdin -> agent loop -> answer
 
 
 class KroftApp:
@@ -82,10 +86,20 @@ class KroftApp:
         self.skill_repo = SkillRepository(signer=None)
         self._seed_demo_marketplace()
         self.graph = InMemoryGraphEngine()
-        self._seed_demo_notes()
+        # KnowledgeEngine (ТЗ-KNOWLEDGE-ENGINE-01, ADR-091) — reused, NOT duplicated.
+        # Ingests REAL vault notes into the graph so memory_notes becomes a live count.
+        from services.content_index import ContentIndex
+        from services.knowledge_engine import build_knowledge_engine
+        self.engine = build_knowledge_engine(graph=self.graph, content_index=ContentIndex())
+        self.vault_reader = ObsidianVaultReader(self.config.vault)
+        self._live_note_count = self._ingest_vault_notes()  # 0 when no vault (graceful)
         self.trust = ReferenceTrustRegistry()
         self._seed_demo_trust()
         self.logs: "deque[str]" = deque(maxlen=50)
+        self.task_store = TaskStore()  # real component (ТЗ-DAILY-01), empty until agent loop enqueues
+        # search over the live knowledge graph (ТЗ-SEARCH-01) — reused for the interactive contour
+        from kernel.search import ReferenceSearchService
+        self.search = ReferenceSearchService(self.memory, self.graph)
         # 5) optional federation (graceful degradation: disabled by default)
         self.distributor: Any = None
         if self.config.federation:
@@ -101,6 +115,7 @@ class KroftApp:
             distributor=self.distributor,
             graph_engine=self.graph,
             logs_buffer=self.logs,
+            task_store=self.task_store,
         )
         self._seed_demo_skill()
 
@@ -127,11 +142,18 @@ class KroftApp:
         for i in range(1, 53):
             self.skill_repo._installed[f"skill.{i}"] = {"name": f"skill.{i}", "version": 1}
 
-    def _seed_demo_notes(self) -> None:
-        from contracts.knowledge_graph import Node, NodeType
-        for i in range(1, 246):
-            self.graph.add_node(Node(id=f"note.{i}", type=NodeType.NOTE, label=f"note {i}",
-                                     metadata={"title": f"note {i}"}))
+    def _ingest_vault_notes(self) -> int:
+        """ТЗ-DAILY-01: ingest REAL vault notes via KnowledgeEngine -> graph (live memory_notes).
+
+        Graceful: missing/empty vault -> 0 notes (no crash). Returns the live graph node count.
+        """
+        notes = self.vault_reader.read_notes()
+        for n in notes:
+            try:
+                self.engine.ingest(n.doc_id, n.text)
+            except Exception:
+                continue  # a single bad note must not abort the whole ingestion
+        return len(self.graph.nodes())
 
     def _seed_demo_trust(self) -> None:
         for aid in ["agent.research", "agent.architect", "agent.programmer",
@@ -209,6 +231,43 @@ class KroftApp:
               f"skills in memory={self.dashboard.render_json(snaps[-1]) is not None}")
         return snaps
 
+    def interactive_query(self, query: str) -> str:
+        """ТЗ-DAILY-01: minimal interactive contour — query -> agent loop (kernel tick) + live search.
+
+        Enqueues a real task, advances the kernel FSM, then answers from the LIVE knowledge graph
+        (ReferenceSearchService over the ingested vault). Deterministic; LLM-free by default (I-09).
+        """
+        from contracts.cognitive_domain import ConfidenceScore, Provenance
+        task_id = f"task-{len(self.task_store.list()) + 1}"
+        self.task_store.add(task_id, "running")
+        # agent loop: advance the kernel FSM with the user's intent
+        self.kernel.tick(Intent(id=task_id, text=query, confidence=ConfidenceScore(0.8),
+                                provenance=Provenance(source="interactive", actor="user")))
+        self.task_store.update(task_id, "done")
+        # answer from the live graph (real vault content)
+        hits = self.search.search(query, top_k=5)
+        if not hits:
+            return f"[no hits] query processed (task {task_id}); vault has no match for: {query}"
+        lines = [f"[answer] {h.source} (conf={h.confidence.value:.2f}, rel={h.relevance})"
+                 for h in hits]
+        return "\n".join(lines)
+
+    def run_interactive(self) -> None:
+        """ТЗ-DAILY-01: read queries from stdin, answer via the agent loop + live search."""
+        print(f"[run_kroft] interactive mode (node={self.config.node_id}); type a query, Ctrl-D to exit")
+        try:
+            while True:
+                try:
+                    q = input("kroft> ").strip()
+                except EOFError:
+                    break
+                if not q:
+                    continue
+                print(self.interactive_query(q))
+        except KeyboardInterrupt:
+            pass
+        print("\n[run_kroft] interactive session ended.")
+
 
 class _MockLlm(ILlm):
     """Deterministic mock ILlm for demo runs (no network)."""
@@ -227,17 +286,22 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
     p.add_argument("--federation", action="store_true", help="enable SkillDistributor federation layer")
     p.add_argument("--ticks", type=int, default=5)
     p.add_argument("--no-demo", action="store_true", help="boot only, do not run the demo loop")
+    p.add_argument("--vault", default=None, help="Obsidian vault path for live note ingestion (ТЗ-DAILY-01)")
+    p.add_argument("--interactive", action="store_true",
+                   help="ТЗ-DAILY-01: read queries from stdin -> agent loop -> live answer")
     a = p.parse_args(argv)
     return KroftConfig(
         node_id=a.node_id, llm=a.llm, federation=a.federation,
-        ticks=a.ticks, run_demo=not a.no_demo,
+        ticks=a.ticks, run_demo=not a.no_demo, vault=a.vault, interactive=a.interactive,
     )
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     config = _parse_args(argv)
     app = KroftApp(config)
-    if config.run_demo:
+    if config.interactive:
+        app.run_interactive()
+    elif config.run_demo:
         app.run_demo()
     else:
         print(f"[run_kroft] booted node={config.node_id} (no-demo); services ready.")
