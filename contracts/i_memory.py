@@ -27,6 +27,8 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional, Tuple
 
+from contracts.cognitive_domain import PolicyLifecycle
+
 
 class MemoryKind:
     """Tag taxonomy for memory roles (ADR-012 §2.1). Immutable constants."""
@@ -268,8 +270,10 @@ class IProceduralMemory(abc.ABC):
 class Procedure:
     """Consolidated procedural skill (ТЗ-SKILL-01). Frozen VO с реальными типами.
 
-    K5: НЕ дублирует `Skill` из cognitive_domain.py (Marketplace / TZ-021) — иное назначение.
+    K5: НЕ дублирует `Skill` из cognitive_domain.py (Marketplace / TЗ-021) — иное назначение.
     O1: процедура — SOFT (не мутирует HARD/FSM); confidence эволюционирует из success-rate.
+    ТЗ-EVOLUTION-01: добавлены `version` + `lifecycle` для замкнутого цикла улучшения навыков
+    (старый навык помечается SUPERSEDED при появлении лучшей версии, трассируемость сохранена).
     """
 
     skill_id: str
@@ -280,3 +284,5 @@ class Procedure:
     confidence: float = 0.0
     provenance: str = ""
     causal: Optional[str] = None
+    version: int = 1
+    lifecycle: PolicyLifecycle = PolicyLifecycle.ACTIVE
