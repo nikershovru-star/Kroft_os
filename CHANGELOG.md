@@ -408,3 +408,17 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   akb-lint 100->101 ADR.
 - **K1/K5/K6/K8/O1/I-09:** stdlib + contracts; 0 новых портов; 0 новых слоёв; read-only orchestrator;
   детерминизм. Следующие агенты (Architect/Programmer/Writer/Finance/Sales) = тот же паттерн, ядро НЕ меняется.
+
+## Agents v0.1 cont. — Architect Agent + MultiAgentExecutor (ADR-102, 2026-08-06) — DONE
+- **Продолжение** Agents v0.1 (Research Agent First) без изменения ядра. Тот же паттерн.
+- **MultiAgentExecutor (новый шов, НЕ порт):** `services/multi_agent_executor.py::MultiAgentExecutor(IAgentExecutor)`
+  — map `capability -> executor`, делегирует `Orchestrator.dispatch` к нужному агенту. Необходим, т.к.
+  `build_orchestrator` принимает ровно один `agent_executor`; K6-clean (services→contracts only).
+- **Architect Agent:** `services/architect_agent.py::ArchitectAgent(IAgentPlatform)` + `ArchitectAgentExecutor`
+  (фокус на архитектуру/ADR), `self.capability="architecture"`. Тот же шаблон что ResearchAgent.
+- **Интеграция:** `run_kroft` строит `Orchestrator(agent_executor=MultiAgentExecutor([research_exec, architect_exec]))`;
+  `interactive_query` роутит `architecture` через `dispatch` (наравне с `research`), остальное — legacy path.
+- **Тесты:** tests/agent/test_architect_agent.py (5 K8): real-search / routing / scope / unknown-capability / graceful.
+  Смежные: research-agent + arch-gate 28 passed; run_kroft --no-demo стартует. K1/K5/K6/K8/O1/I-09.
+- **Следующие (Programmer/Writer/Planner/Finance):** добавляются тем же швом — новый `services/<x>_agent.py`
+  + `<X>AgentExecutor` + регистрация в `MultiAgentExecutor`. Ядро НЕ меняется.

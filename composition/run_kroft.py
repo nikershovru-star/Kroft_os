@@ -100,22 +100,31 @@ class KroftApp:
         # search over the live knowledge graph (ТЗ-SEARCH-01) — reused for the interactive contour
         from kernel.search import ReferenceSearchService
         self.search = ReferenceSearchService(self.memory, self.graph)
-        # 6b) Agents v0.1 (ADR-102, ТЗ-AGENT-BEHAVIOUR-01): wire the Research Agent into the
-        # existing Orchestrator dispatch path. ResearchAgent reuses the live search service;
+        # 6b) Agents v0.1 (ADR-102, ТЗ-AGENT-BEHAVIOUR-01): wire specialised agents into the
+        # existing Orchestrator dispatch path. Each agent reuses the live search service;
         # LLM is optional (graceful, I-09). No new port/layer — composition-only wiring.
+        # Multiple agents are composed behind ONE MultiAgentExecutor (services/multi_agent_executor.py),
+        # which maps capability -> executor so the single injected IAgentExecutor can drive many.
         from contracts.i_orchestrator import OrchestrationGoal
         from kernel.orchestrator import build_orchestrator
         from kernel.identity import ReferenceActionLog
         from kernel.plugin import ReferencePluginRegistry
         from services.research_agent import ResearchAgent, ResearchAgentExecutor
+        from services.architect_agent import ArchitectAgent, ArchitectAgentExecutor
+        from services.multi_agent_executor import MultiAgentExecutor
         research_agent = ResearchAgent(search=self.search, llm=self.llm, top_k=5)
+        architect_agent = ArchitectAgent(search=self.search, llm=self.llm, top_k=5)
         self.research_executor = ResearchAgentExecutor(research_agent)
+        self.architect_executor = ArchitectAgentExecutor(architect_agent)
+        self.agent_executor = MultiAgentExecutor([
+            self.research_executor, self.architect_executor,
+        ])
         self.orchestrator = build_orchestrator(
             identity_registry=self.identity,
             plugin_registry=ReferencePluginRegistry(),
             trust_registry=self.trust,
             action_log=ReferenceActionLog(),
-            agent_executor=self.research_executor,
+            agent_executor=self.agent_executor,
         )
         # 5) optional federation (graceful degradation: disabled by default)
         self.distributor: Any = None
@@ -251,24 +260,27 @@ class KroftApp:
     def interactive_query(self, query: str) -> str:
         """ТЗ-DAILY-01: minimal interactive contour + Agents v0.1 (ADR-102).
 
-        Research intents are routed through the REAL Orchestrator.dispatch -> Research Agent
-        (Goal -> Orchestrator -> ResearchAgent -> KnowledgeEngine/ReferenceSearchService -> AgentResult).
-        Other intents keep the original kernel-tick + live-search path (backward compatible).
-        Deterministic; LLM-free by default (I-09).
+        Agent intents (research / architecture / ...) are routed through the REAL
+        Orchestrator.dispatch -> specialised agent (Goal -> Orchestrator -> Agent ->
+        KnowledgeEngine/ReferenceSearchService -> AgentResult). Other intents keep the
+        original kernel-tick + live-search path (backward compatible). Deterministic;
+        LLM-free by default (I-09).
         """
         from contracts.cognitive_domain import ConfidenceScore, Provenance
         from contracts.i_orchestrator import OrchestrationGoal
         task_id = f"task-{len(self.task_store.list()) + 1}"
         self.task_store.add(task_id, "running")
-        # Agents v0.1: route research intents through the agent dispatch path (real outcome).
-        if self._is_research_intent(query):
-            goal = OrchestrationGoal(goal_id=task_id, capability="research", payload=query)
+        # Agents v0.1: route recognised agent intents through the agent dispatch path.
+        capability = self._route_capability(query)
+        if capability is not None and getattr(self, "agent_executor", None) is not None \
+                and capability in self.agent_executor._by_capability:
+            goal = OrchestrationGoal(goal_id=task_id, capability=capability, payload=query)
             outcome = self.orchestrator.dispatch(goal)
             self.task_store.update(task_id, "done" if outcome.success else "failed")
             if outcome.success:
                 return outcome.detail
             return f"[no answer] {outcome.detail}"
-        # Backward-compatible path for non-research intents.
+        # Backward-compatible path for non-agent intents.
         self.kernel.tick(Intent(id=task_id, text=query, confidence=ConfidenceScore(0.8),
                                 provenance=Provenance(source="interactive", actor="user")))
         self.task_store.update(task_id, "done")
@@ -281,12 +293,17 @@ class KroftApp:
         return "\n".join(lines)
 
     @staticmethod
-    def _is_research_intent(query: str) -> bool:
-        """Heuristic: research intents ask about the knowledge base / concepts."""
+    def _route_capability(query: str) -> Optional[str]:
+        """Map a free-text query to a wired agent capability (or None for the legacy path)."""
+        from contracts.i_orchestrator import OrchestrationGoal  # noqa: F401 (kept local)
         q = (query or "").lower()
-        markers = ("what is", "what are", "explain", "research", "search",
-                   "find", "how does", "kroft", "adr", "architecture", "agent")
-        return any(tok in q for tok in markers)
+        if any(tok in q for tok in ("adr", "architecture", "architect", "design decision",
+                                     "system design", "constitutional")):
+            return "architecture"
+        if any(tok in q for tok in ("what is", "what are", "explain", "research", "search",
+                                     "find", "how does", "kroft", "agent")):
+            return "research"
+        return None
 
     def run_interactive(self) -> None:
         """ТЗ-DAILY-01: read queries from stdin, answer via the agent loop + live search."""

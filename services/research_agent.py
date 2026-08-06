@@ -118,6 +118,7 @@ class ResearchAgentExecutor(IAgentExecutor):
 
     def __init__(self, agent: ResearchAgent) -> None:
         self._agent = agent
+        self.capability = "research"
 
     def execute(self, goal: OrchestrationGoal) -> TaskOutcome:
         try:

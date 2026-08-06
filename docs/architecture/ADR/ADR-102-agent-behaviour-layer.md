@@ -106,6 +106,24 @@ evidence_level: III
 Каждый = новый `services/<x>_agent.py` с `IAgentPlatform`, монтируемый через свой
 `IAgentExecutor`. Ядро (`contracts`/`kernel`/`orchestrator`) НЕ меняется.
 
+## MultiAgentExecutor — необходимый composition-шов (не новый порт)
+
+`build_orchestrator` принимает ровно ОДИН `agent_executor`. Чтобы подключить >1 агента
+(research + architect + ...) к единому `Orchestrator.dispatch` без изменения ядра, введён
+`services/multi_agent_executor.py::MultiAgentExecutor(IAgentExecutor)`. Он НЕ создаёт новый
+порт — реализует существующий `IAgentExecutor` и несёт map `capability → executor`;
+`can_execute(capability)` возвращает True только для известных capability, `execute` делегирует.
+Это composition-only шов (аналог `ReferenceAgentExecutor`/`LoopAgentExecutor`), K6-clean.
+
+## Реализовано (Research + Architect)
+
+- `services/research_agent.py` — `ResearchAgent(IAgentPlatform)` + `ResearchAgentExecutor(IAgentExecutor)`.
+- `services/architect_agent.py` — `ArchitectAgent(IAgentPlatform)` + `ArchitectAgentExecutor(IAgentExecutor)`
+  (тот же шаблон, фокус на архитектуру/ADR), `self.capability = "architecture"`.
+- `services/multi_agent_executor.py` — `MultiAgentExecutor([research_exec, architect_exec])`.
+- `run_kroft` строит `Orchestrator(agent_executor=MultiAgentExecutor([...]))`; `interactive_query`
+  роутит `research`/`architecture` через `dispatch`, остальное — legacy path.
+
 ## Риски / ограничения
 
 - `OrchestrationGoal` не несёт chosen agent id → если потребуется разное поведение для
