@@ -468,3 +468,17 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **arch-gate:** 22 passed (было 17, +5). `run_kroft --no-demo` стартует.
 - **Дисциплина:** порт объявляется ТОЛЬКО в волне с реализацией; IWorkflowCoordinator/IReviewLoop/
   IApprovalGate — следующие волны; Sequential/Hierarchical — слоты (не реализованы).
+
+## Phase C Wave C2 — WorkflowCoordinator + composition root (ADR-103, 2026-08-06) — DONE
+- **WorkflowCoordinator** связывает goal с мультиагентным контуром. Порты: `contracts/i_workflow_coordinator.py`
+  (`IWorkflowCoordinator`). Сервис: `services/workflow_coordinator.py` (build_workflow deterministic sha256,
+  choose_strategy -> StigmergyStrategy, run через IAgentRuntime.delegate_step, copy-on-write Workflow, K6).
+- **Composition root:** `run_kroft --agent-runtime` (default OFF) инжектит AgentRuntime + InMemoryBlackboard +
+  DelegationService + WorkflowCoordinator(StigmergyStrategy); `interactive_query` маршрутирует через coordinator
+  при флаге. Без флага поведение НЕИЗМЕННО (legacy orchestrator path).
+- **Тесты (K8):** `tests/agent_runtime/test_wave_c2.py` (5: deterministic build_workflow I-09, stigmergy,
+  end-to-end через run_kroft boot, legacy path unchanged).
+- **Fix Флаг 1 (C1):** root_goal_id детерминирован via sha256 (I-09, НЕ hash()). Флаг 2 (light): resolver
+  возвращает capability как executor_id (capability-index, документировано). Флаг 3 (light): StigmergyStrategy
+  next_step тривиален для C1, реальная готовность в C2+/позднее.
+- **arch-gate:** 22 passed (без регрессий). `run_kroft --agent-runtime --no-demo` стартует.

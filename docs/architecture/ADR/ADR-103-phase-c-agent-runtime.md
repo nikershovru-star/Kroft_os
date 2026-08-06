@@ -225,7 +225,7 @@ Phase C превращает этот набор в **Agent Runtime** — сис
   - `ICoordinationStrategy` интерфейс + **только `StigmergyStrategy`** (остальные — слоты).
   - ОДИН сквозной тест: задача → делегирование A→B → обмен через blackboard → результат; + proof-of-fire на cycle-detection (A→B→A блокируется).
   - arch-gate: services/agent_runtime импортирует только contracts; boundary `IBlackboard`≠`ILayeredMemory` (критерий §4.3).
-- **Wave C2 — Workflow binding + Strategies (когда появится сценарий):** `IWorkflowCoordinator` (сборка Workflow из goal), выбор стратегии; расширение стратегий при реальном сценарии.
+- **Wave C2 — Workflow binding + Strategies — DONE (2026-08-06):** `IWorkflowCoordinator` (сборка Workflow из goal, deterministic sha256), выбор `StigmergyStrategy`; wiring в composition root `run_kroft --agent-runtime` (default OFF).
 - **Wave C3 — Trust + Metrics:** delegation trust-delta, telemetry-события.
 - **Wave C4 — Strategies (late):** Sequential/Hierarchical — ТОЛЬКО если сценарий потребует.
 - **Wave C5 — Review Loop + Partitioned bus:** `IReviewLoop` (cross-review + `max_review_cycles` + idempotent retry); EventBus topic-partitioning + consistent-hashing для multi-machine.
@@ -279,3 +279,26 @@ Phase C превращает этот набор в **Agent Runtime** — сис
 - `SequentialStrategy`/`HierarchicalStrategy` — слоты, не реализованы (аудит #3).
 - idempotency-key на `Step` (C2, когда появится retry), partitioned bus (C5-late).
 - `AgentRuntime` wiring в `run_kroft` composition root (C2).
+
+---
+
+## 15. Wave C2 — Status: IMPLEMENTED (2026-08-06)
+
+**WorkflowCoordinator + composition root wiring.** Продукт реально использует мультиагентный
+контур через `run_kroft --agent-runtime` (default OFF, legacy path неизменен).
+
+### Созданные артефакты
+- **Порт (contracts):** `i_workflow_coordinator.py` (`IWorkflowCoordinator`: build_workflow / choose_strategy / run).
+- **Сервис (services, только contracts):** `workflow_coordinator.py` (`WorkflowCoordinator` — детерминированная сборка Workflow из goal via sha256, выбор инжектированной StigmergyStrategy, исполнение через IAgentRuntime.delegate_step, copy-on-write Workflow).
+- **Composition root:** `run_kroft.py` — `--agent-runtime` (default OFF) инжектит AgentRuntime + InMemoryBlackboard + DelegationService + WorkflowCoordinator(StigmergyStrategy); `interactive_query` маршрутирует через coordinator при флаге.
+- **Тесты (K8):** `tests/agent_runtime/test_wave_c2.py` (5: deterministic build_workflow I-09, strategy=stigmergy, end-to-end через run_kroft boot, legacy path unchanged).
+
+### Результаты верификации
+- `pytest tests/agent_runtime/test_wave_c2.py` -> **5 passed**.
+- Полный arch-gate (без регрессий) -> **22 passed** (C2 не добавлял новых K6-нарушений; services/workflow_coordinator импортирует только contracts, проверено gate).
+- `run_kroft --agent-runtime --no-demo` стартует и маршрутизирует через coordinator; без флага — прежний orchestrator path.
+
+### Что НЕ сделано (следующие волны)
+- `IWorkflowCoordinator.run` пока 1-step workflow (root capability); multi-step fan-out по DAG — когда появится сценарий (C3/C4).
+- `SequentialStrategy`/`HierarchicalStrategy` — слоты (аудит #3).
+- `IReviewLoop` (C5), `IApprovalGate` (C6), partitioned bus (C5-late) — по мере сценариев.
