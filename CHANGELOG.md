@@ -300,3 +300,28 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   only (K6, concrete HmacSigner в composition); wrong/forged/unregistered key -> safe deny (O1); HMAC детерминизм (I-09).
   Флаг C/1b. Closes Флаг 3 (MARKETPLACE/FED-REPL/CAPSTONE) pragmatically; Ed25519/PKI, key rotation/revocation,
   key distribution — post-MVP.
+
+## ТЗ-DESKTOP-01 — Observability dashboard: read-only kernel-state snapshot (ADR-097, 2026-08-05) — DONE
+- **K5:** OBS-01 (ILiveMetricsCollector/RuntimeSupervisor) отвечает на «как хорошо система работает?»
+  (operational RATIO metrics) — НЕ дублируем. Dashboard отвечает на «какое ТЕКУЩЕЕ СТРУКТУРНОЕ состояние?»
+  (memory/agents/trust/models/tasks/FSM) — отдельный boundary (one-port-per-boundary). DashboardSnapshotter
+  — ЧИСТЫЙ aggregator/renderer: принимает READ-ONLY providers (callables), собирает frozen DashboardSnapshot;
+  НЕ импортирует kernel/identity/services => структурно read-only (не мутирует ядро). Composition связывает
+  providers с реальными компонентами через их публичные аксессоры (K5: reuse, НЕ дублирует state-аксессоры).
+- **contract (contracts/i_dashboard.py):** DashboardSnapshot (frozen VO: node_id, kernel_state, memory_counts,
+  agents, trust, models, tasks, captured_at) + IDashboard (snapshot/render_text/render_json).
+- **impl (services/desktop_dashboard.py, K6: services->contracts only):** DashboardSnapshotter — PURE
+  aggregator/renderer. snapshot() вызывает providers (read-only) -> frozen VO. render_text/render_json
+  детерминированы (json sort_keys). НЕ импортирует kernel/identity/services (только callables).
+- **integration (composition/desktop_dashboard_factory.py, Флаг C):** build_default_dashboard(kernel,
+  memory_platform, trust_registry, identity_registry, task_store, model_registry, ...) — строит providers
+  из реальных компонентов через публичные аксессоры (duck-typed _mem_counts: layered get_episodes/get_semantic/
+  get_normative ИЛИ procedural list_skills; _trust_authors: authors() ИЛИ _by_author). НЕ в build_kernel.
+  READ-ONLY: snapshotter пишет в frozen VO, НЕ мутирует ядро/HARD/FSM (O1-safe). Missing component -> empty.
+- **K8 tests** (tests/desktop/test_dashboard.py, Флаг 1b): snapshot отражает memory/agents/trust/tasks/
+  kernel-state; read-only (НЕ мутирует kernel/trust/memory — verified); determinism (frozen VO + stable JSON);
+  missing components graceful; IDashboard contract. Existing desktop tests intact (13 passed: 5 dashboard + 8 desktop).
+- **K1/K5/K6/O1/I-09:** stdlib only (K1); DashboardSnapshotter НЕ дублирует OBS-01, reuse state-аксессоров (K5);
+  services->contracts only (K6); read-only (O1-safe, structurally cannot mutate); frozen VO + json sort_keys
+  determinism (I-09); Флаг C (НЕ в build_kernel). Замыкает ВСЕ 7 capability-этапов + 2 капстоуна. Non-scope
+  (post-MVP): pyautogui-GUI, Ed25519/PKI/key-distribution, live-refresh loop.

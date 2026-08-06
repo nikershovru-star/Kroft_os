@@ -1757,3 +1757,28 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-AUTHOR-KEYS-01
+
+- id: ADR-097
+  title: Observability dashboard — read-only kernel-state snapshot + deterministic renderer (ТЗ-DESKTOP-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    Финальный capability-этап (Этап 8): пользователь видит состояние ядра (память, агенты, доверие,
+    модели, задачи, FSM-состояние). Полноценный pyautogui-GUI платформозависим — post-MVP; трактобельное
+    ядро этапа — read-only observability-дашборд: детерминированный snapshot + рендерер (text/JSON).
+    K5-разведка: OBS-01 (ILiveMetricsCollector/RuntimeSupervisor) отвечает на «как хорошо система
+    работает?» (operational RATIO metrics) — НЕ дублируем; dashboard отвечает на «какое ТЕКУЩЕЕ
+    СТРУКТУРНОЕ состояние?» (memory/agents/trust/models/tasks/FSM) — отдельный boundary. DashboardSnapshotter
+    — ЧИСТЫЙ aggregator/renderer: принимает READ-ONLY providers (callables), собирает frozen DashboardSnapshot;
+    НЕ импортирует kernel/identity/services (только callables) => структурно read-only. Composition
+    (build_default_dashboard) связывает providers с реальными компонентами через их публичные аксессоры (K5:
+    reuse, НЕ дублирует state-аксессоры). captured_at — инъектируемая последовательность (Lamport), НЕ
+    wall-clock. contracts/i_dashboard.py: DashboardSnapshot (frozen VO) + IDashboard. services/desktop_dashboard.py
+    (K6: services->contracts only): DashboardSnapshotter (snapshot/render_text/render_json, детерминизм json
+    sort_keys). composition/desktop_dashboard_factory.py (Флаг C, НЕ в build_kernel): build_default_dashboard.
+    READ-ONLY: snapshotter пишет в frozen VO, НЕ мутирует ядро/HARD/FSM (O1-safe). Флаг C; I-09 determinism;
+    O1 read-only. Замыкает все 7 capability-этапов + 2 капстоуна. Non-scope (post-MVP): pyautogui-GUI,
+    Ed25519/PKI/key-distribution, live-refresh loop.
+  evidence_level: V
+  addresses:
+  - TZ-DESKTOP-01
