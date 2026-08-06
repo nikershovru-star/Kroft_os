@@ -18,10 +18,16 @@ from contracts.i_blackboard import IBlackboard
 from contracts.i_delegation import IDelegationService
 from contracts.i_agent_executor import IAgentExecutor
 from contracts.i_orchestrator import OrchestrationGoal, TaskOutcome
+from contracts.i_identity import ITrustRegistry
+from contracts.i_telemetry import ITelemetrySink
 
 
 class AgentRuntime(IAgentRuntime):
-    """Facade: единая точка входа; композиция (blackboard/delegation/executors) — извне."""
+    """Facade: единая точка входа; композиция (blackboard/delegation/executors) — извне.
+
+    Wave C3: опц. trust_registry + telemetry — delegation trust-delta и telemetry-события.
+    Без них поведение НЕИЗМЕННО (backward-compat): trust/telemetry вызовы no-op guard-ом.
+    """
 
     def __init__(
         self,
@@ -29,11 +35,15 @@ class AgentRuntime(IAgentRuntime):
         blackboard: IBlackboard,
         delegation: IDelegationService,
         root_capability: str = "research",
+        trust_registry: Optional[ITrustRegistry] = None,
+        telemetry: Optional[ITelemetrySink] = None,
     ) -> None:
         self._executor = executor
         self._blackboard = blackboard
         self._delegation = delegation
         self._root_capability = root_capability
+        self._trust = trust_registry
+        self._telemetry = telemetry
 
     def run_workflow(self, goal: str, root_goal_id: Optional[str] = None) -> WorkflowResult:
         # I-09: стабильная деривация (HE hash() — рандомизован per-process via PYTHONHASHSEED).
@@ -64,6 +74,17 @@ class AgentRuntime(IAgentRuntime):
         # исполняем через MultiAgentExecutor (capability->executor map)
         outcome = self._executor.execute(child_goal)
         self._delegation.record_outcome(child_goal.goal_id, outcome)
+        # Wave C3: trust-delta (SOFT) + telemetry — только если инжектнуты (backward-compat)
+        if self._trust is not None:
+            # executor_id = capability (Флаг 2 C1: capability-index); при неоднозначности
+            # вернуть реальный id исполнителя из registry.
+            self._trust.record_outcome(decision.executor_id, outcome.success)
+        if self._telemetry is not None:
+            self._telemetry.record(
+                "agent_runtime.delegation",
+                1.0 if outcome.success else 0.0,
+                tags={"capability": child_goal.capability, "executor": decision.executor_id},
+            )
         # stigmergy: пишем результат шага в team-scope blackboard (НЕ прямой вызов)
         self._blackboard.append(
             scope=f"team.{child_goal.goal_id}",
