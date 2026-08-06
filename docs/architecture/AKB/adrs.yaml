@@ -1865,3 +1865,26 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-DAILY-01
+
+- id: ADR-102
+  title: Agent Behaviour Layer — где живёт поведение агента и как оно подключается
+  status: proposed
+  date: 2026-08-06
+  summary: >-
+    Agents v0.1 (ТЗ-AGENT-BEHAVIOUR-01, Research Agent First). K5-разведка: инфраструктура
+    агентов УЖЕ полна — IAgent/IAgentLoop/IAgentExecutor/IAgentPlatform, ReferenceAgentExecutor,
+    AgentPlatform, Orchestrator.dispatch по capability x trust, KnowledgeEngine +
+    ReferenceSearchService готовы к reuse. НОВЫЙ порт/слой НЕ нужен. Поведение агента =
+    реализация IAgentPlatform (или IAgentExecutor), инъецирующая доменные сервисы и
+    возвращающая AgentResult/TaskOutcome. Research Agent (services/research_agent.py):
+    ResearchAgent(IAgentPlatform) реально зовёт ReferenceSearchService по живому графу vault
+    (НЕ fixed answer), LLM опционален (graceful, I-09). ResearchAgentExecutor(IAgentExecutor)
+    монтирует агента в Orchestrator.dispatch (agent_executor=), trust эволюционирует из
+    реального исхода. run_kroft строит Orchestrator + вешает ResearchAgentExecutor;
+    interactive_query маршрутизирует research-интенты через dispatch (Goal -> Orchestrator ->
+    ResearchAgent -> KnowledgeEngine/ReferenceSearchService -> AgentResult). K1/K5/K6/K8/O1/I-09
+    соблюдены: services импортирует только contracts; 0 новых портов; 0 новых слоёв. Следующие
+    агенты (Architect/Programmer/Writer/Finance/Sales) = тот же паттерн, ядро НЕ меняется.
+  evidence_level: III
+  addresses:
+  - TZ-AGENT-BEHAVIOUR-01
