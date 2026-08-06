@@ -34,6 +34,7 @@ from contracts.i_orchestrator import (
 )
 from contracts.i_federated_orchestrator import IRemoteOrchestrator
 from contracts.i_agent_executor import IAgentExecutor
+from contracts.i_agent_runtime import IAgentRuntime
 from contracts.plugin import IPluginRegistry
 
 
@@ -54,6 +55,7 @@ class ReferenceOrchestrator(IOrchestrator):
         remote_nodes: Tuple[str, ...] = (),
         skill_recall_min_confidence: float = 0.0,
         agent_executor: Optional["IAgentExecutor"] = None,
+        runtime: Optional["IAgentRuntime"] = None,
     ) -> None:
         self._identities = identity_registry
         self._plugins = plugin_registry
@@ -67,6 +69,7 @@ class ReferenceOrchestrator(IOrchestrator):
         self._remote_nodes = tuple(remote_nodes)
         self._skill_gate = skill_recall_min_confidence
         self._agent_executor = agent_executor  # ТЗ-AGENT-EXEC-01 (Флаг C): optional
+        self._runtime = runtime  # Phase C: AgentRuntime как основной agent-dispatch ядра
         # Seed LATEST running trust from declared baselines (evolves via record_outcome).
         # Idempotent: does NOT overwrite trust already evolved by prior dispatch outcomes.
         for agent in self._identities.list():
@@ -131,10 +134,15 @@ class ReferenceOrchestrator(IOrchestrator):
                 # performed by the caller's SkillEvolution; here we evolve directly for the orchestrator.
                 self._procedural.record_skill_outcome(goal.capability, success, self._delta)
             return TaskOutcome(success=success, detail=f"skill executed (outcome fed back)")
-        # agent: real execution when an IAgentExecutor is wired (ТЗ-AGENT-EXEC-01, closes
-        # Флаг 2 FED-EXEC-01 / Флаг 2 SKILL-EVOLVE-01). The executor runs a REAL cognitive
-        # tick and returns the computed TaskOutcome; trust evolves from that real outcome
-        # (success +, failure -) via record_outcome — uniform with plugin/remote/skill.
+        # agent: реальная координация через AgentRuntime (Phase C) когда подключён.
+        # delegate_step сам делает blackboard + delegation + trust-delta + telemetry + gate;
+        # дублировать trust-delta здесь НЕЛЬЗЯ (иначе двойной счёт). При отсутствии runtime —
+        # legacy путь через agent_executor (обратная совместимость, отдельный trust-счёт).
+        if self._runtime is not None:
+            outcome = self._runtime.delegate_step(goal.goal_id, goal)
+            self._log.append(decision.chosen_id,
+                             f"dispatch:{goal.goal_id}:{'ok' if outcome.success else 'fail'}")
+            return outcome
         if self._agent_executor is not None:
             outcome = self._agent_executor.execute(goal)
             self._log.append(decision.chosen_id,
@@ -209,6 +217,7 @@ def build_orchestrator(
     remote_nodes: Tuple[str, ...] = (),
     skill_recall_min_confidence: float = 0.0,
     agent_executor: Optional[IAgentExecutor] = None,
+    runtime: Optional[IAgentRuntime] = None,
 ) -> ReferenceOrchestrator:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated).
 
@@ -223,8 +232,12 @@ def build_orchestrator(
     `agent_executor` (ТЗ-AGENT-EXEC-01) is OPTIONAL: when provided, dispatch() for kind='agent'
     runs a REAL agent tick and returns the computed TaskOutcome (trust evolves from the real
     outcome); when absent, agent dispatch falls back to the pre-ТЗ delegated success=True.
+    `runtime` (Phase C) is OPTIONAL: when provided, dispatch() for kind='agent' delegates via
+    AgentRuntime.delegate_step (blackboard + delegation + trust-delta + telemetry + gate);
+    дублировать trust-delta в orchestrator НЕ нужно (runtime сам пишет trust). Приоритетнее
+    agent_executor (централизует весь agent-dispatch в AgentRuntime).
     """
     return ReferenceOrchestrator(
         identity_registry, plugin_registry, trust_registry, action_log,
         trust_threshold, plugin_default_trust, trust_delta, procedural, remote,
-        remote_nodes, skill_recall_min_confidence, agent_executor)
+        remote_nodes, skill_recall_min_confidence, agent_executor, runtime)

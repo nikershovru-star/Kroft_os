@@ -512,3 +512,10 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - `--no-agent-runtime` — явный opt-out: legacy `orchestrator.dispatch` (без gate/blackboard/delegation), сохранён для backward-compat.
 - K6 соблюдён: изменения только в composition root (который импортирует services); kernel остаётся contracts-only. `interactive_query` переключается на legacy path при `agent_runtime=None`.
 - Тесты: tests/desktop (13) + tests/agent_runtime (20) + arch-gate (22) зелёные; boot default и --no-agent-runtime проверены.
+
+## Product-mode: AgentRuntime как основной agent-dispatch ЯДРА (2026-08-06) — «точнее всю ОС»
+- **Ядро (ReferenceOrchestrator) теперь использует AgentRuntime** как основной путь для `kind='agent'` в `dispatch`. Не дублирующий optional-контур в composition: orchestrator сам маршрутирует agent-kind через `runtime.delegate_step` (blackboard + delegation + trust-delta + telemetry + gate).
+- **K6 соблюдён:** kernel импортирует только порт `contracts.i_agent_runtime` (не services). `runtime: Optional[IAgentRuntime]` добавлен в `ReferenceOrchestrator.__init__` + `build_orchestrator`.
+- **Без дублирования trust-delta:** при наличии runtime orchestrator НЕ пишет `record_outcome` (runtime сам пишет); legacy `agent_executor` путь сохранён как opt-out при `runtime=None`.
+- Composition root инжектит `runtime=self.agent_runtime` в `build_orchestrator`. `--no-agent-runtime` (runtime=None) -> legacy path.
+- **Верификация:** orchestrator.dispatch(capability='finance') идёт через runtime (default) / legacy agent_executor (--no-agent-runtime); arch-gate 22, desktop 21, agent_runtime 20 зелёные.

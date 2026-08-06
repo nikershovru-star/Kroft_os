@@ -193,6 +193,7 @@ class KroftApp:
             trust_registry=self.trust,
             action_log=ReferenceActionLog(),
             agent_executor=self.agent_executor,
+            runtime=self.agent_runtime,  # Phase C: ядро использует AgentRuntime как основной agent-dispatch
         )
         # 5) optional federation (graceful degradation: disabled by default)
         self.distributor: Any = None
