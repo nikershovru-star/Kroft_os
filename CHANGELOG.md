@@ -344,3 +344,22 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **K1/K5/K6/O1/I-09:** stdlib hmac (K1); IKeyDistribution НЕ дублирует IAuthorKeyRegistry/ISignatureProvider (K5); services->contracts
   only (K6); tampered/revoked/unknown -> safe deny (O1); HMAC детерминизм (I-09); Флаг C (НЕ в build_kernel). Закрывает security-долг
   AUTHOR-KEYS-01 (Флаг 2: key distribution). Ed25519/PKI, реальный bootstrap, OCSP-like revocation — post-MVP.
+
+## ТЗ-RUN-01 — Bootable KROFT_OS: single entry point lifting the whole stack (ADR-099, 2026-08-05) — DONE
+- **K5:** PURE COMPOSITION over existing components — NO new contract/port. Reuses build_kernel (kernel/cognitive_kernel.py,
+  CognitiveKernel with FSM tick), SkillEvolver (EVOLUTION-01), InMemoryLayeredMemory + InMemoryProceduralMemory,
+  build_default_dashboard (DESKTOP-01), build_llm_client/OmniRouter (OMNI-01), SkillDistributor + SkillRepository +
+  ReferenceTrustRegistry (FED-REPL-01). Does NOT duplicate run_evolution.py (that script owns persistence/autosave/live-loop;
+  run_kroft is the higher-level boot-everything + dashboard + demo aggregator).
+- **entry (composition/run_kroft.py, Флаг C):** KroftConfig (dataclass) + KroftApp. Boot kernel + optional LLM
+  (none/auto/mock) + evolution (SkillEvolver) + optional federation (SkillDistributor via LoopbackTransport) + dashboard
+  (build_default_dashboard). run_demo(ticks) loops: kernel.tick(Intent) + evolve demo skill + render read-only dashboard
+  snapshot. CLI: python composition/run_kroft.py [--node-id X] [--llm none|auto|mock] [--federation] [--ticks N] [--no-demo].
+- **graceful degradation (K5):** LLM and federation OPTIONAL; without them the app boots and runs a deterministic,
+  LLM-free evolution demo (I-09). No network/external model required for the default run. Evolution via SkillEvolver
+  heuristic (deterministic). Dashboard read-only (DESKTOP-01, O1-safe).
+- **K8 tests** (tests/desktop/test_run_kroft.py, Флаг 1b): boot без LLM (determinism); boot с mock LLM; dashboard рендерит
+  state; эволюция прогрессирует (demo skill v1->v2); graceful degradation (нет LLM/федерации); federation boot optional.
+- **K1/K5/K6/O1/I-09:** stdlib + contracts (composition imports everything, K6-clean for services it reuses); determinism
+  (I-09); read-only dashboard (O1/DESKTOP-01). Culmination of the capability+security ТЗ series — ALL 7 capability
+  stages + 2 capstones + security core (AUTHOR-KEYS-01 + KEYDIST-01) CLOSED.

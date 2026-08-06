@@ -1804,3 +1804,22 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-KEYDIST-01
+
+- id: ADR-099
+  title: Bootable KROFT_OS — single entry point lifting the whole stack (ТЗ-RUN-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    ТЗ-RUN-01 — кульминация серии capability+security ТЗ: одна команда поднимает весь стек (kernel +
+    опц. LLM + эволюция + опц. федерация + dashboard) с live-демо циклом. K5-разведка: build_kernel
+    (kernel/cognitive_kernel.py), SkillEvolver, InMemoryLayeredMemory/InMemoryProceduralMemory,
+    build_default_dashboard (DESKTOP-01), build_llm_client/OmniRouter (OMNI-01), SkillDistributor/
+    SkillRepository/ReferenceTrustRegistry (FED-REPL-01) — УЖЕ есть. run_kroft.py — ЧИСТАЯ КОМПОЗИЦИЯ
+    (НЕ дублирует run_evolution.py: тот владеет persistence/autosave; run_kroft — верхнеуровневый
+    aggregator). KroftConfig (dataclass) + KroftApp.boot + run_demo loop + CLI (--node-id/--llm/--federation/
+    --ticks/--no-demo). Graceful degradation: LLM и федерация ОПЦИОНАЛЬНЫ; без них — детерминированный
+    LLM-free run (I-09). Эволюция через SkillEvolver (heuristic). Dashboard read-only (DESKTOP-01).
+    Флаг C: standalone entry. Флаг 1b: тесты отдельно. Series capability+security ТЗ COMPLETE.
+  evidence_level: V
+  addresses:
+  - TZ-RUN-01
