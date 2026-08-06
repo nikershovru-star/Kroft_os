@@ -21,6 +21,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from contracts.i_identity import ITrustRegistry
+from contracts.i_author_keys import IAuthorKeyRegistry
 from contracts.i_memory import Procedure
 from contracts.i_marketplace import ISkillRepository, SkillPackage
 from contracts.i_signature import attach_signature, canonical_bytes, check_signature
@@ -80,9 +81,14 @@ class SkillPackager:
 class SkillRepository(ISkillRepository):
     """In-memory/local-dir SkillRepository with signature verify + trust gate (ТЗ-MARKETPLACE-01)."""
 
-    def __init__(self, signer: "Any" = None, store_dir: Optional[str] = None) -> None:
+    def __init__(self, signer: "Any" = None, store_dir: Optional[str] = None,
+                 author_key_registry: Optional[IAuthorKeyRegistry] = None) -> None:
         # signer (ISignatureProvider) injected; store_dir optional for local-dir persistence
         self._signer = signer
+        # ТЗ-AUTHOR-KEYS-01: per-author HMAC keys. When an author is registered, its OWN key
+        # authenticates the package; otherwise verify falls back to the shared `signer` (backward-compat
+        # with MARKETPLACE/FED-REPL/CAPSTONE shared-key usage).
+        self._author_keys = author_key_registry
         self._store_dir = store_dir
         self._packages: Dict[str, SkillPackage] = {}  # id -> pkg
         self._installed: Dict[str, Any] = {}  # name -> installed payload (latest)
@@ -95,7 +101,13 @@ class SkillRepository(ISkillRepository):
             self._persist(pkg)
 
     def verify(self, pkg: SkillPackage, signer: "Any" = None) -> bool:
-        prov = signer if signer is not None else self._signer
+        # ТЗ-AUTHOR-KEYS-01: prefer the author's OWN registered key; fall back to the shared signer
+        # when the author is unregistered (backward-compat with shared-key MARKETPLACE/FED-REPL/CAPSTONE).
+        prov = signer
+        if prov is None and self._author_keys is not None and self._author_keys.has(pkg.author):
+            prov = self._author_keys.get_signer(pkg.author)
+        if prov is None:
+            prov = self._signer
         if prov is None:
             return False
         env = {
@@ -158,6 +170,8 @@ class SkillRepository(ISkillRepository):
 
 
 def build_skill_repository(signer: "Any" = None,
-                           store_dir: Optional[str] = None) -> "SkillRepository":
+                           store_dir: Optional[str] = None,
+                           author_key_registry: Optional[IAuthorKeyRegistry] = None) -> "SkillRepository":
     """Standalone factory (Флаг C) — wire a SkillRepository. NOT in build_kernel (opt-in)."""
-    return SkillRepository(signer=signer, store_dir=store_dir)
+    return SkillRepository(signer=signer, store_dir=store_dir,
+                          author_key_registry=author_key_registry)
