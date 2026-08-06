@@ -443,3 +443,14 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   (`capability="planning"`, фокус на roadmap/planning). `run_kroft` регистрирует в `MultiAgentExecutor`.
 - `interactive_query` роутит planning-интенты (plan/roadmap/milestone/sprint/timeline/planning) через `dispatch`.
 - **Тесты:** tests/agent/test_planner_agent.py (4 K8): real-search / routing / scope / graceful. K1/K5/K6/K8/O1/I-09.
+
+## Agents v0.1 cont. — Finance Agent (ADR-102, 2026-08-06) — DONE
+- **Финал** Agents v0.1 (Research/Architect/Programmer/Writer/Planner/Finance) без изменения ядра.
+- **Finance Agent:** `services/finance_agent.py::FinanceAgent(IAgentPlatform)` + `FinanceAgentExecutor`
+  (`capability="finance"`, фокус на finance/trading). Внешний exchange-адаптер (moneygen/MarketMind)
+  — out-of-scope v0.1 (K6-адаптер позже, ядро не трогается). `run_kroft` регистрирует в `MultiAgentExecutor`.
+- `interactive_query` роутит finance-интенты (finance/trading/market/portfolio/risk/invest/crypto/stock/budget).
+- **Тесты:** tests/agent/test_finance_agent.py (4 K8): real-search / routing / scope / graceful.
+- **Итог Agents v0.1:** 6 агентов (Research/Architect/Programmer/Writer/Planner/Finance), все через
+  единый `MultiAgentExecutor` на `Orchestrator.dispatch`. 0 новых портов, 0 новых слоёв, K5/K6/O1/I-09.
+  Следующие агенты (Sales и др.) = тот же шов.

@@ -1885,6 +1885,10 @@ adrs:
     ResearchAgent -> KnowledgeEngine/ReferenceSearchService -> AgentResult). K1/K5/K6/K8/O1/I-09
     соблюдены: services импортирует только contracts; 0 новых портов; 0 новых слоёв. Следующие
     агенты (Architect/Programmer/Writer/Finance/Sales) = тот же паттерн, ядро НЕ меняется.
+    РЕАЛИЗОВАНО (2026-08-06): Research + Architect + Programmer + Writer + Planner + Finance
+    агенты (services/<x>_agent.py) через ЕДИНЫЙ MultiAgentExecutor(IAgentExecutor) на
+    Orchestrator.dispatch (capability -> executor map). 0 новых портов/слоёв. Внешний
+    finance-exchange адаптер (moneygen/MarketMind) — out-of-scope v0.1 K6-адаптер.
   evidence_level: III
   addresses:
   - TZ-AGENT-BEHAVIOUR-01
