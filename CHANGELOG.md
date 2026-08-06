@@ -422,3 +422,10 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   Смежные: research-agent + arch-gate 28 passed; run_kroft --no-demo стартует. K1/K5/K6/K8/O1/I-09.
 - **Следующие (Programmer/Writer/Planner/Finance):** добавляются тем же швом — новый `services/<x>_agent.py`
   + `<X>AgentExecutor` + регистрация в `MultiAgentExecutor`. Ядро НЕ меняется.
+
+## Agents v0.1 cont. — Programmer Agent (ADR-102, 2026-08-06) — DONE
+- **Продолжение** Agents v0.1 без изменения ядра. Тот же паттерн что Architect/Research.
+- **Programmer Agent:** `services/programmer_agent.py::ProgrammerAgent(IAgentPlatform)` + `ProgrammerAgentExecutor`
+  (`capability="coding"`, фокус на code/implementation). `run_kroft` регистрирует в `MultiAgentExecutor`.
+- `interactive_query` роутит coding-интенты (code/function/implement/class/bug/refactor/python) через `dispatch`.
+- **Тесты:** tests/agent/test_programmer_agent.py (4 K8): real-search / routing / scope / graceful. K1/K5/K6/K8/O1/I-09.
