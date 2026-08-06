@@ -142,9 +142,19 @@ class KroftApp:
             from services.delegation_service import DelegationService
             from services.coordination_strategy import StigmergyStrategy
             from services.workflow_coordinator import WorkflowCoordinator
-            from adapters.in_memory_telemetry import InMemoryTelemetry
+            from services.approval_gate import ApprovalGate
+            from adapters.in_memory_telemetry import InMemoryTelemetrySink as InMemoryTelemetry
+            from kernel.identity import ReferenceActionLog
             blackboard = InMemoryBlackboard()
             delegation = DelegationService(max_depth=8)
+            # Wave C6: Approval Gate (default-deny semantics). Demo approver = auto-approve;
+            # реальный HITL-механизм подключается через тот же IApprovalGate порт позже.
+            approval_gate = ApprovalGate(
+                approver=lambda req: True,
+                action_log=ReferenceActionLog(),
+                sensitive_capabilities={"finance", "coding"},
+                ttl_sec=5.0,
+            )
             self.agent_runtime = AgentRuntime(
                 executor=self.agent_executor,
                 blackboard=blackboard,
@@ -152,6 +162,8 @@ class KroftApp:
                 root_capability="research",
                 trust_registry=self.trust,
                 telemetry=InMemoryTelemetry(),
+                approval_gate=approval_gate,
+                sensitive_capabilities=("finance", "coding"),
             )
             self.workflow_coordinator = WorkflowCoordinator(
                 runtime=self.agent_runtime,
