@@ -519,3 +519,8 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **Без дублирования trust-delta:** при наличии runtime orchestrator НЕ пишет `record_outcome` (runtime сам пишет); legacy `agent_executor` путь сохранён как opt-out при `runtime=None`.
 - Composition root инжектит `runtime=self.agent_runtime` в `build_orchestrator`. `--no-agent-runtime` (runtime=None) -> legacy path.
 - **Верификация:** orchestrator.dispatch(capability='finance') идёт через runtime (default) / legacy agent_executor (--no-agent-runtime); arch-gate 22, desktop 21, agent_runtime 20 зелёные.
+
+## Product-mode: вердикт «всю ОС» принят (2026-08-06)
+- Унификация подтверждена: любой agent-kind dispatch (kernel.tick -> orchestrator -> agent И интерактив) идёт через `AgentRuntime.delegate_step` (blackboard + delegation + trust-delta + telemetry + gate). K6 честно: ядро импортирует только порт `contracts.i_agent_runtime`, конкретный `AgentRuntime` инжектится из composition root. Двойной счёт trust исключён (runtime активен -> orchestrator не пишет `record_outcome`). Backward-compat: `--no-agent-runtime` -> legacy.
+- **Лёгкие флаги (в OPERATIONS_LOG, не блок):** (1) четыре dispatch-поверхности (`runtime.delegate_step` / `agent_executor` / `delegated` / `interactive_query` прямой вызов) — согласованы, но v0.2 свести интерактивный routed-путь через `orchestrator.dispatch`; (2) legacy-пути `agent_executor`/`delegated` при default-ON runtime — почти мёртвый код, удалить в v0.2.
+- **v0.2 бэклог (из реальных проблем + отложенное):** C4 (Strategies), C5 (Review Loop + partitioned bus + workflow-store), Ed25519/PKI, multi-host, консолидация dispatch-поверхностей, удаление legacy-путей.
