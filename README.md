@@ -1228,4 +1228,24 @@ python main.py agent "исправить граф"
 - `fix_graph` — auto-remove broken links, tag orphans with `orphan`, tag untagged nodes with `untagged`; explicit snapshot after fixes.
 - Pure-stdlib DFS cycle detection capped at 10 cycles.
 
+---
+
+## KROFT_OS v0.1 — Release Track
+
+Ядро KROFT_OS закрыто (7 capability-этапов + 2 капстоуна + security-ядро: per-author HMAC-ключи
++ distribution/rotation/revocation). Одна команда поднимает весь стек + observability-панель:
+
+```bash
+python composition/run_kroft.py [--llm none|mock] [--federation] [--ticks N]
+```
+
+Панель **KROFT Desktop** показывает РЕАЛЬНОЕ состояние подсистем (Kernel / Agents / Tasks /
+Models / Marketplace / Federation / Memory / Trust / Logs). Release-notes: [docs/RELEASE_v0.1.md](docs/RELEASE_v0.1.md).
+Инструкция запуска: [docs/RUN.md](docs/RUN.md).
+
+**Стратегия (2026-08-06):** от «строим ядро ТЗ за ТЗ» к «продукт, которым пользуются ежедневно».
+Post-MVP (после реальной эксплуатации): Enterprise Security (Ed25519/PKI/CA), real multi-host
+federation, GUI, daily-use pipeline (Obsidian→Knowledge Engine→Hermes→Agent Loop), собственные
+агенты (Sales/Research/Architect/Programmer/Writer/Finance).
+
 ## Test gates

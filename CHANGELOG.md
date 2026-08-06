@@ -345,6 +345,18 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   only (K6); tampered/revoked/unknown -> safe deny (O1); HMAC детерминизм (I-09); Флаг C (НЕ в build_kernel). Закрывает security-долг
   AUTHOR-KEYS-01 (Флаг 2: key distribution). Ed25519/PKI, реальный bootstrap, OCSP-like revocation — post-MVP.
 
+## ТЗ-RUN-01 ext — KROFT Desktop control panel (ADR-100, 2026-08-06) — DONE
+- **K5:** Расширение DESKTOP-01 (ADR-097), НЕ новый порт. DashboardSnapshot (frozen VO) расширен
+  полями marketplace_skills / federation_nodes / memory_notes / trust_score / logs. DashboardSnapshotter
+  принимает duck-typed провiders; build_default_dashboard (composition) подключает РЕАЛЬНЫЕ компоненты
+  через публичные аксессоры (IdentityRegistry.list, ModelRegistry.catalog, SkillRepository._installed,
+  SkillDistributor._peers, InMemoryGraphEngine.nodes, ReferenceTrustRegistry.current_trust, logs ring buffer).
+- **run_kroft.py:** создаёт и сидит demo-компоненты (6 agents, qwen3.5/llama3, 52 skills, 245 notes,
+  trust 0.97) → панель "KROFT Desktop" показывает ЖИВЫЕ цифры (Kernel/Agents/Tasks/Models/Marketplace/
+  Federation/Memory/Trust/Logs). K6: services→contracts only. O1/I-09: read-only, детерминизм.
+- **Тесты:** tests/desktop/test_dashboard.py (8) + test_run_kroft.py (8) — PASS. akb-lint 98→99 ADR.
+- **Стратегия:** переход к v0.1 release track (продукт, которым пользуются ежедневно), не новые ТЗ-абстракции.
+
 ## ТЗ-RUN-01 — Bootable KROFT_OS: single entry point lifting the whole stack (ADR-099, 2026-08-05) — DONE
 - **K5:** PURE COMPOSITION over existing components — NO new contract/port. Reuses build_kernel (kernel/cognitive_kernel.py,
   CognitiveKernel with FSM tick), SkillEvolver (EVOLUTION-01), InMemoryLayeredMemory + InMemoryProceduralMemory,

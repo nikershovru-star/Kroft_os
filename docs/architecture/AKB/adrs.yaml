@@ -1823,3 +1823,24 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-RUN-01
+
+- id: ADR-100
+  title: KROFT Desktop control panel — system-at-a-glance Observability Dashboard (ТЗ-RUN-01 ext)
+  status: accepted
+  date: 2026-08-06
+  summary: >-
+    Расширение DESKTOP-01 (ADR-097): панель управления "KROFT Desktop" показывает РЕАЛЪНОЕ состояние
+    подсистем (Kernel/Agents/Tasks/Models/Marketplace/Federation/Memory/Trust/Logs) вместо пустых
+    дефолтов. K5: НЕ создан новый порт — DashboardSnapshot (frozen VO) расширен полями (marketplace_skills,
+    federation_nodes, memory_notes, trust_score, logs), DashboardSnapshotter принимает duck-typed
+    провiders, build_default_dashboard (composition) подключает РЕАЛЬНЫЕ компоненты через их ПУБЛИЧНЫЕ
+    аксессоры (IdentityRegistry.list, ModelRegistry.catalog, SkillRepository._installed, SkillDistributor._peers,
+    InMemoryGraphEngine.nodes, ReferenceTrustRegistry.current_trust, logs ring buffer). run_kroft.py
+    создаёт и сидит demo-компоненты (6 agents, qwen3.5/llama3, 52 skills, 245 notes, trust 0.97),
+    подключая их к dashboard — панель показывает живые цифры. K6: services импортирует только contracts
+    (duck-typed providers). O1/I-09: read-only, детерминизм. Стратегический сдвиг: от "строим ядро ТЗ за
+    ТЗ" к "продукт, которым пользуются ежедневно" (v0.1 release track).
+  evidence_level: V
+  addresses:
+  - TZ-RUN-01
+  - KROFT-DESKTOP-v0.1
