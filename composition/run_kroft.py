@@ -53,6 +53,7 @@ class KroftConfig:
     run_demo: bool = True      # execute the live-demo loop on __main__
     vault: Optional[str] = None  # Obsidian vault path for live note ingestion (ТЗ-DAILY-01)
     interactive: bool = False    # ТЗ-DAILY-01: read queries from stdin -> agent loop -> answer
+    query: Optional[str] = None  # ТЗ-DAILY-01 / Operator: one-shot query via agent loop (Hermes-desktop tool call)
     agent_runtime: bool = True   # Phase C: AgentRuntime дефолтно подключён к ядру (--no-agent-runtime для legacy path)
 
 
@@ -469,11 +470,14 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
     p.add_argument("--vault", default=None, help="Obsidian vault path for live note ingestion (ТЗ-DAILY-01)")
     p.add_argument("--interactive", action="store_true",
                    help="ТЗ-DAILY-01: read queries from stdin -> agent loop -> live answer")
+    p.add_argument("--query", default=None,
+                   help="ТЗ-DAILY-01 / Operator: one-shot query -> agent loop -> print answer -> exit "
+                        "(no stdin). Используется Hermes-desktop для вызова KROFT_OS как инструмента.")
     a = p.parse_args(argv)
     return KroftConfig(
         node_id=a.node_id, llm=a.llm, federation=a.federation,
         ticks=a.ticks, run_demo=not a.no_demo, vault=a.vault, interactive=a.interactive,
-        agent_runtime=a.agent_runtime,
+        agent_runtime=a.agent_runtime, query=a.query,
     )
 
 
@@ -482,6 +486,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     app = KroftApp(config)
     if config.interactive:
         app.run_interactive()
+    elif config.query:
+        print(app.interactive_query(config.query))
     elif config.run_demo:
         app.run_demo()
     else:

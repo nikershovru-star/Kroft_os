@@ -101,6 +101,13 @@ PYTHONPATH=. python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\
   cd "C:\Users\Nikita\Documents\Obsidian Vault\02-Projects\KROFT_OS"
   python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\Obsidian Vault" --interactive --llm auto
   ```
+- **Operator (Hermes-desktop / one-shot, без stdin):** `--query` — разовый запрос через агента, печатает ответ, выходит. Используется для вызова KROFT_OS как инструмента:
+  ```powershell
+  $env:PYTHONPATH="."; $env:KROFT_LLM_MODEL="llama3.1:8b"
+  cd "C:\Users\Nikita\Documents\Obsidian Vault\02-Projects\KROFT_OS"
+  python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\Obsidian Vault" --llm auto --query "research:What is the KROFT_OS blackboard pattern? Answer in one sentence."
+  ```
+  Либо pipe: `echo "..." | python composition/run_kroft.py --vault "..." --llm auto --interactive`.
 
 ## Панель KROFT Desktop
 

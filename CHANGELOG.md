@@ -539,3 +539,11 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **Патч (K6):** `composition/run_kroft.py` `_build_llm` пробрасывает `KROFT_LLM_MODEL` + `KROFT_LLM_TIMEOUT` (default 120s) в дефолтный Ollama-путь и в OmniRouter-путь; `adapters/openai_compatible.py` шлёт `max_tokens`.
 - **Верификация:** `KroftApp(llm="auto", KROFT_LLM_MODEL="llama3.1:8b").llm.complete(...)` → реальный синтез-ответ ("The KROFT_OS blackboard pattern... centralized knowledge repository..."). Тесты: arch 22 / desktop 21 / agent_runtime 20 зелёные.
 - Доки: `docs/RUN.md` (выбор модели + таймаут), `docs/OPERATIONS_LOG.md` (переменные).
+
+## Product-mode fix: LLM-синтез у всех 6 агентов заработал + Operator `--query` (2026-08-06)
+- **Симптом:** агенты возвращали сырые `graph:`-строки вместо синтеза (иллюзия «retrieval работает, синтеза нет»).
+- **Корень:** все 6 агентов вызывали `self._llm.complete(prompt=...)` — строку, хотя порт `ILlm.complete(query: ModelQuery) -> LlmResponse` (K1/K6). Вызов падал с `TypeError`, агент ловил `except Exception` и тихо фоллбэчил к raw hits.
+- **Фикс (K6):** в `services/{research,architect,finance,planner,programmer,writer}_agent.py` → `self._llm.complete(ModelQuery(prompt=...)).text` + импорт `ModelQuery` из `contracts.i_llm`. Порт соблюдён.
+- **Operator-режим (Паттерн 1):** добавлен `--query "<cap>:<вопрос>"` one-shot в `composition/run_kroft.py` (KroftConfig.query + main) — Hermes-desktop вызывает KROFT_OS как инструмент без stdin. Поддержан также pipe в `--interactive`.
+- **Верификация:** `--query` по всем 6 capabilities (research/architecture/coding/writing/planning/finance) → реальный синтез-ответ от `llama3.1:8b`. Тесты: arch 22 / desktop 21 / agent_runtime 20 зелёные.
+- Доки: `docs/RUN.md` (Operator-команда), `docs/OPERATIONS_LOG.md` (баг + Operator).

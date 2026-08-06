@@ -26,7 +26,7 @@ from typing import Optional, Tuple
 from contracts.i_agent_executor import IAgentExecutor
 from contracts.i_agent_platform import AgentResult, AgentStatus, IAgentPlatform
 from contracts.i_knowledge_engine import IKnowledgeEngine
-from contracts.i_llm import ILlm
+from contracts.i_llm import ILlm, ModelQuery
 from contracts.i_orchestrator import OrchestrationGoal, TaskOutcome
 from contracts.i_search import ISearchService
 from contracts.i_workflow import Step, StepStatus, Workflow, WorkflowStatus
@@ -79,8 +79,8 @@ class ResearchAgent(IAgentPlatform):
             )
             try:
                 synthesis = self._llm.complete(
-                    prompt=f"Question: {goal}\n\nKnowledge:\n{context_blob}\n\nAnswer concisely:",
-                )
+                    ModelQuery(prompt=f"Question: {goal}\n\nKnowledge:\n{context_blob}\n\nAnswer concisely:")
+                ).text
                 result = result.with_tools(synthesis)
             except Exception:
                 # model failure must not break the run — fall back to raw hits (O1).

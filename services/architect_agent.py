@@ -19,7 +19,7 @@ from typing import Optional
 from contracts.i_agent_executor import IAgentExecutor
 from contracts.i_agent_platform import AgentResult, AgentStatus, IAgentPlatform
 from contracts.i_knowledge_engine import IKnowledgeEngine
-from contracts.i_llm import ILlm
+from contracts.i_llm import ILlm, ModelQuery
 from contracts.i_orchestrator import OrchestrationGoal, TaskOutcome
 from contracts.i_search import ISearchService
 from contracts.i_workflow import Step, StepStatus, Workflow, WorkflowStatus
@@ -58,9 +58,9 @@ class ArchitectAgent(IAgentPlatform):
             context_blob = "\n".join(f"- {h.source}: {h.content[:200]}" for h in hits)
             try:
                 synthesis = self._llm.complete(
-                    prompt=f"As a system architect, answer concisely.\n"
-                           f"Question: {goal}\n\nArchitecture knowledge:\n{context_blob}\n\nAnswer:",
-                )
+                    ModelQuery(prompt=f"As a system architect, answer concisely.\n"
+                           f"Question: {goal}\n\nArchitecture knowledge:\n{context_blob}\n\nAnswer:")
+                ).text
                 result = result.with_tools(synthesis)
             except Exception:
                 result = result.with_tools(
