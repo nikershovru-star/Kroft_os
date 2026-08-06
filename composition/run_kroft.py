@@ -132,6 +132,29 @@ class KroftApp:
             self.research_executor, self.architect_executor, self.programmer_executor,
             self.writer_executor, self.planner_executor, self.finance_executor,
         ])
+        # Phase C (Wave C1/C2): Agent Runtime composition root (default OFF).
+        # Без флага --agent-runtime поведение run_kroft НЕИЗМЕННО (legacy orchestrator path).
+        self.agent_runtime: Any = None
+        self.workflow_coordinator: Any = None
+        if getattr(self.config, "agent_runtime", False):
+            from services.agent_runtime import AgentRuntime
+            from services.blackboard import InMemoryBlackboard
+            from services.delegation_service import DelegationService
+            from services.coordination_strategy import StigmergyStrategy
+            from services.workflow_coordinator import WorkflowCoordinator
+            blackboard = InMemoryBlackboard()
+            delegation = DelegationService(max_depth=8)
+            self.agent_runtime = AgentRuntime(
+                executor=self.agent_executor,
+                blackboard=blackboard,
+                delegation=delegation,
+                root_capability="research",
+            )
+            self.workflow_coordinator = WorkflowCoordinator(
+                runtime=self.agent_runtime,
+                strategy=StigmergyStrategy(),
+                root_capability="research",
+            )
         self.orchestrator = build_orchestrator(
             identity_registry=self.identity,
             plugin_registry=ReferencePluginRegistry(),
@@ -293,6 +316,15 @@ class KroftApp:
             if outcome.success:
                 return outcome.detail
             return f"[no answer] {outcome.detail}"
+        # Phase C (Wave C2): если --agent-runtime вкл — маршрут через WorkflowCoordinator
+        # (build_workflow -> stigmergy run через AgentRuntime). Без флага — legacy path ниже.
+        if getattr(self, "workflow_coordinator", None) is not None:
+            wf = self.workflow_coordinator.build_workflow(query)
+            wf = self.workflow_coordinator.run(wf)
+            self.task_store.update(task_id, "done" if wf.status == "done" else "failed")
+            if wf.status == "done" and wf.plan:
+                return wf.plan[0].output
+            return f"[no answer] workflow {wf.status}: {wf.plan[0].error if wf.plan else 'empty'}"
         # Backward-compatible path for non-agent intents.
         self.kernel.tick(Intent(id=task_id, text=query, confidence=ConfidenceScore(0.8),
                                 provenance=Provenance(source="interactive", actor="user")))
@@ -364,6 +396,9 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
     p.add_argument("--federation", action="store_true", help="enable SkillDistributor federation layer")
     p.add_argument("--ticks", type=int, default=5)
     p.add_argument("--no-demo", action="store_true", help="boot only, do not run the demo loop")
+    p.add_argument("--agent-runtime", action="store_true",
+                   help="Phase C: wire AgentRuntime+WorkflowCoordinator (default OFF; "
+                        "legacy orchestrator path unchanged when absent)")
     p.add_argument("--vault", default=None, help="Obsidian vault path for live note ingestion (ТЗ-DAILY-01)")
     p.add_argument("--interactive", action="store_true",
                    help="ТЗ-DAILY-01: read queries from stdin -> agent loop -> live answer")
