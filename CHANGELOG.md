@@ -211,3 +211,26 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   (version+1, old SUPERSEDED); not-better -> старый сохранён; детерминизм; Procedure version+lifecycle.
   Existing SKILL/SKILL-EVOLVE тесты целы (16 passed).
 - **K1/K6/O1/I-09:** services->contracts (K6); LLM-free детерминизм (I-09); sandbox failure graceful (O1).
+
+## ТЗ-MARKETPLACE-01 — Marketplace: package/sign/publish/install с trust-гейтингом (ADR-093, 2026-08-05) — DONE
+- **K5:** проверено, что contracts/i_signature.py УЖЕ имеет ISignatureProvider + attach_signature/
+  check_signature (HMAC, stdlib) — переиспользуем (НЕ дублируем). HmacSigner только в kernel/crypto.py
+  (K6: services НЕ импортирует kernel) -> создан adapters/hmac_signer.py (адаптер-слой, К5 services->adapters
+  OK, НЕ дубль). contracts/i_identity.py УЖЕ имеет ITrustRegistry (trust_score_of) — переиспользуем для
+  trust-гейта. Procedure (version/lifecycle из EVOLUTION-01) + PluginManifest (PLUGIN-01) — переиспользуем
+  как payload. SkillPackage + ISkillRepository — НОВЫЕ швы (НЕ дублируют порты).
+- **contract (contracts/i_marketplace.py):** SkillPackage (frozen VO: id/name/version/author/capabilities/
+  payload_type/payload/signature) + ISkillRepository (publish/verify/install/list).
+- **impl (adapters/hmac_signer.py + services/skill_marketplace.py, K6: services->contracts+adapters):**
+  HmacSigner (адаптер, ISignatureProvider). SkillPackager.package(Procedure/Plugin -> signed SkillPackage
+  via attach_signature). SkillRepository publish/verify/install: install верифицирует подпись (check_signature)
+  + trust-гейт (trust_score_of(author) >= threshold); untrusted/tampered -> None (O1, не мутирует store);
+  version supersede (old SUPERSEDED). Детерминизм (I-09, HMAC canonical_bytes).
+- **integration (composition/skill_marketplace_factory.py, Флаг C):** build_default_marketplace (HmacSigner
+  + repo). НЕ в build_kernel (opt-in).
+- **K8 tests** (tests/marketplace/test_marketplace.py, Флаг 1b): package+sign+publish; install verifies
+  signature (roundtrip на другом store); untrusted author -> rejected; tampered payload -> rejected; version
+  supersede (SUPERSEDED); determinism; plugin payload packs+installs. Existing PLUGIN/EVOLUTION/IDT тесты
+  целы (49 passed).
+- **K1/K6/O1/I-09:** stdlib hmac (K1); services->contracts+adapters (K6); untrusted/tampered -> safe deny (O1);
+  HMAC детерминизм (I-09). Флаг C/1b.

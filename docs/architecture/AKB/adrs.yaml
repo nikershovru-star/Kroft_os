@@ -1632,3 +1632,37 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-EVOLUTION-01
+
+- id: ADR-093
+  title: Marketplace — package / sign / publish / install with trust gating (ТЗ-MARKETPLACE-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    Навыки улучшаются (EVOLUTION-01), плагины регистрируются (PLUGIN-01), доверие есть (IDT-01),
+
+    сеть есть (FED-*). Но нет дистрибуции: упаковать навык в подписанный пакет, опубликовать,
+
+    установить с проверкой подписи и доверия. ТЗ-MARKETPLACE-01 даёт SkillPackage + repository +
+
+    install с trust-гейтингом. K5: contracts/i_signature.py УЖЕ имеет ISignatureProvider +
+
+    attach_signature/check_signature (HMAC) — переиспользуем (НЕ дублируем). HmacSigner только в
+
+    kernel/crypto.py (K6: services НЕ импортирует kernel) -> создан adapters/hmac_signer.py
+
+    (адаптер-слой, К5 services->adapters OK, НЕ дубль). contracts/i_identity.py УЖЕ имеет
+
+    ITrustRegistry (trust_score_of) — переиспользуем для trust-гейта. Procedure (version/lifecycle)
+
+    + PluginManifest — переиспользуем как payload. SkillPackage + ISkillRepository — НОВЫЕ швы (НЕ
+
+    дублируют порты). SkillPackager (services) package -> signed SkillPackage (HMAC). SkillRepository
+
+    (services, K6 services->contracts+adapters) publish/verify/install: install верифицирует подпись
+
+    + trust-гейт (untrusted/tampered -> reject, O1), version supersede (old SUPERSEDED). Детерминизм
+
+    (I-09). composition/skill_marketplace_factory.py (Флаг C): build_default_marketplace (НЕ в build_kernel).
+  evidence_level: V
+  addresses:
+  - TZ-MARKETPLACE-01

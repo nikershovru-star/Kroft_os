@@ -20,7 +20,6 @@ from dataclasses import asdict
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from adapters.hmac_signer import HmacSigner
 from contracts.i_identity import ITrustRegistry
 from contracts.i_memory import Procedure
 from contracts.i_marketplace import ISkillRepository, SkillPackage
