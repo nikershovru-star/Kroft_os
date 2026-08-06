@@ -189,3 +189,25 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   работает; дубликат-инжест идемпотентен; малформированный doc -> пустая extraction (O1);
   optional LLM-extractor обогащает; existing knowledge_graph/graph тесты целы (246 passed).
 - **K1/K6/O1/I-09:** services->contracts (K6); LLM-free детерминизм (I-09); malformed -> graceful (O1).
+
+## ТЗ-EVOLUTION-01 — Skill Evolver: self-improving skills (ADR-092, 2026-08-05) — DONE
+- **K5:** проверено, что IExecutionSandbox/SubprocessSandbox (ADR-039), Procedure (frozen VO),
+  IProceduralMemory/InMemoryProceduralMemory (store_skill/recall/record_skill_outcome),
+  PolicyLifecycle.SUPERSEDED — ВСЁ УЖЕ есть. НЕТ ISkillEvolver/ISkillEvaluator/SkillUsageStats/
+  SkillVariant/EvalResult -> создан НОВЫЙ шов (НЕ дублирует IExecutionSandbox/Procedure/PolicyLifecycle).
+  Procedure расширен version+lifecycle (K5, НЕ дубль).
+- **contract (contracts/i_skill_evolver.py):** ISkillEvolver (propose_improvement -> SkillVariant) +
+  ISkillEvaluator (test_in_sandbox -> EvalResult) + VOs (SkillUsageStats, SkillVariant, EvalResult).
+  Procedure расширен version:int=1 + lifecycle:PolicyLifecycle=ACTIVE (contracts/i_memory.py).
+- **impl (services/skill_evolution.py, K6: services->contracts; sandbox+memory инъектируются):**
+  LLM-free эвристика (min_uses + success_threshold; дроп longest step), test_in_sandbox через
+  SubprocessSandbox (step = изолированная команда, score = доля exit-0), better -> update
+  (version+1/ACTIVE + old SUPERSEDED в self._history), not-better -> старый сохранён. Опц. LLM-advisor
+  (non-blocking). Детерминизм (I-09). O1: sandbox failure -> score 0, не crash, не мутирует HARD/FSM.
+- **integration (composition/skill_evolution_factory.py, Флаг C):** build_default_skill_evolver
+  (SubprocessSandbox + InMemoryProceduralMemory). НЕ в build_kernel (opt-in).
+- **K8 tests** (tests/skills/test_skill_evolution_sandbox.py, Флаг 1b): usage>=N + low efficiency ->
+  предложение; usage<N / high efficiency -> None; sandbox-тест (изолирован, O1); better -> update
+  (version+1, old SUPERSEDED); not-better -> старый сохранён; детерминизм; Procedure version+lifecycle.
+  Existing SKILL/SKILL-EVOLVE тесты целы (16 passed).
+- **K1/K6/O1/I-09:** services->contracts (K6); LLM-free детерминизм (I-09); sandbox failure graceful (O1).

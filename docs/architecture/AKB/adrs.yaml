@@ -1598,3 +1598,37 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-KNOWLEDGE-ENGINE-01
+
+- id: ADR-092
+  title: Skill Evolver — self-improving skills (usage -> propose -> sandbox-test -> update) (ТЗ-EVOLUTION-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    Skills (SKILL-01) + usage-tracking (SKILL-EVOLVE-01) есть, но навыки НЕ улучшаются. ТЗ-EVOLUTION-01
+
+    замыкает Этап 5: skill с достаточным usage и низкой эффективностью -> предложение улучшения
+
+    (LLM-advisor опц., LLM-free эвристика fallback) -> вариант тестируется в IExecutionSandbox ->
+
+    если лучше, навык обновляется (version+1, старый SUPERSEDED). K5: IExecutionSandbox/SubprocessSandbox
+
+    (ADR-039), Procedure (frozen VO), IProceduralMemory/InMemoryProceduralMemory, PolicyLifecycle.SUPERSEDED
+
+    УЖЕ есть. НЕТ ISkillEvolver/ISkillEvaluator/SkillUsageStats/SkillVariant/EvalResult -> НОВЫЕ швы
+
+    (НЕ дублируют IExecutionSandbox/Procedure/PolicyLifecycle). Procedure расширен version+lifecycle
+
+    (K5, НЕ дубль). SkillEvolver (services/skill_evolution.py, K6: services->contracts; IExecutionSandbox+
+
+    IProceduralMemory инъектируются) LLM-free эвристика (дроп longest step при low efficiency),
+
+    test_in_sandbox через SubprocessSandbox (изолированно, timeout), better -> update (version+1/ACTIVE
+
+    + old SUPERSEDED в истории). Детерминизм (I-09). O1: sandbox failure -> low score, не crash, не
+
+    мутирует HARD/FSM. composition/skill_evolution_factory.py (Флаг C): build_default_skill_evolver
+
+    (НЕ в build_kernel).
+  evidence_level: V
+  addresses:
+  - TZ-EVOLUTION-01
