@@ -20,13 +20,15 @@ from contracts.i_agent_executor import IAgentExecutor
 from contracts.i_orchestrator import OrchestrationGoal, TaskOutcome
 from contracts.i_identity import ITrustRegistry
 from contracts.i_telemetry import ITelemetrySink
+from contracts.i_approval_gate import ApprovalRequest, IApprovalGate
 
 
 class AgentRuntime(IAgentRuntime):
     """Facade: единая точка входа; композиция (blackboard/delegation/executors) — извне.
 
     Wave C3: опц. trust_registry + telemetry — delegation trust-delta и telemetry-события.
-    Без них поведение НЕИЗМЕННО (backward-compat): trust/telemetry вызовы no-op guard-ом.
+    Wave C6: опц. approval_gate + sensitive_capabilities — человеческий предохранитель.
+    Без них поведение НЕИЗМЕННО (backward-compat): guard-ами по None / пустому списку.
     """
 
     def __init__(
@@ -37,6 +39,8 @@ class AgentRuntime(IAgentRuntime):
         root_capability: str = "research",
         trust_registry: Optional[ITrustRegistry] = None,
         telemetry: Optional[ITelemetrySink] = None,
+        approval_gate: Optional[IApprovalGate] = None,
+        sensitive_capabilities: Optional[Tuple[str, ...]] = None,
     ) -> None:
         self._executor = executor
         self._blackboard = blackboard
@@ -44,6 +48,8 @@ class AgentRuntime(IAgentRuntime):
         self._root_capability = root_capability
         self._trust = trust_registry
         self._telemetry = telemetry
+        self._approval = approval_gate
+        self._sensitive = set(sensitive_capabilities or ())
 
     def run_workflow(self, goal: str, root_goal_id: Optional[str] = None) -> WorkflowResult:
         # I-09: стабильная деривация (HE hash() — рандомизован per-process via PYTHONHASHSEED).
@@ -71,6 +77,21 @@ class AgentRuntime(IAgentRuntime):
         decision = self._delegation.delegate(parent_goal_id, child_goal, resolver)
         if not decision.accepted:
             return TaskOutcome(success=False, detail=decision.reason)
+        # Wave C6: человеческий предохранитель для чувствительных capabilities (default OFF)
+        if self._approval is not None and child_goal.capability in self._sensitive:
+            adec = self._approval.request_approval(
+                ApprovalRequest(
+                    action_id=child_goal.goal_id,
+                    capability=child_goal.capability,
+                    payload=str(child_goal.payload),
+                    agent_id=decision.executor_id,
+                )
+            )
+            if not adec.approved:
+                return TaskOutcome(
+                    success=False,
+                    detail=f"approval denied: {adec.reason}",
+                )
         # исполняем через MultiAgentExecutor (capability->executor map)
         outcome = self._executor.execute(child_goal)
         self._delegation.record_outcome(child_goal.goal_id, outcome)
