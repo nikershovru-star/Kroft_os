@@ -278,3 +278,25 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
 - **K1/K5/K6/O1/I-09:** stdlib hmac (K1); composition-only, ZERO new ports (K5); services stay axis-clean, composition
   imports services+adapters+kernel (K6); untrusted/tampered -> safe deny (O1); LLM-free evolver + HMAC детерминизм (I-09).
   Флаг C/1b. Поведение B РЕАЛЬНО меняется (не просто install).
+
+## ТЗ-AUTHOR-KEYS-01 — Per-author HMAC keys: author bound to its key (ADR-096, 2026-08-05) — DONE
+- **K5:** ISignatureProvider/HmacSigner (CRYPTO-01) УЖЕ есть — переиспользуем (НЕ дублируем). SkillPackager
+  УЖЕ принимает signer (per-author HmacSigner) — НЕ меняем сигнатуру. SkillRepository.verify расширен: если
+  автор зарегистрирован в IAuthorKeyRegistry -> verify через get_signer(author) (HmacSigner(author_key)); ИНАЧЕ
+  fallback на общий _signer (backward-compat с MARKETPLACE/FED-REPL/CAPSTONE shared-key сценариями). IAuthorKeyRegistry
+  + AuthorKey — НОВЫЙ шов (НЕ дублирует ISignatureProvider).
+- **contract (contracts/i_author_keys.py):** AuthorKey (frozen VO: author/key) + IAuthorKeyRegistry
+  (register_key/get_key/get_signer/has).
+- **impl (services/skill_marketplace.py, K6: services->contracts only):** SkillRepository.__init__ принимает
+  author_key_registry; verify предпочитает registry.get_signer(pkg.author) когда автор зарегистрирован, иначе
+  fallback на общий signer. install -> verify (unchanged). build_skill_repository расширен параметром.
+- **integration (composition/author_keys_factory.py, Флаг C):** AuthorKeyRegistry (in-memory) +
+  build_author_key_registry (seeding author->key); get_signer строит HmacSigner(key) из adapters. НЕ в build_kernel.
+- **K8 tests** (tests/security/test_author_keys.py, Флаг 1b): sign author key + verify (per-author); wrong registered
+  key -> rejected (forged); unregistered author -> fallback shared (backward-compat); author-bound (alice key verifies
+  via alice registry, NOT shared-only); backward-compat shared key no-registry; determinism. Existing MARKETPLACE/
+  FED-REPL/CAPSTONE tests intact (26 passed) — shared-key scenarios keep working.
+- **K1/K5/K6/O1/I-09:** stdlib hmac (K1); IAuthorKeyRegistry НЕ дублирует ISignatureProvider (K5); services->contracts
+  only (K6, concrete HmacSigner в composition); wrong/forged/unregistered key -> safe deny (O1); HMAC детерминизм (I-09).
+  Флаг C/1b. Closes Флаг 3 (MARKETPLACE/FED-REPL/CAPSTONE) pragmatically; Ed25519/PKI, key rotation/revocation,
+  key distribution — post-MVP.

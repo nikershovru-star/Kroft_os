@@ -1734,3 +1734,26 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-CAPSTONE-02
+
+- id: ADR-096
+  title: Per-author HMAC keys — author cryptographically bound to its key (ТЗ-AUTHOR-KEYS-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    MARKETPLACE-01/FED-REPL-01/CAPSTONE-02 подписывали ВСЕ пакеты ОДНИМ общим HMAC-ключом, поэтому подпись
+    доказывала "подписал кто-то с общим ключом", а НЕ "подписала alice" (Флаг 3, накапливается в 3 ТЗ).
+    ТЗ-AUTHOR-KEYS-01 закрывает это прагматично (stdlib, без Ed25519): каждый автор имеет СОБСТВЕННЫЙ HMAC-ключ
+    в IAuthorKeyRegistry; пакет подписывается ключом автора и верифицируется зарегистрированным ключом этого
+    автора. Подделка автора (чужой ключ) -> rejected. K5-разведка: ISignatureProvider/HmacSigner (CRYPTO-01)
+    УЖЕ есть — переиспользуем (НЕ дублируем). SkillPackager УЖЕ принимает signer (per-author HmacSigner) — НЕ
+    меняем сигнатуру. SkillRepository.verify расширен: если автор зарегистрирован в IAuthorKeyRegistry -> verify
+    через get_signer(author) (HmacSigner(author_key)); ИНАЧЕ fallback на общий _signer (backward-compat с
+    MARKETPLACE/FED-REPL/CAPSTONE shared-key сценариями). IAuthorKeyRegistry + AuthorKey — НОВЫЙ шов (НЕ дублирует
+    ISignatureProvider). AuthorKeyRegistry (composition, Флаг C) строит HmacSigner из зарегистрированного ключа.
+    K6: services/skill_marketplace.py импортирует ТОЛЬКО contracts.i_author_keys (IAuthorKeyRegistry интерфейс);
+    concrete HmacSigner живёт в adapters/composition (services НЕ импортирует adapters). Backward-compat:
+    незарегистрированный автор (или registry=None) -> verify через общий ключ. Ed25519/PKI, ротация/отзыв ключей,
+    key distribution — post-MVP.
+  evidence_level: V
+  addresses:
+  - TZ-AUTHOR-KEYS-01
