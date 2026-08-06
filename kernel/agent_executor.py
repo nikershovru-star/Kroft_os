@@ -82,3 +82,46 @@ def build_agent_executor(
 ) -> ReferenceAgentExecutor:
     """Standalone factory (Флаг C) — НЕ in build_kernel (god-factory not aggravated)."""
     return ReferenceAgentExecutor(default_agent_id=default_agent_id, llm_client=llm_client)
+
+
+class LoopAgentExecutor(IAgentExecutor):
+    """Multi-step agent executor (ТЗ-AGENT-LOOP-01) — drives an AgentLoop to a goal.
+
+    Wraps the iterative AgentLoop (kernel/agent_loop.py) behind the IAgentExecutor port
+    so the orchestrator's uniform TaskOutcome dispatch accepts it unchanged (backward-
+    compat: ReferenceAgentExecutor remains the single-tick path). On any loop failure it
+    returns TaskOutcome(success=False) so trust evolves correctly (failure LOWERS trust).
+    """
+
+    def __init__(self, default_agent_id: str = "agent-loop", llm_client=None,
+                 budget: int = 5) -> None:
+        self._default_agent_id = default_agent_id
+        self._llm_client = llm_client
+        self._budget = budget
+
+    def execute(self, goal: OrchestrationGoal) -> TaskOutcome:
+        node_id = f"{self._default_agent_id}:{goal.goal_id}"
+        goal_text = str(goal.payload if goal.payload is not None else goal.capability)
+        try:
+            from kernel.agent_loop import AgentLoop
+            loop = AgentLoop(node_id=node_id, llm_client=self._llm_client)
+            result = loop.run(goal_text, budget=self._budget)
+            return TaskOutcome(
+                success=result.success,
+                detail=(result.final_outcome or result.error)
+                + f" [steps={result.steps_taken}]",
+            )
+        except Exception as exc:  # noqa: BLE001 — executor faults must lower trust, not crash
+            return TaskOutcome(success=False,
+                               detail=f"agent loop failed: {type(exc).__name__}: {exc}")
+
+    def can_execute(self, goal: OrchestrationGoal) -> bool:
+        return True
+
+
+def build_loop_agent_executor(
+    default_agent_id: str = "agent-loop", llm_client=None, budget: int = 5
+) -> LoopAgentExecutor:
+    """Standalone factory (Флаг C) — multi-step agent executor over AgentLoop."""
+    return LoopAgentExecutor(default_agent_id=default_agent_id,
+                             llm_client=llm_client, budget=budget)
