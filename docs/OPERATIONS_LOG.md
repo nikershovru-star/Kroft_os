@@ -39,5 +39,14 @@ PYTHONPATH=. python composition/run_kroft.py \
 - **Флаг 1 C2 (light):** `build_workflow` строит одношаговый Workflow; multi-step планирование — Wave C4+ (отложено).
 - **Флаг 2 C2 (light):** Workflow не персистится (нет workflow-store для resume/retry) — Wave C5+ (отложено).
 
+## Архитектурные guidance для v0.2 (knowledge-capture, НЕ строим сейчас)
+Зафиксировано из product-mode review (2026-08-06). Применять ТОЛЬКО когда журнал подтвердит реальную боль effector (агент может ответить, но не может сделать/записать). Не текущая итерация.
+
+### Effector layer (самая вероятная первая боль из бэклога)
+1. **Переиспользовать паттерн `services/agent_orchestration/healing.py`** (`AuditLogger` + approval-gating), а НЕ изобретать новый effector-каркас. Тот же механизм audit + gating, что уже работает для self-healing.
+2. **Каждый external-write обязан проходить тот же `IApprovalGate`, что и `delegate_step`** — иначе предохранитель снова окажется «в обход» для записи во внешний мир (создание заметки, отправка, trade). Ровно та дыра, которая была с Approval Gate на early-wave: гейт защищал `delegate_step`, но routed-capability шёл в `orchestrator.dispatch` мимо него, пока не исправили маршрутизацию. Для effector это правило №1: gate — единая точка, external-write НЕ может его миновать.
+3. **Единая dispatch-поверхность:** интерактивный routed-путь и effector-path оба идут через orchestrator (см. Флаг 1 light выше) — чтобы не размножать поверхности, которые потом рассинхронизируются с гейтом.
+- Эффектор = НОВЫЙ ПОРТ (`contracts/i_effector.py` по K5/K6) → строго бэклог v0.2, не строится заранее (discipline product-mode).
+
 ## Статус Phase C
 Реализованы C1 → C2 → C3 → C6. Отложены до реальных сценариев: C4 (Strategies Sequential/Hierarchical), C5 (Review Loop + partitioned bus + workflow-store). Фаза строительства ЗАКРЫТА; далее — product-mode.
