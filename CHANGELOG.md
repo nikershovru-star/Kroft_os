@@ -234,3 +234,28 @@ Trust evolves ONLY from verified outcomes. See ADR-082 for detail. Superseded in
   целы (49 passed).
 - **K1/K6/O1/I-09:** stdlib hmac (K1); services->contracts+adapters (K6); untrusted/tampered -> safe deny (O1);
   HMAC детерминизм (I-09). Флаг C/1b.
+
+## ТЗ-FED-REPL-01 — Federation replication of signed SkillPackages (ADR-094, 2026-08-05) — DONE (Этап 6 завершён)
+- **K5:** contracts/i_network_transport.py УЖЕ имеет INetworkTransport.send_soft_layer/on_soft_layer (NW-01) —
+  переиспользуем для передачи SkillPackage как wire-dict (НЕ новый transport-канал). services/distributed_runtime.py
+  FederationSoftMemorySync (FSE-01) — ПАТТЕРН (publish via send_soft_layer + on_soft_layer handler + verify + trust-gate);
+  следуем ЭТОМУ ЖЕ shape (НЕ дублируем). contracts/i_marketplace.py УЖЕ имеет SkillPackage + ISkillRepository
+  (install = verify + trust gate + version supersede) — переиспользуем на принимающем узле (второй install-путь
+  НЕ создаём). ISignatureProvider (i_signature) + ITrustRegistry (i_identity) переиспользуются внутри
+  ISkillRepository.install. ISkillDistributor — НОВЫЙ шов (НЕ дублирует порты).
+- **contract (contracts/i_skill_distributor.py):** ISkillDistributor — publish_remote(pkg, transport) (ship via
+  transport.send_soft_layer([asdict(pkg)], node_id)) + on_remote_package(pkg_dict, trust_registry, threshold)
+  (rebuild SkillPackage -> SkillRepository.install).
+- **impl (services/skill_distributor.py, K6: services->contracts only):** SkillDistributor следует FSE-01 shape —
+  on_soft_layer(self._handle_inbound) в конструкторе/bind. on_remote_package перестраивает SkillPackage и
+  делегирует SkillRepository.install (verify + trust-gate + version supersede). Deterministic (I-09).
+- **integration (composition/skill_distributor_factory.py, Флаг C):** build_default_skill_distributor (SkillRepository
+  + transport + trust) — НЕ в build_kernel.
+- **bug-fix (MARKETPLACE-01 install):** version supersede ранее искал old_pkg в _packages (только publish заполняет);
+  federation-installs приходят БЕЗ _packages -> old НЕ попадал в superseded. Исправлено: supersede добавляет prev
+  (уже установленный payload), который ВСЕГДА присутствует. (amended into C2 before push.)
+- **K8 tests** (tests/federation/test_federation_replication.py, Флаг 1b): package A->B via INetworkTransport, B
+  verifies + installs; untrusted author -> rejected; tampered payload -> rejected; version supersede между узлами;
+  determinism. Existing FED/MARKETPLACE/IDT тесты целы.
+- **K1/K5/K6/O1/I-09:** stdlib hmac (K1); services->contracts (K6, transport/repository/trust injected); untrusted/
+  tampered -> safe deny (O1); HMAC детерминизм (I-09). Флаг C/1b.

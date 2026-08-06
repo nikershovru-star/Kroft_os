@@ -1666,3 +1666,49 @@ adrs:
   evidence_level: V
   addresses:
   - TZ-MARKETPLACE-01
+
+- id: ADR-094
+  title: Federation replication of signed SkillPackages (ТЗ-FED-REPL-01)
+  status: accepted
+  date: 2026-08-05
+  summary: >-
+    MARKETPLACE-01 дал упаковку/подпись/установку навыков, FED-* — сеть, IDT-01 — доверие,
+
+    FSE-01 — soft-обмен. Но подписанные SkillPackage НЕ распространяются между узлами. ТЗ-FED-REPL-01
+
+    связывает: узел A публикует подписанный пакет в сеть, узел B принимает, верифицирует подпись +
+
+    гейтит по trust автора + устанавливает (version supersede). K5-разведка: contracts/i_network_transport.py
+
+    УЖЕ имеет INetworkTransport.send_soft_layer/on_soft_layer (NW-01) — переиспользуем для передачи
+
+    SkillPackage как wire-dict (НЕ создаём новый transport-канал). services/distributed_runtime.py
+
+    FederationSoftMemorySync (FSE-01) — ПАТТЕРН (publish via send_soft_layer + on_soft_layer handler +
+
+    verify + trust-gate); следуем ЭТОМУ ЖЕ shape (НЕ дублируем). contracts/i_marketplace.py УЖЕ имеет
+
+    SkillPackage + ISkillRepository (install = verify + trust gate + version supersede) — переиспользуем
+
+    на принимающем узле (второй install-путь НЕ создаём). ISignatureProvider (i_signature) +
+
+    ITrustRegistry (i_identity) переиспользуются внутри ISkillRepository.install. ISkillDistributor — НОВЫЙ
+
+    шов (НЕ дублирует INetworkTransport/ISkillRepository/ISignatureProvider/ITrustRegistry). SkillDistributor
+
+    (services) publish_remote (send_soft_layer([asdict(pkg)], node_id)) + on_remote_package (rebuild ->
+
+    SkillRepository.install). K6: services->contracts only; transport/repository/trust инъектируются.
+
+    composition/skill_distributor_factory.py (Флаг C) build_default_skill_distributor (НЕ в build_kernel).
+
+    Deterministic (I-09); O1: НЕ устанавливает до verify+trust-gate (untrusted/tampered -> None). Bug-fix
+
+    (MARKETPLACE-01 install): version supersede ранее искал old_pkg в _packages (только publish заполняет);
+
+    federation-installs приходят БЕЗ _packages -> old не попадал в superseded; исправлено: supersede
+
+    добавляет prev (уже установленный payload), который ВСЕГДА присутствует.
+  evidence_level: V
+  addresses:
+  - TZ-FED-REPL-01
