@@ -36,21 +36,26 @@ class ApprovalGate(IApprovalGate):
         return capability in self._sensitive
 
     def request_approval(self, request: ApprovalRequest) -> ApprovalDecision:
-        # Non-blocking: approver в executor с таймаутом; таймаут -> default-deny
+        # Non-blocking: approver в executor с таймаутом; таймаут -> default-deny.
+        # НЕ ждём завершения фонового потока (shutdown(wait=False)), чтобы event loop
+        # не блокировался на slow approver (напр. ожидание human).
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-                fut = ex.submit(self._approver, request)
+            fut = ex.submit(self._approver, request)
+            try:
                 approved = fut.result(timeout=self._ttl)
-            reason = "approved" if approved else "denied by approver"
-            timed_out = False
-        except concurrent.futures.TimeoutError:
-            approved = False
-            reason = f"default-deny: approval timed out after {self._ttl}s"
-            timed_out = True
-        except Exception as exc:  # любой сбой approver -> deny (fail-closed)
-            approved = False
-            reason = f"default-deny: approver error ({exc})"
-            timed_out = False
+                reason = "approved" if approved else "denied by approver"
+                timed_out = False
+            except concurrent.futures.TimeoutError:
+                approved = False
+                reason = f"default-deny: approval timed out after {self._ttl}s"
+                timed_out = True
+            except Exception as exc:  # любой сбой approver -> deny (fail-closed)
+                approved = False
+                reason = f"default-deny: approver error ({exc})"
+                timed_out = False
+        finally:
+            ex.shutdown(wait=False)
         # audit (non-bypassable, append-only)
         self._log.append(
             request.agent_id,
