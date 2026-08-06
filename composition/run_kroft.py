@@ -19,6 +19,7 @@ deterministic, LLM-free evolution demo (I-09). No network or external model requ
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections import deque
 from dataclasses import dataclass
@@ -260,10 +261,26 @@ class KroftApp:
             return None  # LLM-free deterministic run (I-09)
         if mode == "mock":
             return _MockLlm()
-        # "auto": build a real client (endpoint may be unreachable; we never call it in the demo)
+        # "auto": build a real client. Opt-in OmniRoute via KROFT_LLM_BASE_URL (ТЗ-OMNI-01, ADR-089).
+        # Без переменной — прежний путь (одиночный Ollama-клиент localhost:11434/v1), дефолт НЕ меняем.
+        # С переменной — строим OmniRouter из одного ProviderSpec (keyless), graceful к retrieval-only.
+        from composition.llm_client_factory import build_llm_client
+        from contracts.i_model_router import ProviderSpec
+        base_url = os.environ.get("KROFT_LLM_BASE_URL")
+        if not base_url:
+            try:
+                return build_llm_client()
+            except Exception:
+                return None
+        spec = ProviderSpec(
+            name="omni",
+            base_url=base_url,
+            api_key_env="",           # keyless gateway
+            priority=10,              # первым в цепочке
+            model=os.environ.get("KROFT_LLM_MODEL", "auto"),
+        )
         try:
-            from composition.llm_client_factory import build_llm_client
-            return build_llm_client()
+            return build_llm_client(providers=[spec])
         except Exception:
             return None
 

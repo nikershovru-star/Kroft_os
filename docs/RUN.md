@@ -65,6 +65,38 @@ PYTHONPATH=. python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\
 - `TaskStore` — реальные задачи (0 пока agent loop не использует интерактивно; интерактивный контур
   уже создаёт задачу на каждый query).
 
+## LLM-советник: opt-in OmniRoute (ТЗ-OMNI-01, ADR-089)
+
+Без LLM агент = pure retrieval (возвращает сырые `graph:`-строки). Чтобы получать **синтез-ответ**,
+подключите OpenAI-совместимый gateway (например, keyless OmniRoute) — **строго opt-in через
+env-переменную, дефолт Ollama не меняется**.
+
+| Переменная | По умолчанию | Назначение |
+|---|---|---|
+| `KROFT_LLM_BASE_URL` | *(пусто)* | Base URL OpenAI-совместимого gateway (напр. `http://localhost:20128/v1`). Если **не задана** → прежний путь (одиночный Ollama-клиент `localhost:11434/v1`). |
+| `KROFT_LLM_MODEL` | `auto` | модель на gateway (или `auto` — пусть endpoint выбирает). |
+
+```bash
+# 1) OmniRoute НЕ поднят, переменная не задана -> прежний Ollama-путь (как было)
+PYTHONPATH=. python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\Obsidian Vault" --interactive --llm auto
+
+# 2) OmniRoute поднят на localhost:20128/v1 -> строим OmniRouter (keyless), синтез-ответ
+export KROFT_LLM_BASE_URL="http://localhost:20128/v1"
+export KROFT_LLM_MODEL="auto"
+PYTHONPATH=. python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\Obsidian Vault" --interactive --llm auto
+```
+
+- **Graceful degradation (LLM-01):** если `KROFT_LLM_BASE_URL` задан, но gateway недоступен →
+  `LLMError` → kernel fallback к retrieval-only (не crash, поведение не хуже текущего).
+- **Безопасность:** OmniRouter — это `ILlm`, поэтому kernel принимает его без изменений; keyless gateway
+  не требует `api_key`. K6 соблюдён: правка только в composition root (`run_kroft._build_llm`).
+- **PowerShell:**
+  ```powershell
+  $env:PYTHONPATH="."; $env:KROFT_LLM_BASE_URL="http://localhost:20128/v1"
+  cd "C:\Users\Nikita\Documents\Obsidian Vault\02-Projects\KROFT_OS"
+  python composition/run_kroft.py --vault "C:\Users\Nikita\Documents\Obsidian Vault" --interactive --llm auto
+  ```
+
 ## Панель KROFT Desktop
 
 После boot'а `run_kroft` печатает панель на каждом tick:
