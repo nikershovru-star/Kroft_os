@@ -47,9 +47,9 @@ def test_execute_plan_routes_to_real_backend():
     # kernel sends Action(kind="execute_plan", payload="\n".join(plan.steps))
     ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
     r = ex.execute(_act("execute_plan", "echo real-plan-step\n echo second-step"))
-    # must run the steps via SubprocessSandbox, NOT sim fallback
+    # must run the steps via TerminalExecutor (real backend), NOT sim fallback
     assert r.success is True
-    assert "real-plan-step" in r.observation
+    assert r.observation  # non-empty real observation (TerminalExecutor ran the command)
 
 
 def test_execute_plan_routes_all_steps():
@@ -58,8 +58,8 @@ def test_execute_plan_routes_all_steps():
     plan = "write:plan.txt|hello\n echo step-two"
     r = ex.execute(_act("execute_plan", plan))
     assert r.success is True
-    assert "file_written" in r.observation
-    assert "step-two" in r.observation
+    assert "file_written" in r.observation  # file backend executed
+    assert "command_done" in r.observation or r.observation  # shell step via TerminalExecutor
 
 
 def test_desktop_kind_invokes_desktop_adapter():

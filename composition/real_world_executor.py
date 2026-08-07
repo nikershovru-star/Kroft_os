@@ -4,8 +4,8 @@ Minimal IExecutor that routes an Action to REAL execution backends, reusing exis
 components (K5) and touching NO kernel/contracts code (K6):
 
   Action.kind == "file"         -> LocalFileSystemAdapter (read/write)   [adapters/filesystem_adapter.py]
-  Action.kind == "command"      -> SubprocessSandbox (List[str], kill-on-timeout) [adapters/subprocess_sandbox.py]
-  Action.kind == "execute_plan" -> SubprocessSandbox over ALL plan steps (real OS exec)
+  Action.kind == "command"      -> TerminalExecutor (secure, blacklist)   [services/security/terminal_executor.py]
+  Action.kind == "execute_plan" -> TerminalExecutor over ALL plan steps (real OS exec)
   Action.kind == "desktop"      -> PyAutoGUIAdapter (click/type/open_app) [adapters/desktop_adapter.py]
   unknown kind                  -> ReferenceExecutor / ReferenceExecutionEnvironment (sim fallback)
 
@@ -51,10 +51,10 @@ class RealWorldExecutor(IExecutor):
             self._fs = LocalFileSystemAdapter(self._base_dir)
         return self._fs
 
-    def _get_sandbox(self):
+    def _get_terminal(self):
         if self._sandbox is None:
-            from adapters.subprocess_sandbox import SubprocessSandbox
-            self._sandbox = SubprocessSandbox(default_timeout=30.0)
+            from services.security.terminal_executor import TerminalExecutor
+            self._sandbox = TerminalExecutor()
         return self._sandbox
 
     def _get_desktop(self):
@@ -144,15 +144,16 @@ class RealWorldExecutor(IExecutor):
     def _run_shell(self, cmd_line: str, timeout: Optional[float] = None) -> ExecutionResult:
         mark = CausalMark("realworld", 1)
         conf = ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE)
-        command = cmd_line.split()
-        result = self._get_sandbox().execute(command, timeout_sec=timeout or 30.0, cwd=self._base_dir)
+        # TerminalExecutor (services/security) takes a command STRING and applies the
+        # blacklist; returns TerminalResult(returncode, out, err, blocked).
+        result = self._get_terminal().execute(cmd_line, timeout=timeout or 30.0)
         rc = getattr(result, "returncode", -1)
-        killed = bool(getattr(result, "killed", False))
-        success = (rc == 0) and not killed
-        out = (getattr(result, "stdout", "") or getattr(result, "stderr", "") or "").strip()
+        blocked = bool(getattr(result, "blocked", False))
+        success = (rc == 0) and not blocked
+        out = (getattr(result, "out", "") or getattr(result, "err", "") or "").strip()
         return ExecutionResult(
             action_id="shell", success=success,
-            observation=out[:200] or ("killed" if killed else "command_done"),
+            observation=(f"blocked:{out}" if blocked else (out[:200] or "command_done")),
             reward=0.9 if success else 0.1, confidence=conf, causal=mark)
 
     def _route_desktop_step(self, action_id, step, conf, mark) -> ExecutionResult:
