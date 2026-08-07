@@ -90,13 +90,14 @@ class KroftApp:
             memory=self.memory, procedural=self.procedural,
             live_metrics=self._live_collector,
         )
-        # ТЗ-PHASE-N: wire a REAL execution backend (IExecutor) so the cognitive loop
+        # ТЗ-PHASE-N/O: wire a REAL execution backend (IExecutor) so the cognitive loop
         # records REAL success/failure outcomes instead of the proxy-fallback (always
-        # success). ReferenceExecutor is LLM-free + deterministic (I-09) and routes an
-        # Action to ReferenceExecutionEnvironment. Closes RF-01 outcome-proxy (ТЗ-EX-01).
-        # No kernel change — attach_executor is the existing post-hoc wiring API (K5/K6).
-        from kernel.execution import ReferenceExecutor
-        self.kernel.attach_executor(ReferenceExecutor())
+        # success). RealWorldExecutor routes Action.kind -> real backends (file/command)
+        # and falls back to the deterministic sim for unknown kinds (ТЗ-EX-01). LLM-free
+        # + deterministic (I-09). No kernel change — attach_executor is the existing
+        # post-hoc wiring API (K5/K6).
+        from composition.real_world_executor import RealWorldExecutor
+        self.kernel.attach_executor(RealWorldExecutor())
         # 4) REAL subsystem components (reused, no new port) — feed the dashboard with live numbers
         self.identity = ReferenceIdentityRegistry()
         self._seed_demo_agents()
