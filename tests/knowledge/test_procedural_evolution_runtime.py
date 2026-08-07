@@ -47,7 +47,7 @@ def test_low_success_rate_evolves_skill_and_persists(tmp_path):
         ExecutionOutcome(episode_id="f2", success=False, utility=0.0,
                          confidence=ConfidenceScore(0.5, "observation"), causal=None),
     ]
-    a._evolve_procedural_from_runtime(capability="demo", skill=a.procedural._skills["demo"])
+    a._evolve_procedural_from_runtime()
     after_v = a.procedural._skills["demo"].version
     assert after_v > before_v
     a._save_knowledge()

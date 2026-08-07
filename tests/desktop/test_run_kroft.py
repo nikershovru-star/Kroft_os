@@ -86,7 +86,7 @@ def test_evolution_progresses():
         ExecutionOutcome(episode_id="f2", success=False, utility=0.0,
                          confidence=ConfidenceScore(0.5, "observation"), causal=None),
     ]
-    a._evolve_procedural_from_runtime(capability="demo", skill=a.procedural._skills["demo"])
+    a._evolve_procedural_from_runtime()
     after = {s.version for s in a.procedural.list_skills() if s.capability == "demo"}
     assert 2 in after  # evolution produced a better (shorter) variant from real stats
 
