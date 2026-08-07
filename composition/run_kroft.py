@@ -110,8 +110,8 @@ class KroftApp:
         # ТЗ-PHASE-E: overlay saved running-trust on top of the demo seed so the
         # system's accumulated experience (per-author trust) survives restart.
         self._restore_trust()
-        # Persist immediately after the first build so a fresh run is never lost.
-        self._save_knowledge()
+        # ТЗ-PHASE-F: final save happens AFTER demo-seed + procedural restore (below),
+        # so the snapshot carries the real learned state, not a pre-seed empty one.
         self.logs: "deque[str]" = deque(maxlen=50)
         self.task_store = TaskStore()  # real component (ТЗ-DAILY-01), empty until agent loop enqueues
         # search over the live knowledge graph (ТЗ-SEARCH-01) — reused for the interactive contour
@@ -229,6 +229,11 @@ class KroftApp:
             task_store=self.task_store,
         )
         self._seed_demo_skill()
+        # ТЗ-PHASE-F: overlay saved skills + procedure stats AFTER the demo seed,
+        # so accumulated learning (SkillEvolver outcomes) wins over the demo skill.
+        self._restore_procedural()
+        # re-persist after demo-skill seed so the snapshot carries the seeded skill too
+        self._save_knowledge()
 
     # --- demo seeders (reuse existing component accessors; composition-only scaffolding) ---
     def _seed_demo_agents(self) -> None:
@@ -292,8 +297,37 @@ class KroftApp:
             # reuse the same direct-assignment replay pattern as run_evolution.py
             self.trust._running[author] = float(score)
 
+    def _restore_procedural(self) -> None:
+        """ТЗ-PHASE-F: overlay saved skills + procedure stats over the demo seed."""
+        if self._snapshot_store is None:
+            return
+        saved = self._snapshot_store.load_procedural()
+        if not saved:
+            return
+        # procedure usage stats (runs/successes/success_rate) — plain dict replay
+        for name, entry in saved.get("procedures", {}).items():
+            if isinstance(entry, dict) and "runs" in entry and "successes" in entry:
+                self.procedural._procedures[name] = dict(entry)
+        # skills (Procedure VO) — reuse the EXISTING converter (K5, no duplicate),
+        # then re-attach version + lifecycle that _procedure_from_dict drops (it
+        # only maps the base fields). dataclasses.replace keeps it axis-clean.
+        from dataclasses import replace
+        from kernel.persistence import _procedure_from_dict
+        from contracts.i_memory import PolicyLifecycle
+        for cap, sk in saved.get("skills", {}).items():
+            try:
+                proc = _procedure_from_dict(sk)
+                proc = replace(
+                    proc,
+                    version=int(sk.get("version", proc.version)),
+                    lifecycle=PolicyLifecycle[sk.get("lifecycle", "ACTIVE")],
+                )
+                self.procedural._skills[cap] = proc
+            except Exception:
+                pass  # a malformed skill blob must not abort boot
+
     def _save_knowledge(self) -> None:
-        """Persist graph + content index + running-trust to disk (no-op w/o path)."""
+        """Persist graph + content index + running-trust + procedural to disk."""
         if self._snapshot_store is None:
             return
         try:
@@ -308,6 +342,20 @@ class KroftApp:
                 self.engine._content_index.snapshot(),
                 meta,
                 trust=self.trust._running,
+                procedural={
+                    "procedures": {k: dict(v) for k, v in self.procedural._procedures.items()},
+                    "skills": {
+                        cap: {
+                            "skill_id": s.skill_id, "name": s.name,
+                            "capability": s.capability, "steps": list(s.steps),
+                            "preconditions": list(s.preconditions),
+                            "confidence": s.confidence, "provenance": s.provenance,
+                            "causal": s.causal, "version": s.version,
+                            "lifecycle": s.lifecycle.name,
+                        }
+                        for cap, s in self.procedural._skills.items()
+                    },
+                },
             )
         except Exception:
             pass  # persistence failure must never crash the agent loop
