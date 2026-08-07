@@ -43,6 +43,15 @@ def test_command_executes_safely():
     assert r.success is True
 
 
+def test_execute_plan_routes_to_real_backend():
+    # kernel sends Action(kind="execute_plan", payload="\n".join(plan.steps))
+    ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
+    r = ex.execute(_act("execute_plan", "echo real-plan-step\nsecond step"))
+    # must run the first step via SubprocessSandbox, NOT sim fallback
+    assert r.success is True
+    assert "real-plan-step" in r.observation
+
+
 def test_unknown_kind_falls_back_to_sim():
     ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
     # unknown kind must not crash; returns an ExecutionResult (sim env path)
