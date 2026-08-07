@@ -23,6 +23,7 @@ import os
 import sys
 from collections import deque
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, List, Optional
 
 from contracts.cognitive_domain import ConfidenceScore, Intent, Provenance
@@ -55,6 +56,7 @@ class KroftConfig:
     interactive: bool = False    # ТЗ-DAILY-01: read queries from stdin -> agent loop -> answer
     query: Optional[str] = None  # ТЗ-DAILY-01 / Operator: one-shot query via agent loop (Hermes-desktop tool call)
     agent_runtime: bool = True   # Phase C: AgentRuntime дефолтно подключён к ядру (--no-agent-runtime для legacy path)
+    knowledge_snapshot: Optional[str] = None  # ТЗ-KNOWLEDGE-PERSIST-01: JSON snapshot of graph+index (survives restart)
 
 
 class KroftApp:
@@ -95,7 +97,17 @@ class KroftApp:
         from services.knowledge_engine import build_knowledge_engine
         self.engine = build_knowledge_engine(graph=self.graph, content_index=ContentIndex())
         self.vault_reader = ObsidianVaultReader(self.config.vault)
+        # ТЗ-KNOWLEDGE-PERSIST-01: restore prior knowledge BEFORE live ingest, so a
+        # cold boot reuses the on-disk graph + inverted index (starts "already
+        # learned"). New/changed vault notes are then merged in idempotently below.
+        self._snapshot_store = None
+        if self.config.knowledge_snapshot:
+            from composition.knowledge_persistence import KnowledgeSnapshotStore
+            self._snapshot_store = KnowledgeSnapshotStore(self.config.knowledge_snapshot)
+            self._restore_knowledge()
         self._live_note_count = self._ingest_vault_notes()  # 0 when no vault (graceful)
+        # Persist immediately after the first build so a fresh run is never lost.
+        self._save_knowledge()
         self.trust = ReferenceTrustRegistry()
         self._seed_demo_trust()
         self.logs: "deque[str]" = deque(maxlen=50)
@@ -252,6 +264,42 @@ class KroftApp:
                 continue  # a single bad note must not abort the whole ingestion
         return len(self.graph.nodes())
 
+    # ---- ТЗ-KNOWLEDGE-PERSIST-01: snapshot persistence of live knowledge ----
+    def _restore_knowledge(self) -> None:
+        """Load graph + content index from disk (graceful: missing -> no-op)."""
+        if self._snapshot_store is None:
+            return
+        data = self._snapshot_store.load()
+        if not data:
+            return  # first run or corrupt snapshot -> build from vault only
+        try:
+            self.graph.restore(data.get("graph", {}))
+        except Exception:
+            pass  # a broken graph blob must not abort boot; live ingest still runs
+        try:
+            self.engine._content_index.restore(data.get("index", {}))
+        except Exception:
+            pass  # index restore is best-effort; graph + vault reindex cover it
+
+    def _save_knowledge(self) -> None:
+        """Persist graph + content index to disk (no-op without a snapshot path)."""
+        if self._snapshot_store is None:
+            return
+        try:
+            meta = {
+                "vault": self.config.vault,
+                "node_count": len(self.graph.nodes()),
+                "edge_count": len(self.graph.edges()),
+                "saved_at": datetime.now(timezone.utc).isoformat(),
+            }
+            self._snapshot_store.save(
+                self.graph.snapshot(),
+                self.engine._content_index.snapshot(),
+                meta,
+            )
+        except Exception:
+            pass  # persistence failure must never crash the agent loop
+
     def _seed_demo_trust(self) -> None:
         for aid in ["agent.research", "agent.architect", "agent.programmer",
                     "agent.writer", "agent.finance", "agent.sales"]:
@@ -400,6 +448,7 @@ class KroftApp:
             return f"[no hits] query processed (task {task_id}); vault has no match for: {query}"
         lines = [f"[answer] {h.source} (conf={h.confidence.value:.2f}, rel={h.relevance})"
                  for h in hits]
+        self._save_knowledge()  # ТЗ-KNOWLEDGE-PERSIST-01: persist after each query
         return "\n".join(lines)
 
     @staticmethod
@@ -468,6 +517,9 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
                    help="Отключить AgentRuntime: routed capabilities идут через legacy "
                         "orchestrator.dispatch (без blackboard/delegation/gate).")
     p.add_argument("--vault", default=None, help="Obsidian vault path for live note ingestion (ТЗ-DAILY-01)")
+    p.add_argument("--knowledge-snapshot", default=None,
+                   help="ТЗ-KNOWLEDGE-PERSIST-01: JSON file to persist/restore the live "
+                        "knowledge graph + index across restarts (so KROFT_OS starts learned)")
     p.add_argument("--interactive", action="store_true",
                    help="ТЗ-DAILY-01: read queries from stdin -> agent loop -> live answer")
     p.add_argument("--query", default=None,
@@ -478,6 +530,7 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
         node_id=a.node_id, llm=a.llm, federation=a.federation,
         ticks=a.ticks, run_demo=not a.no_demo, vault=a.vault, interactive=a.interactive,
         agent_runtime=a.agent_runtime, query=a.query,
+        knowledge_snapshot=a.knowledge_snapshot,
     )
 
 
