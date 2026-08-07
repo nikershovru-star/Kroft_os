@@ -54,8 +54,10 @@ class KnowledgeSnapshotStore:
              meta: Optional[Dict[str, Any]] = None,
              trust: Optional[TrustState] = None,
              procedural: Optional[ProceduralState] = None,
-             episodes: Optional[EpisodicState] = None) -> str:
-        """Write {graph, index, meta, trust, procedural, episodes} to the snapshot file."""
+             episodes: Optional[EpisodicState] = None,
+             semantic: Optional[list] = None,
+             normative: Optional[list] = None) -> str:
+        """Write {graph, index, meta, trust, procedural, episodes, semantic, normative}."""
         payload: Dict[str, Any] = {
             "version": 1,
             "graph": graph_state,
@@ -63,6 +65,8 @@ class KnowledgeSnapshotStore:
             "trust": trust or {},
             "procedural": procedural or {},
             "episodes": episodes or [],
+            "semantic": semantic or [],
+            "normative": normative or [],
             "meta": meta or {},
         }
         parent = os.path.dirname(self._path)
@@ -113,6 +117,28 @@ class KnowledgeSnapshotStore:
             return []
         raw = data.get("episodes", [])
         # defensive: only accept a list of dicts (Episode blobs)
+        if not isinstance(raw, list):
+            return []
+        return [e for e in raw if isinstance(e, dict)]
+
+    def load_semantic(self, data: Optional[Dict[str, Any]] = None) -> list:
+        """Extract the semantic-fact list from a loaded snapshot (graceful empty)."""
+        if data is None:
+            data = self.load()
+        if not data:
+            return []
+        raw = data.get("semantic", [])
+        if not isinstance(raw, list):
+            return []
+        return [e for e in raw if isinstance(e, dict)]
+
+    def load_normative(self, data: Optional[Dict[str, Any]] = None) -> list:
+        """Extract the normative-policy list from a loaded snapshot (graceful empty)."""
+        if data is None:
+            data = self.load()
+        if not data:
+            return []
+        raw = data.get("normative", [])
         if not isinstance(raw, list):
             return []
         return [e for e in raw if isinstance(e, dict)]
