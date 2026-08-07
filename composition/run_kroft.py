@@ -77,11 +77,18 @@ class KroftApp:
         self.evolver = SkillEvolver(self._sandbox, self.procedural, min_uses=2, success_threshold=0.8)
         # 2) optional LLM advisor (graceful degradation: None = LLM-free deterministic)
         self.llm: Optional[ILlm] = self._build_llm(self.config.llm)
+        # ТЗ-PHASE-M (Task 2): wire the live metrics collector so the kernel's existing
+        # RuntimeSupervisor hook (collect->reflect->apply, SOFT-only, O1-guarded) activates.
+        # LiveMetricsCollector implements ILiveMetricsCollector; kernel_builder
+        # builds LiveRuntimeMetrics + RuntimeSupervisor from it. No kernel change (K5/K6).
+        from kernel.observability import LiveMetricsCollector
+        self._live_collector = LiveMetricsCollector()
         # 3) kernel (CognitiveKernel) via the shared composition factory
         self.bus = build_event_bus()
         self.kernel = build_cognitive_kernel(
             node_id=self.config.node_id, llm_client=self.llm,
             memory=self.memory, procedural=self.procedural,
+            live_metrics=self._live_collector,
         )
         # 4) REAL subsystem components (reused, no new port) — feed the dashboard with live numbers
         self.identity = ReferenceIdentityRegistry()
@@ -497,7 +504,7 @@ class KroftApp:
         # CognitiveKernel already accumulated ExecutionOutcome(s) this tick in
         # self.kernel._outcomes; SkillEvolver (composition-owned) proposes a better variant
         # when success_rate is low. No kernel change — data is available post-tick (K5/K6).
-        self._evolve_procedural_from_runtime(capability="demo", skill=self._demo_skill)
+        self._evolve_procedural_from_runtime()
         self.logs.append(f"tick: kernel={self.kernel._state.name} evolved demo skill")
         # ТЗ-PHASE-K: close the persistence loop — a tick evolves memory (episodes /
         # semantic / normative via CognitiveKernel), so persist it immediately. Without
@@ -505,18 +512,45 @@ class KroftApp:
         self._save_knowledge()
         return self.dashboard.snapshot()
 
-    def _evolve_procedural_from_runtime(self, capability: str, skill) -> None:
-        """ТЗ-PHASE-L: feed REAL tick outcomes into SkillEvolver.
+    def _resolve_skill_from_plan(self):
+        """ТЗ-PHASE-M (Task 1): map the last executed Plan to a real Procedure (skill).
 
-        Reuses CognitiveKernel._outcomes (success/utility) + the composition-owned
-        SkillEvolver + InMemoryProceduralMemory. Aggregates this tick's execution
-        outcomes into a SkillUsageStats and evolves the matching skill when the
-        success rate is below threshold. No new port/layer/DTO (K5/K6).
+        The CognitiveKernel does NOT tag plans with a skill_id (K6: no kernel change),
+        but both Plan.steps and Procedure.steps are Tuple[str]. We match the last tick's
+        selected plan steps against stored Procedures (exact, then normalized join) and
+        return (capability, Procedure). Falls back to the demo skill when no match — so
+        the loop always has a skill to evolve. Composition-only (K5/K6).
+        """
+        plan = getattr(self.kernel, "_last_selected_plan", None)
+        if plan is None:
+            return "demo", self._demo_skill
+        plan_steps = tuple(str(s) for s in getattr(plan, "steps", ()))
+        if not plan_steps:
+            return "demo", self._demo_skill
+        # exact steps match
+        for cap, proc in self.procedural._skills.items():
+            if tuple(str(s) for s in proc.steps) == plan_steps:
+                return cap, proc
+        # normalized join match (order-insensitive-ish, cheap heuristic)
+        joined = "|".join(plan_steps)
+        for cap, proc in self.procedural._skills.items():
+            if "|".join(str(s) for s in proc.steps) == joined:
+                return cap, proc
+        return "demo", self._demo_skill
+
+    def _evolve_procedural_from_runtime(self) -> None:
+        """ТЗ-PHASE-L/M: feed REAL tick outcomes into SkillEvolver for the executed skill.
+
+        Resolves the skill actually executed this tick (ТЗ-PHASE-M _resolve_skill_from_plan),
+        aggregates CognitiveKernel._outcomes (success/utility) into SkillUsageStats, and
+        evolves the matching skill when the success rate is low. Reuses SkillEvolver +
+        InMemoryProceduralMemory + KnowledgeSnapshotStore; no new port/layer/DTO (K5/K6).
         """
         from contracts.i_skill_evolver import SkillUsageStats
         outcomes = [o for o in getattr(self.kernel, "_outcomes", [])]
         if not outcomes:
             return
+        capability, skill = self._resolve_skill_from_plan()
         uses = len(outcomes)
         successes = sum(1 for o in outcomes if getattr(o, "success", False))
         success_rate = successes / uses if uses else 0.0
@@ -601,7 +635,7 @@ class KroftApp:
         self.kernel.tick(Intent(id=task_id, text=query, confidence=ConfidenceScore(0.8),
                                 provenance=Provenance(source="interactive", actor="user")))
         # ТЗ-PHASE-L: evolve procedural memory from the REAL outcome of this tick.
-        self._evolve_procedural_from_runtime(capability="demo", skill=self._demo_skill)
+        self._evolve_procedural_from_runtime()
         self.task_store.update(task_id, "done")
         # answer from the live graph (real vault content)
         hits = self.search.search(query, top_k=5)
