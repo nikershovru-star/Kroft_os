@@ -190,7 +190,57 @@ class _LivingCore:
         return _extract_state(self.kernel, self.proc, self.trust, self._baseline)
 
     def save(self) -> None:
-        self.store.save(self.snapshot(), self.state_path)
+        """ТЗ-PHASE-J: write-convergence. When --knowledge-snapshot is set, persist
+        back into the SAME KnowledgeSnapshotStore (no second source of truth).
+        Otherwise keep the legacy JsonMemoryStore/kernel_state.json path."""
+        if self.knowledge_snapshot:
+            self._save_knowledge_snapshot()
+        else:
+            self.store.save(self.snapshot(), self.state_path)
+
+    def _save_knowledge_snapshot(self) -> None:
+        """Write evolution deltas into the unified KnowledgeSnapshotStore.
+
+        Reuses the existing converters (_episode_to_dict / _semantic_to_dict /
+        _policy_to_dict / _procedure_to_dict) — no new serializer/DTO/port (K5).
+        graph/index are PRESERVED from the existing file (run_evolution does not
+        build a graph) so a prior run_kroft graph is never clobbered.
+        """
+        from composition.knowledge_persistence import KnowledgeSnapshotStore
+        from kernel.persistence import (
+            _episode_to_dict, _semantic_to_dict, _policy_to_dict, _procedure_to_dict,
+        )
+        from dataclasses import replace
+        from contracts.i_memory import PolicyLifecycle
+        ks = KnowledgeSnapshotStore(self.knowledge_snapshot)
+        # preserve graph/index already on disk (run_kroft owns those)
+        existing = ks.load() or {}
+        graph_state = existing.get("graph", {})
+        index_state = existing.get("index", {})
+        procedural = {
+            "procedures": {k: dict(v) for k, v in self.proc._procedures.items()},
+            "skills": {
+                cap: {
+                    "skill_id": s.skill_id, "name": s.name,
+                    "capability": s.capability, "steps": list(s.steps),
+                    "preconditions": list(s.preconditions),
+                    "confidence": s.confidence, "provenance": s.provenance,
+                    "causal": s.causal, "version": s.version,
+                    "lifecycle": s.lifecycle.name,
+                }
+                for cap, s in self.proc._skills.items()
+            },
+        }
+        ks.save(
+            graph_state,
+            index_state,
+            meta={"node_id": self.node_id, "written_by": "run_evolution"},
+            trust=self.trust._running,
+            procedural=procedural,
+            episodes=[_episode_to_dict(e) for e in self.mem._episodes],
+            semantic=[_semantic_to_dict(f) for f in self.mem._semantic],
+            normative=[_policy_to_dict(p) for p in self.mem._normative],
+        )
 
     # -- background autosave --------------------------------------------
     def _schedule_autosave(self) -> None:
