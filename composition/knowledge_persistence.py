@@ -22,21 +22,34 @@ import json
 import os
 from typing import Any, Dict, Optional
 
+# Trust state is a flat Dict[author_id, running_trust(float)]; reused verbatim
+# by the restore path (same shape run_evolution.py replays into ReferenceTrustRegistry).
+TrustState = Dict[str, float]
+
 
 class KnowledgeSnapshotStore:
-    """JSON save/load of the live knowledge graph + content index."""
+    """JSON save/load of the live knowledge graph + content index + trust.
+
+    Composition-only seam (Флаг C): owns file I/O so graph engine / content
+    index / trust registry stay axis-clean (K1). All three live in ONE
+    deterministic JSON file (atomic + single source of truth). Round-trip is
+    byte-stable for identical state (I-09): sort_keys + deterministic order.
+    save/load NEVER mutate HARD — they restore SOFT-derived knowledge only.
+    """
 
     def __init__(self, path: str) -> None:
         # path may live under a vault with spaces; pathlib-free, stdlib only.
         self._path = path
 
     def save(self, graph_state: Dict[str, Any], index_state: Dict[str, Any],
-             meta: Optional[Dict[str, Any]] = None) -> str:
-        """Write {graph, index, meta} to the snapshot file. Returns the path."""
+             meta: Optional[Dict[str, Any]] = None,
+             trust: Optional[TrustState] = None) -> str:
+        """Write {graph, index, meta, trust} to the snapshot file. Returns the path."""
         payload: Dict[str, Any] = {
             "version": 1,
             "graph": graph_state,
             "index": index_state,
+            "trust": trust or {},
             "meta": meta or {},
         }
         parent = os.path.dirname(self._path)
@@ -56,3 +69,13 @@ class KnowledgeSnapshotStore:
         except Exception:
             return None  # corrupt snapshot -> treat as missing (graceful degrade)
         return data
+
+    def load_trust(self, data: Optional[Dict[str, Any]] = None) -> TrustState:
+        """Extract the running-trust map from a loaded snapshot (graceful empty)."""
+        if data is None:
+            data = self.load()
+        if not data:
+            return {}
+        raw = data.get("trust", {})
+        # defensive: only keep valid float scores (ignore corrupt entries)
+        return {a: float(v) for a, v in raw.items() if isinstance(v, (int, float))}
