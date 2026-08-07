@@ -489,21 +489,55 @@ class KroftApp:
             pass
 
     def step(self, goal_text: str = "demo goal") -> Any:
-        """Advance one tick (kernel FSM) + evolve the demo skill; return a read-only dashboard snapshot."""
+        """Advance one tick (kernel FSM) + evolve the demo skill; return a read-only dashboard snapshot.""" 
         from contracts.cognitive_domain import ConfidenceScore, Provenance
         self.kernel.tick(Intent(id="intent-1", text=goal_text, confidence=ConfidenceScore(0.8),
                                 provenance=Provenance(source="demo", actor="run_kroft")))
-        # Evolution: low-efficiency usage stats -> SkillEvolver proposes a better variant (LLM-free)
-        from contracts.i_skill_evolver import SkillUsageStats
-        self.evolver.evolve_skill(
-            self._demo_skill, SkillUsageStats(capability="demo", uses=10, success_rate=0.3)
-        )
+        # ТЗ-PHASE-L: evolve procedural memory from REAL tick outcomes (not fake stats).
+        # CognitiveKernel already accumulated ExecutionOutcome(s) this tick in
+        # self.kernel._outcomes; SkillEvolver (composition-owned) proposes a better variant
+        # when success_rate is low. No kernel change — data is available post-tick (K5/K6).
+        self._evolve_procedural_from_runtime(capability="demo", skill=self._demo_skill)
         self.logs.append(f"tick: kernel={self.kernel._state.name} evolved demo skill")
         # ТЗ-PHASE-K: close the persistence loop — a tick evolves memory (episodes /
         # semantic / normative via CognitiveKernel), so persist it immediately. Without
         # this, run_demo/step develops memory that is lost on restart until a query saves.
         self._save_knowledge()
         return self.dashboard.snapshot()
+
+    def _evolve_procedural_from_runtime(self, capability: str, skill) -> None:
+        """ТЗ-PHASE-L: feed REAL tick outcomes into SkillEvolver.
+
+        Reuses CognitiveKernel._outcomes (success/utility) + the composition-owned
+        SkillEvolver + InMemoryProceduralMemory. Aggregates this tick's execution
+        outcomes into a SkillUsageStats and evolves the matching skill when the
+        success rate is below threshold. No new port/layer/DTO (K5/K6).
+        """
+        from contracts.i_skill_evolver import SkillUsageStats
+        outcomes = [o for o in getattr(self.kernel, "_outcomes", [])]
+        if not outcomes:
+            return
+        uses = len(outcomes)
+        successes = sum(1 for o in outcomes if getattr(o, "success", False))
+        success_rate = successes / uses if uses else 0.0
+        # accumulate into the per-skill procedure stats so persistence carries the record
+        if capability not in self.procedural._procedures:
+            self.procedural._procedures[capability] = {
+                "capability": capability, "runs": 0, "successes": 0,
+            }
+        rec = self.procedural._procedures[capability]
+        rec["runs"] = int(rec.get("runs", 0)) + uses
+        rec["successes"] = int(rec.get("successes", 0)) + successes
+        try:
+            evolved = self.evolver.evolve_skill(
+                skill, SkillUsageStats(capability=capability, uses=uses,
+                                       success_rate=success_rate)
+            )
+            if evolved is not None and evolved is not skill:
+                self.procedural.store_skill(evolved)
+                self.logs.append(f"procedural evolution: {capability} -> v{evolved.version}")
+        except Exception:
+            pass  # evolution must never break the runtime loop
 
     def run_demo(self, ticks: Optional[int] = None) -> List[Any]:
         """Live-demo loop: tick + evolve, printing a read-only dashboard snapshot each iteration.
@@ -566,6 +600,8 @@ class KroftApp:
         # Backward-compatible path for non-agent intents.
         self.kernel.tick(Intent(id=task_id, text=query, confidence=ConfidenceScore(0.8),
                                 provenance=Provenance(source="interactive", actor="user")))
+        # ТЗ-PHASE-L: evolve procedural memory from the REAL outcome of this tick.
+        self._evolve_procedural_from_runtime(capability="demo", skill=self._demo_skill)
         self.task_store.update(task_id, "done")
         # answer from the live graph (real vault content)
         hits = self.search.search(query, top_k=5)
