@@ -97,19 +97,21 @@ class KroftApp:
         from services.knowledge_engine import build_knowledge_engine
         self.engine = build_knowledge_engine(graph=self.graph, content_index=ContentIndex())
         self.vault_reader = ObsidianVaultReader(self.config.vault)
-        # ТЗ-KNOWLEDGE-PERSIST-01: restore prior knowledge BEFORE live ingest, so a
-        # cold boot reuses the on-disk graph + inverted index (starts "already
-        # learned"). New/changed vault notes are then merged in idempotently below.
+        # ТЗ-KNOWLEDGE-PERSIST-01: restore prior graph + index BEFORE live ingest,
+        # so a cold boot reuses on-disk knowledge (starts "already learned").
         self._snapshot_store = None
         if self.config.knowledge_snapshot:
             from composition.knowledge_persistence import KnowledgeSnapshotStore
             self._snapshot_store = KnowledgeSnapshotStore(self.config.knowledge_snapshot)
-            self._restore_knowledge()
+            self._restore_graph_and_index()
         self._live_note_count = self._ingest_vault_notes()  # 0 when no vault (graceful)
-        # Persist immediately after the first build so a fresh run is never lost.
-        self._save_knowledge()
         self.trust = ReferenceTrustRegistry()
         self._seed_demo_trust()
+        # ТЗ-PHASE-E: overlay saved running-trust on top of the demo seed so the
+        # system's accumulated experience (per-author trust) survives restart.
+        self._restore_trust()
+        # Persist immediately after the first build so a fresh run is never lost.
+        self._save_knowledge()
         self.logs: "deque[str]" = deque(maxlen=50)
         self.task_store = TaskStore()  # real component (ТЗ-DAILY-01), empty until agent loop enqueues
         # search over the live knowledge graph (ТЗ-SEARCH-01) — reused for the interactive contour
@@ -264,8 +266,8 @@ class KroftApp:
                 continue  # a single bad note must not abort the whole ingestion
         return len(self.graph.nodes())
 
-    # ---- ТЗ-KNOWLEDGE-PERSIST-01: snapshot persistence of live knowledge ----
-    def _restore_knowledge(self) -> None:
+    # ---- ТЗ-KNOWLEDGE-PERSIST-01 + ТЗ-PHASE-E: snapshot persistence of live knowledge ----
+    def _restore_graph_and_index(self) -> None:
         """Load graph + content index from disk (graceful: missing -> no-op)."""
         if self._snapshot_store is None:
             return
@@ -281,8 +283,17 @@ class KroftApp:
         except Exception:
             pass  # index restore is best-effort; graph + vault reindex cover it
 
+    def _restore_trust(self) -> None:
+        """ТЗ-PHASE-E: overlay saved running-trust over the demo seed (graceful)."""
+        if self._snapshot_store is None:
+            return
+        saved = self._snapshot_store.load_trust()
+        for author, score in saved.items():
+            # reuse the same direct-assignment replay pattern as run_evolution.py
+            self.trust._running[author] = float(score)
+
     def _save_knowledge(self) -> None:
-        """Persist graph + content index to disk (no-op without a snapshot path)."""
+        """Persist graph + content index + running-trust to disk (no-op w/o path)."""
         if self._snapshot_store is None:
             return
         try:
@@ -296,6 +307,7 @@ class KroftApp:
                 self.graph.snapshot(),
                 self.engine._content_index.snapshot(),
                 meta,
+                trust=self.trust._running,
             )
         except Exception:
             pass  # persistence failure must never crash the agent loop
