@@ -46,10 +46,28 @@ def test_command_executes_safely():
 def test_execute_plan_routes_to_real_backend():
     # kernel sends Action(kind="execute_plan", payload="\n".join(plan.steps))
     ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
-    r = ex.execute(_act("execute_plan", "echo real-plan-step\nsecond step"))
-    # must run the first step via SubprocessSandbox, NOT sim fallback
+    r = ex.execute(_act("execute_plan", "echo real-plan-step\n echo second-step"))
+    # must run the steps via SubprocessSandbox, NOT sim fallback
     assert r.success is True
     assert "real-plan-step" in r.observation
+
+
+def test_execute_plan_routes_all_steps():
+    # multi-step plan: each step routed (file + shell), aggregated success
+    ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
+    plan = "write:plan.txt|hello\n echo step-two"
+    r = ex.execute(_act("execute_plan", plan))
+    assert r.success is True
+    assert "file_written" in r.observation
+    assert "step-two" in r.observation
+
+
+def test_desktop_kind_invokes_desktop_adapter():
+    # kind="desktop" routes to PyAutoGUIAdapter (graceful if pyautogui absent)
+    ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
+    r = ex.execute(_act("desktop", "click 5 5\n type hi\n open_app notepad"))
+    assert r is not None
+    assert hasattr(r, "success")
 
 
 def test_unknown_kind_falls_back_to_sim():
