@@ -1,11 +1,12 @@
-"""Real-World Executor Adapter (ТЗ-PHASE-O.1).
+"""Real-World Executor Adapter (ТЗ-PHASE-O.1 / O.2).
 
 Minimal IExecutor that routes an Action to REAL execution backends, reusing existing
 components (K5) and touching NO kernel/contracts code (K6):
 
   Action.kind == "file"         -> LocalFileSystemAdapter (read/write)   [adapters/filesystem_adapter.py]
   Action.kind == "command"      -> SubprocessSandbox (List[str], kill-on-timeout) [adapters/subprocess_sandbox.py]
-  Action.kind == "execute_plan" -> SubprocessSandbox (real plan steps executed by the OS)
+  Action.kind == "execute_plan" -> SubprocessSandbox over ALL plan steps (real OS exec)
+  Action.kind == "desktop"      -> PyAutoGUIAdapter (click/type/open_app) [adapters/desktop_adapter.py]
   unknown kind                  -> ReferenceExecutor / ReferenceExecutionEnvironment (sim fallback)
 
 Lives in composition/ (the composition root) because it wires adapters together;
@@ -40,10 +41,11 @@ class RealWorldExecutor(IExecutor):
         self._base_dir = base_dir or tempfile.gettempdir()
         self._fs = None
         self._sandbox = None
+        self._desktop = None
         self._sim = ReferenceExecutor(environment=ReferenceExecutionEnvironment(clock), clock=clock)
 
     # --- backend accessors (lazy, keep imports localized) -------------------
-    def _filesystem(self):
+    def _get_fs(self):
         if self._fs is None:
             from adapters.filesystem_adapter import LocalFileSystemAdapter
             self._fs = LocalFileSystemAdapter(self._base_dir)
@@ -55,13 +57,21 @@ class RealWorldExecutor(IExecutor):
             self._sandbox = SubprocessSandbox(default_timeout=30.0)
         return self._sandbox
 
+    def _get_desktop(self):
+        if self._desktop is None:
+            from adapters.desktop_adapter import PyAutoGUIAdapter
+            self._desktop = PyAutoGUIAdapter()
+        return self._desktop
+
     # --- IExecutor ---------------------------------------------------------
     def execute(self, action: Action, timeout: Optional[float] = None) -> ExecutionResult:
         kind = (action.kind or "").lower()
         if kind == "file":
             return self._exec_file(action)
         if kind in ("command", "execute_plan"):
-            return self._exec_command(action, timeout)
+            return self._exec_plan(action, timeout)
+        if kind == "desktop":
+            return self._exec_desktop(action)
         # unknown kind -> deterministic simulation (backward compatible)
         return self._sim.execute(action, timeout)
 
@@ -74,14 +84,14 @@ class RealWorldExecutor(IExecutor):
             if payload.startswith("write:"):
                 _, rest = payload.split("write:", 1)
                 path, _, content = rest.partition("|")
-                ok = self._filesystem().write_content(path.strip(), content)
+                ok = self._get_fs().write_content(path.strip(), content)
                 return ExecutionResult(
                     action_id=action.id, success=bool(ok),
                     observation=f"file_written:{path}" if ok else "file_write_failed",
                     reward=0.9 if ok else 0.0, confidence=conf, causal=mark)
             if payload.startswith("read:"):
                 path = payload.split("read:", 1)[1].strip()
-                data = self._filesystem().read_content(path)
+                data = self._get_fs().read_content(path)
                 return ExecutionResult(
                     action_id=action.id, success=True,
                     observation=f"file_read:{len(data)} bytes", reward=0.9,
@@ -95,39 +105,95 @@ class RealWorldExecutor(IExecutor):
                 action_id=action.id, success=False,
                 observation=f"file_error:{exc}", reward=0.0, confidence=conf, causal=mark)
 
-    def _exec_command(self, action: Action, timeout: Optional[float] = None) -> ExecutionResult:
-        """Route to SubprocessSandbox (real OS execution, List[str], kill-on-timeout).
+    def _exec_plan(self, action: Action, timeout: Optional[float] = None) -> ExecutionResult:
+        """Execute EVERY plan step as a real action (heuristic routing), aggregate result.
 
-        For 'execute_plan' the kernel passes payload="\\n".join(plan.steps); the first
-        step is executed as a real command so the cognitive loop records a REAL outcome
-        (not the proxy). For 'command' the payload is the command string.
+        For 'execute_plan' the kernel passes payload="\\n".join(plan.steps). Each step is
+        routed: 'write:' -> file backend, 'click'/'type'/'open_app' -> desktop backend,
+        otherwise -> SubprocessSandbox (echo proof). Aggregate: all steps must succeed.
         """
         mark = CausalMark("realworld", 1)
         conf = ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE)
+        steps = [s.strip() for s in (action.payload or "").splitlines() if s.strip()]
+        if not steps:
+            steps = ["echo ok"]
+        observations = []
+        all_ok = True
         try:
-            payload = (action.payload or "").strip()
-            # first non-empty line = the command to run
-            cmd_line = next((ln.strip() for ln in payload.splitlines() if ln.strip()), "")
-            if not cmd_line:
-                cmd_line = "echo ok"
-            command = cmd_line.split()
-            result = self._get_sandbox().execute(
-                command, timeout_sec=timeout or 30.0, cwd=self._base_dir)
-            # SubprocessSandbox returns contracts.i_execution_sandbox.ExecutionResult
-            # (returncode/stdout/stderr/killed) -> map to IExecutor ExecutionResult.
-            rc = getattr(result, "returncode", -1)
-            killed = bool(getattr(result, "killed", False))
-            success = (rc == 0) and not killed
-            out = (getattr(result, "stdout", "") or getattr(result, "stderr", "") or "").strip()
+            for step in steps:
+                low = step.lower()
+                if low.startswith("write:"):
+                    r = self._exec_file(Action(id=f"{action.id}-f", kind="file",
+                                               payload=step, confidence=conf,
+                                               provenance=action.provenance))
+                elif "click" in low or "type" in low or "open_app" in low:
+                    r = self._route_desktop_step(action.id, step, conf, mark)
+                else:
+                    r = self._run_shell(step, timeout)
+                observations.append(r.observation)
+                all_ok = all_ok and r.success
             return ExecutionResult(
-                action_id=action.id,
-                success=success,
-                observation=out[:200] or ("killed" if killed else "command_done"),
-                reward=0.9 if success else 0.1,
-                confidence=conf,
-                causal=mark,
-            )
+                action_id=action.id, success=all_ok,
+                observation="; ".join(observations)[:400] or "plan_done",
+                reward=0.9 if all_ok else 0.1, confidence=conf, causal=mark)
         except Exception as exc:  # noqa: BLE001
             return ExecutionResult(
                 action_id=action.id, success=False,
-                observation=f"command_error:{exc}", reward=0.0, confidence=conf, causal=mark)
+                observation=f"plan_error:{exc}", reward=0.0, confidence=conf, causal=mark)
+
+    def _run_shell(self, cmd_line: str, timeout: Optional[float] = None) -> ExecutionResult:
+        mark = CausalMark("realworld", 1)
+        conf = ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE)
+        command = cmd_line.split()
+        result = self._get_sandbox().execute(command, timeout_sec=timeout or 30.0, cwd=self._base_dir)
+        rc = getattr(result, "returncode", -1)
+        killed = bool(getattr(result, "killed", False))
+        success = (rc == 0) and not killed
+        out = (getattr(result, "stdout", "") or getattr(result, "stderr", "") or "").strip()
+        return ExecutionResult(
+            action_id="shell", success=success,
+            observation=out[:200] or ("killed" if killed else "command_done"),
+            reward=0.9 if success else 0.1, confidence=conf, causal=mark)
+
+    def _route_desktop_step(self, action_id, step, conf, mark) -> ExecutionResult:
+        d = self._get_desktop()
+        low = step.lower()
+        try:
+            if low.startswith("click"):
+                parts = step.split()
+                x = int(parts[1]) if len(parts) > 1 else 0
+                y = int(parts[2]) if len(parts) > 2 else 0
+                d.click(x, y)
+                obs = f"desktop_click:{x},{y}"
+            elif low.startswith("type"):
+                text = step.split(" ", 1)[1] if " " in step else ""
+                d.type(text)
+                obs = f"desktop_type:{len(text)} chars"
+            elif low.startswith("open_app"):
+                name = step.split(" ", 1)[1] if " " in step else ""
+                d.open_app(name)
+                obs = f"desktop_open:{name}"
+            else:
+                obs = "desktop_noop"
+            return ExecutionResult(action_id=action_id, success=True,
+                                    observation=obs, reward=0.9, confidence=conf, causal=mark)
+        except Exception as exc:  # noqa: BLE001
+            return ExecutionResult(action_id=action_id, success=False,
+                                    observation=f"desktop_error:{exc}", reward=0.0,
+                                    confidence=conf, causal=mark)
+
+    def _exec_desktop(self, action: Action) -> ExecutionResult:
+        """kind='desktop': payload lines are desktop actions (click/type/open_app)."""
+        mark = CausalMark("realworld", 1)
+        conf = ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE)
+        steps = [s.strip() for s in (action.payload or "").splitlines() if s.strip()]
+        observations = []
+        all_ok = True
+        for i, step in enumerate(steps):
+            r = self._route_desktop_step(f"{action.id}-{i}", step, conf, mark)
+            observations.append(r.observation)
+            all_ok = all_ok and r.success
+        return ExecutionResult(
+            action_id=action.id, success=all_ok,
+            observation="; ".join(observations)[:400] or "desktop_done",
+            reward=0.9 if all_ok else 0.1, confidence=conf, causal=mark)
