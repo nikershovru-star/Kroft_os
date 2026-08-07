@@ -117,8 +117,10 @@ class _LivingCore:
     """Wiring of kernel + stores + background services (autosave timer + optional bg consolidate)."""
 
     def __init__(self, state_dir: str, node_id: str, llm_client, ticks: int,
-                 autosave_sec: float, bg_consolidate: bool):
+                 autosave_sec: float, bg_consolidate: bool,
+                 knowledge_snapshot: Optional[str] = None):
         self.state_path = str(Path(state_dir) / "kernel_state.json")
+        self.knowledge_snapshot = knowledge_snapshot
         self.node_id = node_id
         self.ticks = ticks
         self.autosave_sec = autosave_sec
@@ -134,8 +136,38 @@ class _LivingCore:
         self.consolidator = build_procedural(self.proc, threshold=2, min_rate=0.5)
         self._baseline: Optional[KernelState] = None
 
-        # Resume across restarts.
-        if os.path.exists(self.state_path):
+        # ТЗ-PHASE-I (convergence): prefer the unified KnowledgeSnapshotStore format
+        # written by run_kroft, so evolution resumes from the SAME state the bootable
+        # runtime persists (no duplicate format, no desync). Falls back to the legacy
+        # JsonMemoryStore/KernelState path when --knowledge-snapshot is not supplied.
+        if knowledge_snapshot and os.path.exists(knowledge_snapshot):
+            from composition.knowledge_persistence import KnowledgeSnapshotStore
+            from kernel.persistence import (
+                _episode_from_dict, _semantic_from_dict, _policy_from_dict,
+                _procedure_from_dict,
+            )
+            from dataclasses import replace
+            ks = KnowledgeSnapshotStore(knowledge_snapshot)
+            self.mem._episodes = [_episode_from_dict(b) for b in ks.load_episodic() if isinstance(b, dict)]
+            self.mem._semantic = [_semantic_from_dict(b) for b in ks.load_semantic() if isinstance(b, dict)]
+            self.mem._normative = [_policy_from_dict(b) for b in ks.load_normative() if isinstance(b, dict)]
+            proc = ks.load_procedural()
+            for name, entry in proc.get("procedures", {}).items():
+                if isinstance(entry, dict) and "runs" in entry:
+                    self.proc._procedures[name] = dict(entry)
+            for cap, sk in proc.get("skills", {}).items():
+                try:
+                    p = replace(_procedure_from_dict(sk),
+                                version=int(sk.get("version", 1)),
+                                lifecycle=__import__("contracts.i_memory", fromlist=["PolicyLifecycle"]).PolicyLifecycle[sk.get("lifecycle", "ACTIVE")])
+                    self.proc._skills[cap] = p
+                except Exception:
+                    pass
+            for author, score in ks.load_trust().items():
+                self.trust._running[author] = float(score)
+            print(f"[run_evolution] resumed from knowledge-snapshot {knowledge_snapshot}: "
+                  f"{len(self.mem._episodes)} episodes, {len(self.mem._normative)} policies")
+        elif os.path.exists(self.state_path):
             loaded = self.store.load(self.state_path)
             _replay_state(loaded, self.mem, self.proc, self.trust)
             self._baseline = loaded
@@ -239,6 +271,11 @@ def main(argv: List[str] | None = None) -> int:
                         help="Background autosave period in seconds (0 disables).")
     parser.add_argument("--bg-consolidate", action="store_true",
                         help="Enable optional background consolidation tick (off by default; deterministic).")
+    parser.add_argument("--knowledge-snapshot", default=None,
+                        help="ТЗ-PHASE-I: unified KnowledgeSnapshotStore file (written by run_kroft). "
+                             "When present, evolution resumes from the SAME state the bootable runtime "
+                             "persists, avoiding a second divergent format. Falls back to --state-dir "
+                             "kernel_state.json when omitted.")
     args = parser.parse_args(argv)
 
     # 1. Optional local LLM advisor (skip-if-unavailable).
@@ -264,6 +301,7 @@ def main(argv: List[str] | None = None) -> int:
         ticks=args.ticks,
         autosave_sec=args.autosave_sec,
         bg_consolidate=args.bg_consolidate,
+        knowledge_snapshot=args.knowledge_snapshot,
     )
 
     # 2. Graceful SIGINT: save + stop + exit 0.
