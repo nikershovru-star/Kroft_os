@@ -26,15 +26,20 @@ from typing import Any, Dict, Optional
 # by the restore path (same shape run_evolution.py replays into ReferenceTrustRegistry).
 TrustState = Dict[str, float]
 
+# Procedural memory state: {procedures: name->stats, skills: capability->Procedure-dict}.
+# Both are plain serializable structures; skills go through the existing
+# _procedure_to_dict converter in kernel/persistence.py (K5: reuse, never duplicate).
+ProceduralState = Dict[str, Any]
+
 
 class KnowledgeSnapshotStore:
-    """JSON save/load of the live knowledge graph + content index + trust.
+    """JSON save/load of the live knowledge graph + content index + trust + procedural.
 
     Composition-only seam (Флаг C): owns file I/O so graph engine / content
-    index / trust registry stay axis-clean (K1). All three live in ONE
-    deterministic JSON file (atomic + single source of truth). Round-trip is
-    byte-stable for identical state (I-09): sort_keys + deterministic order.
-    save/load NEVER mutate HARD — they restore SOFT-derived knowledge only.
+    index / trust registry / procedural memory stay axis-clean (K1). All four
+    live in ONE deterministic JSON file (atomic + single source of truth).
+    Round-trip is byte-stable for identical state (I-09): sort_keys + deterministic
+    order. save/load NEVER mutate HARD — they restore SOFT-derived knowledge only.
     """
 
     def __init__(self, path: str) -> None:
@@ -43,13 +48,15 @@ class KnowledgeSnapshotStore:
 
     def save(self, graph_state: Dict[str, Any], index_state: Dict[str, Any],
              meta: Optional[Dict[str, Any]] = None,
-             trust: Optional[TrustState] = None) -> str:
-        """Write {graph, index, meta, trust} to the snapshot file. Returns the path."""
+             trust: Optional[TrustState] = None,
+             procedural: Optional[ProceduralState] = None) -> str:
+        """Write {graph, index, meta, trust, procedural} to the snapshot file."""
         payload: Dict[str, Any] = {
             "version": 1,
             "graph": graph_state,
             "index": index_state,
             "trust": trust or {},
+            "procedural": procedural or {},
             "meta": meta or {},
         }
         parent = os.path.dirname(self._path)
@@ -79,3 +86,15 @@ class KnowledgeSnapshotStore:
         raw = data.get("trust", {})
         # defensive: only keep valid float scores (ignore corrupt entries)
         return {a: float(v) for a, v in raw.items() if isinstance(v, (int, float))}
+
+    def load_procedural(self, data: Optional[Dict[str, Any]] = None) -> ProceduralState:
+        """Extract the procedural-memory state from a loaded snapshot (graceful empty)."""
+        if data is None:
+            data = self.load()
+        if not data:
+            return {}
+        raw = data.get("procedural", {})
+        # defensive: require the two expected sub-keys; ignore anything malformed
+        if not isinstance(raw, dict) or "procedures" not in raw:
+            return {}
+        return dict(raw)
