@@ -234,6 +234,9 @@ class KroftApp:
         self._restore_procedural()
         # ТЗ-PHASE-G: restore recorded episodes into layered memory (after memory exists)
         self._restore_episodic()
+        # ТЗ-PHASE-H: restore semantic facts + normative policies into layered memory
+        self._restore_semantic()
+        self._restore_normative()
         # re-persist after demo-skill seed so the snapshot carries the seeded skill too
         self._save_knowledge()
 
@@ -346,11 +349,45 @@ class KroftApp:
         # episodes are append-only experience; restore the full prior list
         self.memory._episodes = restored
 
+    def _restore_semantic(self) -> None:
+        """ТЗ-PHASE-H: restore consolidated SemanticFacts into layered memory."""
+        if self._snapshot_store is None:
+            return
+        saved = self._snapshot_store.load_semantic()
+        if not saved:
+            return
+        from kernel.persistence import _semantic_from_dict  # reuse existing (K5)
+        restored = []
+        for blob in saved:
+            try:
+                restored.append(_semantic_from_dict(blob))
+            except Exception:
+                pass  # a malformed fact blob must not abort boot
+        self.memory._semantic = restored
+
+    def _restore_normative(self) -> None:
+        """ТЗ-PHASE-H: restore normative/soft Policies into layered memory."""
+        if self._snapshot_store is None:
+            return
+        saved = self._snapshot_store.load_normative()
+        if not saved:
+            return
+        from kernel.persistence import _policy_from_dict  # reuse existing (K5)
+        restored = []
+        for blob in saved:
+            try:
+                restored.append(_policy_from_dict(blob))
+            except Exception:
+                pass  # a malformed policy blob must not abort boot
+        self.memory._normative = restored
+
     def _save_knowledge(self) -> None:
         """Persist graph + content index + running-trust + procedural + episodes to disk."""
         if self._snapshot_store is None:
             return
         from kernel.persistence import _episode_to_dict  # reuse existing serializer (K5)
+        from kernel.persistence import _semantic_to_dict  # reuse existing (K5)
+        from kernel.persistence import _policy_to_dict  # reuse existing (K5)
         try:
             meta = {
                 "vault": self.config.vault,
@@ -378,6 +415,8 @@ class KroftApp:
                     },
                 },
                 episodes=[_episode_to_dict(e) for e in self.memory._episodes],
+                semantic=[_semantic_to_dict(f) for f in self.memory._semantic],
+                normative=[_policy_to_dict(p) for p in self.memory._normative],
             )
         except Exception:
             pass  # persistence failure must never crash the agent loop
