@@ -167,6 +167,21 @@ class RealWorldExecutor(IExecutor):
                 action_id=action.id, success=False,
                 observation=f"plan_error:{exc}", reward=0.0, confidence=conf, causal=mark)
 
+    # --- external bridge (ТЗ-PHASE-O.5) -----------------------------------
+    def run_plan(self, payload: str, timeout: Optional[float] = None) -> ExecutionResult:
+        """Bridge for external agents/users to execute a plan via the real backend.
+
+        Accepts EITHER a structured JSON-array plan (passed through unchanged) OR a
+        textual "\\n".join(steps) plan (existing heuristic routing). Builds the
+        Action(kind="execute_plan") and delegates to execute() — no planner/CognitiveKernel
+        change (K6). This is the minimal entry point that lets an external source drive
+        RealWorldExecutor directly without invoking the full cognitive cycle.
+        """
+        action = Action(id="ext-plan", kind="execute_plan", payload=payload or "",
+                        confidence=ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE),
+                        provenance=Provenance(source="external", actor="bridge"))
+        return self.execute(action, timeout)
+
     @staticmethod
     def _parse_structured_plan(payload: str):
         """Return a list of step dicts if payload is a JSON array of kinded objects, else None."""

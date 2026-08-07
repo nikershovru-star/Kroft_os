@@ -85,6 +85,24 @@ def test_structured_json_plan_executes_real_actions():
     assert isinstance(r2, type(r))
 
 
+def test_run_plan_bridge_accepts_json_and_text():
+    # ТЗ-PHASE-O.5: external bridge run_plan() passes structured JSON through unchanged
+    # and keeps textual heuristic routing (backward compat)
+    import json
+    ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
+    jplan = json.dumps([
+        {"kind": "file", "path": "bridge.txt", "content": "o5"},
+        {"kind": "command", "cmd": "echo o5"},
+    ])
+    r = ex.run_plan(jplan)
+    assert r.success is True
+    assert os.path.exists(os.path.join(tempfile.gettempdir(), "bridge.txt"))
+    # textual payload via bridge -> heuristic still works
+    r2 = ex.run_plan("echo bridge-text\n write:bt.txt|bridge")
+    assert r2.success is True
+    assert os.path.exists(os.path.join(tempfile.gettempdir(), "bt.txt"))
+
+
 def test_desktop_kind_invokes_desktop_adapter():
     # kind="desktop" routes to PyAutoGUIAdapter (graceful if pyautogui absent)
     ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
