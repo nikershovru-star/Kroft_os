@@ -43,6 +43,13 @@ def test_command_executes_safely():
     assert r.success is True
 
 
+def test_shell_kind_routes_to_terminal():
+    # ТЗ-PHASE-O.2: kind="shell" must also route to TerminalExecutor (real backend)
+    ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
+    r = ex.execute(_act("shell", "echo shell-kind"))
+    assert r.success is True
+
+
 def test_execute_plan_routes_to_real_backend():
     # kernel sends Action(kind="execute_plan", payload="\n".join(plan.steps))
     ex = RealWorldExecutor(base_dir=tempfile.gettempdir())

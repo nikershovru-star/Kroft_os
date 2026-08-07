@@ -5,6 +5,7 @@ components (K5) and touching NO kernel/contracts code (K6):
 
   Action.kind == "file"         -> LocalFileSystemAdapter (read/write)   [adapters/filesystem_adapter.py]
   Action.kind == "command"      -> TerminalExecutor (secure, blacklist)   [services/security/terminal_executor.py]
+  Action.kind == "shell"        -> TerminalExecutor (secure, blacklist)   [services/security/terminal_executor.py]
   Action.kind == "execute_plan" -> TerminalExecutor over ALL plan steps (real OS exec)
   Action.kind == "desktop"      -> PyAutoGUIAdapter (click/type/open_app) [adapters/desktop_adapter.py]
   unknown kind                  -> ReferenceExecutor / ReferenceExecutionEnvironment (sim fallback)
@@ -68,7 +69,7 @@ class RealWorldExecutor(IExecutor):
         kind = (action.kind or "").lower()
         if kind == "file":
             return self._exec_file(action)
-        if kind in ("command", "execute_plan"):
+        if kind in ("command", "shell", "execute_plan"):
             return self._exec_plan(action, timeout)
         if kind == "desktop":
             return self._exec_desktop(action)
