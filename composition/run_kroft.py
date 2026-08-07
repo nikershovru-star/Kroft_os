@@ -232,6 +232,8 @@ class KroftApp:
         # ТЗ-PHASE-F: overlay saved skills + procedure stats AFTER the demo seed,
         # so accumulated learning (SkillEvolver outcomes) wins over the demo skill.
         self._restore_procedural()
+        # ТЗ-PHASE-G: restore recorded episodes into layered memory (after memory exists)
+        self._restore_episodic()
         # re-persist after demo-skill seed so the snapshot carries the seeded skill too
         self._save_knowledge()
 
@@ -326,10 +328,29 @@ class KroftApp:
             except Exception:
                 pass  # a malformed skill blob must not abort boot
 
-    def _save_knowledge(self) -> None:
-        """Persist graph + content index + running-trust + procedural to disk."""
+    def _restore_episodic(self) -> None:
+        """ТЗ-PHASE-G: restore recorded Episode list into layered memory."""
         if self._snapshot_store is None:
             return
+        saved = self._snapshot_store.load_episodic()
+        if not saved:
+            return
+        # reuse the EXISTING converter (K5, no new serializer)
+        from kernel.persistence import _episode_from_dict
+        restored = []
+        for blob in saved:
+            try:
+                restored.append(_episode_from_dict(blob))
+            except Exception:
+                pass  # a malformed episode blob must not abort boot
+        # episodes are append-only experience; restore the full prior list
+        self.memory._episodes = restored
+
+    def _save_knowledge(self) -> None:
+        """Persist graph + content index + running-trust + procedural + episodes to disk."""
+        if self._snapshot_store is None:
+            return
+        from kernel.persistence import _episode_to_dict  # reuse existing serializer (K5)
         try:
             meta = {
                 "vault": self.config.vault,
@@ -356,6 +377,7 @@ class KroftApp:
                         for cap, s in self.procedural._skills.items()
                     },
                 },
+                episodes=[_episode_to_dict(e) for e in self.memory._episodes],
             )
         except Exception:
             pass  # persistence failure must never crash the agent loop
