@@ -5,7 +5,7 @@ DFS cycle detection (color marking).
 """
 from __future__ import annotations
 from threading import RLock
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from contracts.knowledge_graph import (
     Edge,
     EdgeType,
@@ -113,3 +113,68 @@ class InMemoryGraphEngine(IGraphEngine):
     def edges(self) -> List[Edge]:
         with self._lock:
             return [e for lst in self._out.values() for e in lst]
+
+    # ---- Stage 49: snapshot persistence (ТЗ-KNOWLEDGE-PERSIST-01) ----
+    # K1-compliant: returns/loads a plain-dict; this method NEVER touches the
+    # filesystem (an external SnapshotStore owns file I/O). Round-trip is
+    # byte-stable for identical state (I-09).
+    def snapshot(self) -> Dict[str, Any]:
+        """Serialize nodes + edges to a JSON-friendly plain-dict."""
+        with self._lock:
+            nodes = [
+                {
+                    "id": n.id,
+                    "type": n.type.value,
+                    "label": n.label,
+                    "metadata": dict(n.metadata),
+                    "version": n.version,
+                    "created_at": n.created_at,
+                    "modified_at": n.modified_at,
+                    "tenant_id": n.tenant_id,
+                }
+                for n in self._nodes.values()
+            ]
+            edges = [
+                {
+                    "source_id": e.source_id,
+                    "target_id": e.target_id,
+                    "type": e.type.value if isinstance(e.type, EdgeType) else str(e.type),
+                    "weight": e.weight,
+                    "evidence": e.evidence,
+                }
+                for e in self.edges()
+            ]
+            return {"nodes": nodes, "edges": edges}
+
+    def restore(self, data: Dict[str, Any]) -> None:
+        """Wholesale state replacement from a snapshot dict (O(nodes + edges))."""
+        with self._lock:
+            self._nodes = {}
+            self._out = {}
+            self._in = {}
+            for nd in data.get("nodes", []):
+                node = Node(
+                    id=nd["id"],
+                    type=NodeType(nd["type"]),
+                    label=nd["label"],
+                    metadata=dict(nd.get("metadata", {})),
+                    version=nd.get("version", 1),
+                    created_at=nd.get("created_at", ""),
+                    modified_at=nd.get("modified_at", ""),
+                    tenant_id=nd.get("tenant_id", "default"),
+                )
+                self._nodes[node.id] = node
+                self._out.setdefault(node.id, [])
+                self._in.setdefault(node.id, [])
+            for ed in data.get("edges", []):
+                edge = Edge(
+                    source_id=ed["source_id"],
+                    target_id=ed["target_id"],
+                    type=ed["type"],
+                    weight=ed.get("weight", 1.0),
+                    evidence=ed.get("evidence", ""),
+                )
+                # edges whose endpoints are missing are dropped (defensive, idempotent)
+                if edge.source_id in self._nodes and edge.target_id in self._nodes:
+                    self._out[edge.source_id].append(edge)
+                    self._in[edge.target_id].append(edge)
