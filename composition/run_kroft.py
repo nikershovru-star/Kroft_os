@@ -107,9 +107,13 @@ class KroftApp:
         # ТЗ-KNOWLEDGE-PERSIST-01: restore prior graph + index BEFORE live ingest,
         # so a cold boot reuses on-disk knowledge (starts "already learned").
         self._snapshot_store = None
-        if self.config.knowledge_snapshot:
+        # ТЗ-PHASE-M.6: external configs (e.g. SimpleNamespace in agent tests) may omit
+        # knowledge_snapshot; use getattr so run_kroft stays compatible without changing
+        # the KroftConfig contract (K5/K6: no new field/adapter).
+        _knowledge_snapshot = getattr(self.config, "knowledge_snapshot", None)
+        if _knowledge_snapshot:
             from composition.knowledge_persistence import KnowledgeSnapshotStore
-            self._snapshot_store = KnowledgeSnapshotStore(self.config.knowledge_snapshot)
+            self._snapshot_store = KnowledgeSnapshotStore(_knowledge_snapshot)
             self._restore_graph_and_index()
         self._live_note_count = self._ingest_vault_notes()  # 0 when no vault (graceful)
         self.trust = ReferenceTrustRegistry()
