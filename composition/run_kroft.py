@@ -499,6 +499,10 @@ class KroftApp:
             self._demo_skill, SkillUsageStats(capability="demo", uses=10, success_rate=0.3)
         )
         self.logs.append(f"tick: kernel={self.kernel._state.name} evolved demo skill")
+        # ТЗ-PHASE-K: close the persistence loop — a tick evolves memory (episodes /
+        # semantic / normative via CognitiveKernel), so persist it immediately. Without
+        # this, run_demo/step develops memory that is lost on restart until a query saves.
+        self._save_knowledge()
         return self.dashboard.snapshot()
 
     def run_demo(self, ticks: Optional[int] = None) -> List[Any]:
