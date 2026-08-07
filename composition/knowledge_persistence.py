@@ -31,15 +31,19 @@ TrustState = Dict[str, float]
 # _procedure_to_dict converter in kernel/persistence.py (K5: reuse, never duplicate).
 ProceduralState = Dict[str, Any]
 
+# Episodic memory state: a list of Episode dicts (via _episode_to_dict).
+EpisodicState = list  # List[Dict[str, Any]]
+
 
 class KnowledgeSnapshotStore:
-    """JSON save/load of the live knowledge graph + content index + trust + procedural.
+    """JSON save/load of the live knowledge graph + content index + trust + procedural + episodic.
 
     Composition-only seam (Флаг C): owns file I/O so graph engine / content
-    index / trust registry / procedural memory stay axis-clean (K1). All four
-    live in ONE deterministic JSON file (atomic + single source of truth).
-    Round-trip is byte-stable for identical state (I-09): sort_keys + deterministic
-    order. save/load NEVER mutate HARD — they restore SOFT-derived knowledge only.
+    index / trust registry / procedural memory / layered memory stay axis-clean
+    (K1). All five live in ONE deterministic JSON file (atomic + single source
+    of truth). Round-trip is byte-stable for identical state (I-09): sort_keys +
+    deterministic order. save/load NEVER mutate HARD — they restore SOFT-derived
+    knowledge only.
     """
 
     def __init__(self, path: str) -> None:
@@ -49,14 +53,16 @@ class KnowledgeSnapshotStore:
     def save(self, graph_state: Dict[str, Any], index_state: Dict[str, Any],
              meta: Optional[Dict[str, Any]] = None,
              trust: Optional[TrustState] = None,
-             procedural: Optional[ProceduralState] = None) -> str:
-        """Write {graph, index, meta, trust, procedural} to the snapshot file."""
+             procedural: Optional[ProceduralState] = None,
+             episodes: Optional[EpisodicState] = None) -> str:
+        """Write {graph, index, meta, trust, procedural, episodes} to the snapshot file."""
         payload: Dict[str, Any] = {
             "version": 1,
             "graph": graph_state,
             "index": index_state,
             "trust": trust or {},
             "procedural": procedural or {},
+            "episodes": episodes or [],
             "meta": meta or {},
         }
         parent = os.path.dirname(self._path)
@@ -98,3 +104,15 @@ class KnowledgeSnapshotStore:
         if not isinstance(raw, dict) or "procedures" not in raw:
             return {}
         return dict(raw)
+
+    def load_episodic(self, data: Optional[Dict[str, Any]] = None) -> EpisodicState:
+        """Extract the episode list from a loaded snapshot (graceful empty)."""
+        if data is None:
+            data = self.load()
+        if not data:
+            return []
+        raw = data.get("episodes", [])
+        # defensive: only accept a list of dicts (Episode blobs)
+        if not isinstance(raw, list):
+            return []
+        return [e for e in raw if isinstance(e, dict)]
