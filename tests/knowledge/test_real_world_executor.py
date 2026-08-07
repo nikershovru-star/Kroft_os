@@ -69,6 +69,22 @@ def test_execute_plan_routes_all_steps():
     assert "command_done" in r.observation or r.observation  # shell step via TerminalExecutor
 
 
+def test_structured_json_plan_executes_real_actions():
+    # ТЗ-PHASE-O.3: JSON-array plan with explicit kinds -> real file + real command
+    import json
+    ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
+    payload = json.dumps([
+        {"kind": "file", "path": "s.txt", "content": "json-hello"},
+        {"kind": "command", "cmd": "echo json-cmd"},
+    ])
+    r = ex.execute(_act("execute_plan", payload))
+    assert r.success is True
+    assert os.path.exists(os.path.join(tempfile.gettempdir(), "s.txt"))
+    # malformed JSON must fall back to textual routing (no crash)
+    r2 = ex.execute(_act("execute_plan", "[not valid json"))
+    assert isinstance(r2, type(r))
+
+
 def test_desktop_kind_invokes_desktop_adapter():
     # kind="desktop" routes to PyAutoGUIAdapter (graceful if pyautogui absent)
     ex = RealWorldExecutor(base_dir=tempfile.gettempdir())

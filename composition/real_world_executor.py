@@ -24,7 +24,7 @@ import tempfile
 from typing import Optional
 
 from contracts.cognitive_domain import (
-    Action, CausalMark, ConfidenceScore, NodeLamportClock, ProvenanceType,
+    Action, CausalMark, ConfidenceScore, NodeLamportClock, Provenance, ProvenanceType,
 )
 from contracts.i_execution import ExecutionResult, IExecutor
 from kernel.execution import ReferenceExecutor, ReferenceExecutionEnvironment
@@ -107,14 +107,39 @@ class RealWorldExecutor(IExecutor):
                 observation=f"file_error:{exc}", reward=0.0, confidence=conf, causal=mark)
 
     def _exec_plan(self, action: Action, timeout: Optional[float] = None) -> ExecutionResult:
-        """Execute EVERY plan step as a real action (heuristic routing), aggregate result.
+        """Execute EVERY plan step as a real action, aggregate result.
 
-        For 'execute_plan' the kernel passes payload="\\n".join(plan.steps). Each step is
-        routed: 'write:' -> file backend, 'click'/'type'/'open_app' -> desktop backend,
-        otherwise -> SubprocessSandbox (echo proof). Aggregate: all steps must succeed.
+        Two input shapes are supported (backward compatible):
+          * STRUCTURED: payload is a JSON array of step objects, each with a 'kind'
+            ('file' | 'command' | 'shell' | 'desktop'). Routed precisely.
+          * TEXTUAL: payload is "\\n".join(plan.steps) (kernel default). Each line is
+            routed heuristically: 'write:' -> file, 'click'/'type'/'open_app' -> desktop,
+            otherwise -> TerminalExecutor (echo proof).
+
+        Aggregate: all steps must succeed.
         """
         mark = CausalMark("realworld", 1)
         conf = ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE)
+        structured = self._parse_structured_plan(action.payload)
+        if structured is not None:
+            steps = structured
+            observations = []
+            all_ok = True
+            try:
+                for i, step in enumerate(steps):
+                    r = self._exec_structured_step(action.id, i, step, conf, mark, timeout)
+                    observations.append(r.observation)
+                    all_ok = all_ok and r.success
+                return ExecutionResult(
+                    action_id=action.id, success=all_ok,
+                    observation="; ".join(observations)[:400] or "plan_done",
+                    reward=0.9 if all_ok else 0.1, confidence=conf, causal=mark)
+            except Exception as exc:  # noqa: BLE001
+                return ExecutionResult(
+                    action_id=action.id, success=False,
+                    observation=f"plan_error:{exc}", reward=0.0, confidence=conf, causal=mark)
+
+        # --- textual fallback (kernel default) ---
         steps = [s.strip() for s in (action.payload or "").splitlines() if s.strip()]
         if not steps:
             steps = ["echo ok"]
@@ -141,6 +166,46 @@ class RealWorldExecutor(IExecutor):
             return ExecutionResult(
                 action_id=action.id, success=False,
                 observation=f"plan_error:{exc}", reward=0.0, confidence=conf, causal=mark)
+
+    @staticmethod
+    def _parse_structured_plan(payload: str):
+        """Return a list of step dicts if payload is a JSON array of kinded objects, else None."""
+        if not payload or not payload.strip().startswith("["):
+            return None
+        try:
+            import json
+            data = json.loads(payload)
+        except (ValueError, TypeError):
+            return None
+        if not isinstance(data, list) or not data or not all(isinstance(s, dict) and "kind" in s for s in data):
+            return None
+        return data
+
+    def _exec_structured_step(self, action_id, idx, step, conf, mark, timeout) -> ExecutionResult:
+        kind = (step.get("kind") or "").lower()
+        if kind == "file":
+            path = step.get("path", "")
+            content = step.get("content", "")
+            return self._exec_file(Action(id=f"{action_id}-{idx}", kind="file",
+                                          payload=f"write:{path}|{content}", confidence=conf,
+                                          provenance=Provenance(source="plan", actor="executor")))
+        if kind in ("command", "shell"):
+            return self._run_shell(step.get("cmd", "echo ok"), timeout)
+        if kind == "desktop":
+            # step: {"kind":"desktop","op":"click","x":..,"y":..} | {"op":"type","text":..} | {"op":"open_app","name":..}
+            op = (step.get("op") or "").lower()
+            line = op
+            if op == "click":
+                line = f"click {step.get('x', 0)} {step.get('y', 0)}"
+            elif op == "type":
+                line = f"type {step.get('text', '')}"
+            elif op == "open_app":
+                line = f"open_app {step.get('name', '')}"
+            return self._route_desktop_step(f"{action_id}-{idx}", line, conf, mark)
+        # unknown structured kind -> sim fallback for that step
+        return self._sim.execute(
+            Action(id=f"{action_id}-{idx}", kind=kind, payload="", confidence=conf,
+                   provenance=Provenance(source="plan", actor="executor")), timeout)
 
     def _run_shell(self, cmd_line: str, timeout: Optional[float] = None) -> ExecutionResult:
         mark = CausalMark("realworld", 1)
