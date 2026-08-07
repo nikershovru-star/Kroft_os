@@ -69,13 +69,26 @@ def test_dashboard_panel_shows_live_subsystem_counts():
 
 
 def test_evolution_progresses():
-    """The demo skill evolves (v1 -> v2) across ticks via the LLM-free SkillEvolver."""
+    """The demo skill evolves (v1 -> v2) when REAL tick outcomes show low success rate.
+
+    ТЗ-PHASE-L: step() now feeds REAL ExecutionOutcome stats into SkillEvolver instead
+    of fake stats. Successful proxy-fallback ticks (rate 1.0) do NOT evolve; we inject
+    failed outcomes to prove the runtime evolution path still produces a better variant.
+    """
     a = KroftApp(KroftConfig(node_id="n4", llm="none", ticks=4))
     before = {s.version for s in a.procedural.list_skills() if s.capability == "demo"}
-    a.run_demo(ticks=4)
-    after = {s.version for s in a.procedural.list_skills() if s.capability == "demo"}
     assert 1 in before
-    assert 2 in after  # evolution produced a better (shorter) variant
+    # simulate failed ticks -> SkillEvolver evolves the demo skill to v2
+    from contracts.cognitive_domain import ExecutionOutcome, ConfidenceScore
+    a.kernel._outcomes = [
+        ExecutionOutcome(episode_id="f1", success=False, utility=0.0,
+                         confidence=ConfidenceScore(0.5, "observation"), causal=None),
+        ExecutionOutcome(episode_id="f2", success=False, utility=0.0,
+                         confidence=ConfidenceScore(0.5, "observation"), causal=None),
+    ]
+    a._evolve_procedural_from_runtime(capability="demo", skill=a.procedural._skills["demo"])
+    after = {s.version for s in a.procedural.list_skills() if s.capability == "demo"}
+    assert 2 in after  # evolution produced a better (shorter) variant from real stats
 
 
 def test_graceful_degradation_no_llm_no_federation():

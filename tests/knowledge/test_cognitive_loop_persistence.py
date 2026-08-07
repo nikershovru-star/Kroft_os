@@ -28,14 +28,15 @@ def test_step_persists_and_restores_evolved_memory(tmp_path):
     # step() alone wrote the snapshot (no explicit query)
     assert os.path.exists(snap)
     blob = json.load(open(snap, encoding="utf-8"))
+    # ТЗ-PHASE-K: the tick produced a persisted Episode (runtime loop closed).
     assert len(blob.get("episodes", [])) >= 1
-    assert blob["procedural"]["skills"]["demo"]["version"] == 2  # SkillEvolver outcome
+    # NOTE: demo skill does NOT auto-evolve on successful ticks (ТЗ-PHASE-L switched to
+    # REAL outcome stats; proxy-fallback ticks are always successful -> rate 1.0 -> no
+    # evolution). Procedural evolution is verified separately in test_phase_l below.
 
-    # cold boot without vault -> evolved memory restored
+    # cold boot without vault -> tick episode restored, graph/trust intact
     b = KroftApp(KroftConfig(node_id="k2", llm="none", ticks=0,
                              vault=None, knowledge_snapshot=snap))
     assert len(b.memory._episodes) >= 1
-    assert b.procedural._skills["demo"].version == 2
-    # graph/trust untouched (trust stays at demo seed 0.97)
     assert len(b.graph.nodes()) >= 1
     assert abs(b.trust.current_trust("agent.research") - 0.97) < 1e-9
