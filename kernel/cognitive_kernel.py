@@ -16,6 +16,7 @@ from __future__ import annotations
 import uuid
 import json
 import re
+import math
 from typing import Callable, Dict, List, Optional
 
 from contracts.cognitive_domain import (
@@ -89,6 +90,7 @@ from kernel.llm_advisor import (
 )
 from contracts.i_llm_advisor import ILLMAdvisor, adapter_for
 from contracts.i_self_evolution import ISoftPolicySource
+from contracts import IEmbedding
 
 
 def _uid(prefix: str) -> str:
@@ -304,7 +306,8 @@ class CognitiveKernel(ICognitiveKernel):
                  world_model: Optional["IWorldModel"] = None,
                  memory_evolution: Optional["IMemoryEvolution"] = None,
                  memory: Optional["ILayeredMemory"] = None,
-                 reflection_engine: Optional["IReflectionEngine"] = None) -> None:
+                 reflection_engine: Optional["IReflectionEngine"] = None,
+                 embedding: Optional["IEmbedding"] = None) -> None:
         # ТЗ-WM-01 flag A: default clock MUST derive node_id from the world, never
         # the literal "kernel" (ТЗ-RE-01 already wired node_origin=node_id when a
         # clock is injected; this closes the residual default-construction path).
@@ -344,6 +347,7 @@ class CognitiveKernel(ICognitiveKernel):
         # outcomes and PROPOSES SOFT-layer evolution; Memory Evolution commits it under
         # the O1 Self-Evolving guard. Reflection never writes memory itself.
         self._reflection_engine = reflection_engine
+        self._embedding = embedding  # Slice: semantic episodic retrieval (K5 reuse of adapters/embedding)
         self._outcomes: list = []
         # ТЗ-EX-01: real execution backend (None => proxy fallback, backward compat).
         self._executor = None
@@ -388,22 +392,56 @@ class CognitiveKernel(ICognitiveKernel):
 
     # -- ICognitiveKernel ------------------------------------------------------
     def _retrieve_similar_episodes(self, text: str, k: int = 3) -> List["Episode"]:
-        """Slice 3-alt: retrieve past experiences similar to a goal (K5, keyword overlap).
+        """Slice: retrieve past experiences similar to a goal.
 
-        Minimal, dependency-free similarity over ``Episode.summary`` vs the goal text.
-        Returns top-k by token overlap, best-first. No new retrieval engine (reuses the
-        existing layered-memory Episode store, which already persists + restores).
+        Two paths (K5, no new retrieval engine):
+          - semantic: if an ``IEmbedding`` adapter is wired, score by cosine
+            similarity over ``Episode.summary`` embeddings (finds synonyms /
+            paraphrases that share NO keywords). Adapter failure degrades to [].
+          - fallback: dependency-free keyword-overlap (original Slice 3-alt) when
+            no embedding adapter is available. Deterministic.
+        Both reuse the existing layered-memory Episode store (already persists +
+        restores), so retrieval works across restarts. Returns top-k, best-first.
         """
         eps = self._memory.get_episodes() if self._memory is not None else []
         if not eps or not text:
             return []
+        if self._embedding is not None:
+            return self._retrieve_by_embedding(text, eps, k)
+        return self._retrieve_by_keyword(text, eps, k)
+
+    @staticmethod
+    def _cosine(a: List[float], b: List[float]) -> float:
+        dot = sum(x * y for x, y in zip(a, b))
+        na = math.sqrt(sum(x * x for x in a))
+        nb = math.sqrt(sum(y * y for y in b))
+        return dot / (na * nb) if na and nb else 0.0
+
+    def _retrieve_by_embedding(self, text: str, eps: List["Episode"], k: int) -> List["Episode"]:
+        try:
+            q = self._embedding.embed(text)
+        except Exception:
+            return []  # adapter unavailable -> graceful no-retrieval
+        scored = []
+        for ep in eps:
+            try:
+                v = self._embedding.embed(ep.summary or "")
+            except Exception:
+                continue
+            sim = self._cosine(q, v)
+            if sim >= 0.5:
+                scored.append((sim, ep))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [ep for _, ep in scored[:k]]
+
+    def _retrieve_by_keyword(self, text: str, eps: List["Episode"], k: int) -> List["Episode"]:
         goal_tokens = {t for t in re.findall(r"[^\W_]+", text.lower()) if len(t) > 2}
         if not goal_tokens:
             return []
         scored = []
         for ep in eps:
             ep_tokens = {t for t in re.findall(r"[^\W_]+", (ep.summary or "").lower())
-                        if len(t) > 2}
+                         if len(t) > 2}
             overlap = len(goal_tokens & ep_tokens)
             if overlap > 0:
                 scored.append((overlap, ep))
