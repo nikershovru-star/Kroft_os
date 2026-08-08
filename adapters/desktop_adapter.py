@@ -56,6 +56,23 @@ class PyAutoGUIAdapter(IDesktop):
                     "PyAutoGUI not installed: pip install pyautogui pillow"
                 ) from e
 
+    def available(self) -> bool:
+        """Best-effort liveness check used by live tests to skip gracefully.
+
+        True only when PyAutoGUI is importable AND (on posix) a display server is
+        present. Lets CI / headless environments skip real GUI automation without
+        importing or touching the screen. Never raises.
+        """
+        try:
+            import pyautogui  # noqa: F401  (import side-effects only)
+        except ImportError:
+            return False
+        import os
+        if os.name == "posix":
+            if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+                return False
+        return True
+
     def click(self, x: int, y: int) -> None:
         self._ensure()
         self._pg.click(x, y)

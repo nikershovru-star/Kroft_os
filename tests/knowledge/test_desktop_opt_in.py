@@ -109,13 +109,23 @@ def test_env_var_opt_in():
 
 
 def test_live_desktop_gated():
-    """Real GUI automation gated on DESKTOP_LIVE=1; skipped otherwise."""
+    """Real GUI automation: gated on DESKTOP_LIVE=1 AND a usable display.
+
+    Safe by design (ТЗ option a): never touches the screen in CI. Skips when the
+    flag is absent OR when PyAutoGUI / a display server is unavailable (headless CI).
+    When both hold, proves the live PyAutoGUIAdapter path is wired and executes a
+    desktop step through the opt-in-gated RealWorldExecutor without crashing.
+    """
+    import pytest
     if not os.environ.get("DESKTOP_LIVE"):
-        import pytest
-        pytest.skip("requires live desktop (DESKTOP_LIVE=1 + PyAutoGUI)")
+        pytest.skip("requires live desktop (DESKTOP_LIVE=1)")
     from adapters.desktop_adapter import PyAutoGUIAdapter
+    adapter = PyAutoGUIAdapter()
+    if not adapter.available():
+        pytest.skip("no GUI/display available (PyAutoGUI or DISPLAY missing)")
+    # proof the live path is alive: construct + execute one click through the executor
     ex = RealWorldExecutor(desktop_opt_in=True)
-    ex._desktop = PyAutoGUIAdapter()  # may raise RuntimeError if pyautogui missing
+    ex._desktop = adapter
     r = ex.execute(Action(id="l1", kind="desktop", payload="click 0 0",
                           confidence=ConfidenceScore(0.9, ProvenanceType.RULE_INFERENCE),
                           provenance=Provenance(source="t", actor="t")))
