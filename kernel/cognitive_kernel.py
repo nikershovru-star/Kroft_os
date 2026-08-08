@@ -14,6 +14,7 @@ in via the ports in contracts.i_cognitive_kernel without touching this module.
 from __future__ import annotations
 
 import uuid
+import json
 from typing import Callable, Dict, List, Optional
 
 from contracts.cognitive_domain import (
@@ -440,7 +441,13 @@ class CognitiveKernel(ICognitiveKernel):
         if self._executor is not None:
             # chosen Plan -> Action routed to the execution environment
             plan = self._last_selected_plan
-            payload = "\n".join(plan.steps) if plan is not None else decision.selected_plan_id
+            # ТЗ-PHASE-P.3 (ADR-O.9 K6-exception): prefer structured execution intent
+            # when the planner emitted one; otherwise fall back to textual steps so the
+            # loop stays backward compatible (textual plans still echo via RealWorldExecutor).
+            if plan is not None and plan.execution_steps:
+                payload = json.dumps([dict(s) for s in plan.execution_steps])
+            else:
+                payload = "\n".join(plan.steps) if plan is not None else decision.selected_plan_id
             action = Action(
                 id=f"act-{decision.selected_plan_id}",
                 kind="execute_plan",
