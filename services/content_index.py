@@ -48,6 +48,7 @@ class ContentIndex(ISnapshotable):
     def __init__(self) -> None:
         self._index: Dict[str, Set[str]] = {}
         self._doc_terms: Dict[str, Counter] = {}
+        self._doc_raw: Dict[str, str] = {}  # node_id -> lowercased raw text (phrase rerank)
         self._sorted_terms: List[str] = []  # Stage 20: sorted vocabulary
 
     # ----- internal: maintain sorted term list (Stage 20) -----
@@ -65,6 +66,7 @@ class ContentIndex(ISnapshotable):
         if not counts:
             return
         self._doc_terms[node_id] = counts
+        self._doc_raw[node_id] = (text or "").lower()
         for word in counts:
             self._index.setdefault(word, set()).add(node_id)
         self._rebuild_sorted_terms()
@@ -88,13 +90,22 @@ class ContentIndex(ISnapshotable):
             if not result:
                 return []
         assert result is not None
-        return sorted(
-            result,
-            key=lambda nid: (
-                -sum(self._doc_terms[nid][t] for t in tokens),
-                nid,
-            ),
-        )
+        q_norm = (query or "").lower()
+        # Exact-phrase rerank (ТЗ: retrieval-quality): a document that contains the
+        # query string verbatim (e.g. its own QUESTION header) is lifted above docs
+        # that only win on raw term frequency. This kills frequency collisions on
+        # common terms ("knowledge graph", "attention") without touching the graph,
+        # snapshot, contracts, or embeddings.
+        exact = [nid for nid in result if q_norm and q_norm in self._doc_raw.get(nid, "")]
+        others = [nid for nid in result if nid not in exact]
+
+        def _by_freq(group):
+            return sorted(
+                group,
+                key=lambda nid: (-sum(self._doc_terms[nid][t] for t in tokens), nid),
+            )
+
+        return _by_freq(exact) + _by_freq(others)
 
     def remove_file(self, node_id: str) -> None:
         """Drop node_id from every posting list it appears in.
@@ -103,6 +114,7 @@ class ContentIndex(ISnapshotable):
         Empty posting lists are pruned so get_stats() stays honest.
         """
         counts = self._doc_terms.pop(node_id, None)
+        self._doc_raw.pop(node_id, None)
         if not counts:
             return
         for word in counts:
