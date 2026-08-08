@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from typing import Optional
+from typing import Callable, Optional
 
 from contracts.cognitive_domain import (
     Action, CausalMark, ConfidenceScore, NodeLamportClock, Provenance, ProvenanceType,
@@ -38,12 +38,25 @@ class RealWorldExecutor(IExecutor):
     """
 
     def __init__(self, clock: Optional[NodeLamportClock] = None,
-                 base_dir: Optional[str] = None) -> None:
+                 base_dir: Optional[str] = None,
+                 policy: Optional[Callable[[dict], bool]] = None) -> None:
         self._base_dir = base_dir or tempfile.gettempdir()
         self._fs = None
         self._sandbox = None
         self._desktop = None
+        self._policy = policy  # optional execution policy: step dict -> allow?
         self._sim = ReferenceExecutor(environment=ReferenceExecutionEnvironment(clock), clock=clock)
+
+    def _policy_allows(self, step: dict) -> bool:
+        """ТЗ-PHASE-P.6 (Fix D2): gate planner-generated structured steps.
+
+        Default (no policy): allow file/command/shell (command/shell already guarded by
+        TerminalExecutor blacklist) but DENY desktop — screen automation has no safe
+        default. A supplied policy callable decides per-step (reuse existing guards).
+        """
+        if self._policy is not None:
+            return bool(self._policy(step))
+        return (step.get("kind") or "").lower() != "desktop"
 
     # --- backend accessors (lazy, keep imports localized) -------------------
     def _get_fs(self):
@@ -197,6 +210,11 @@ class RealWorldExecutor(IExecutor):
         return data
 
     def _exec_structured_step(self, action_id, idx, step, conf, mark, timeout) -> ExecutionResult:
+        if not self._policy_allows(step):
+            return ExecutionResult(
+                action_id=f"{action_id}-{idx}", success=False,
+                observation=f"policy_denied:{step.get('kind', '?')}",
+                reward=0.0, confidence=conf, causal=mark)
         kind = (step.get("kind") or "").lower()
         if kind == "file":
             path = step.get("path", "")

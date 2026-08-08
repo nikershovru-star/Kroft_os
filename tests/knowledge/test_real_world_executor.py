@@ -123,3 +123,37 @@ def test_run_kroft_wires_real_world_executor():
     app = KroftApp(KroftConfig(node_id="o1", llm="none", ticks=0,
                               vault="C:/Users/Nikita/Documents/Obsidian Vault/02-Projects/KROFT_OS"))
     assert type(app.kernel._executor).__name__ == "RealWorldExecutor"
+
+
+def test_security_default_denies_desktop_but_allows_file_and_command():
+    # ТЗ-PHASE-P.6 (Fix D2): desktop has no safe default -> denied; file/command allowed
+    # (command guarded by TerminalExecutor blacklist, already present).
+    import json
+    ex = RealWorldExecutor(base_dir=tempfile.gettempdir())
+    desktop_plan = json.dumps([{"kind": "desktop", "op": "click", "x": 1, "y": 1}])
+    rd = ex.execute(_act("execute_plan", desktop_plan))
+    assert rd.success is False
+    assert "policy_denied" in rd.observation
+
+    # file still works
+    fplan = json.dumps([{"kind": "file", "path": "sec.txt", "content": "x"}])
+    rf = ex.execute(_act("execute_plan", fplan))
+    assert rf.success is True
+    assert os.path.exists(os.path.join(tempfile.gettempdir(), "sec.txt"))
+
+
+def test_security_custom_policy_overrides_default():
+    # supplied policy decides per-step (reuse existing guards / add stricter rules)
+    ex = RealWorldExecutor(base_dir=tempfile.gettempdir(),
+                           policy=lambda s: (s.get("kind") == "desktop"
+                                            and s.get("op") == "open_app"
+                                            and s.get("name") == "notepad"))
+    import json
+    allow = json.dumps([{"kind": "desktop", "op": "open_app", "name": "notepad"}])
+    ra = ex.execute(_act("execute_plan", allow))
+    # notepad open is allowed by policy; success depends on pyautogui presence (graceful)
+    assert "policy_denied" not in ra.observation
+    deny = json.dumps([{"kind": "desktop", "op": "click", "x": 1, "y": 1}])
+    rd = ex.execute(_act("execute_plan", deny))
+    assert rd.success is False
+    assert "policy_denied" in rd.observation
