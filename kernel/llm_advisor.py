@@ -170,7 +170,7 @@ class LLMAdvisorPlanner(ReferencePlanner):
                         ProvenanceType.MODEL_INFERENCE,
                     ),
                 )
-                boosted_list.insert(0, boosted)  # move to front (best-first)
+                boosted_list.insert(0, self._apply_experience_ranking([boosted])[0])  # ТЗ-SLICE8: advisor plan also rides experience-ranking
             else:
                 boosted_list.append(p)
         return boosted_list
