@@ -5,6 +5,10 @@ test: (a) graceful degrade when unavailable, (b) pipeline orchestration with
 fake IMultimodalParser adapters, (c) KG VIDEO/AUDIO/IMAGE node creation,
 (d) negative proof-of-fire (K1/K8).
 """
+
+import importlib.util
+import pytest
+
 from contracts.i_multimodal import IMultimodalParser, MediaKnowledge, MediaSegment, MediaSource
 from contracts.knowledge_graph import EdgeType, IGraphEngine, Node, NodeType
 from adapters.ollama_vision import OllamaVisionAdapter
@@ -49,6 +53,10 @@ def test_vision_unavailable_graceful():
 
 
 def test_transcript_unavailable_graceful():
+    # The adapter is available ONLY when yt-dlp is installed. Skip when it actually is
+    # (then `available` is True by design); otherwise verify graceful degradation.
+    if importlib.util.find_spec("yt_dlp") is not None:
+        pytest.skip("yt-dlp installed -> adapter is available by design")
     a = YtDlpTranscriptAdapter()
     assert a.available is False
     try:
