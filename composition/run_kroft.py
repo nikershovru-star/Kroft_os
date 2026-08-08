@@ -58,6 +58,7 @@ class KroftConfig:
     agent_runtime: bool = True   # Phase C: AgentRuntime дефолтно подключён к ядру (--no-agent-runtime для legacy path)
     knowledge_snapshot: Optional[str] = None  # ТЗ-KNOWLEDGE-PERSIST-01: JSON snapshot of graph+index (survives restart)
     desktop_opt_in: bool = False    # P.6: explicit opt-in for desktop (click/type/open_app); default-deny
+    embedding: str = "none"         # Slice: "none" (keyword fallback) | "auto" (local Ollama /v1/embeddings if reachable)
 
 
 class KroftApp:
@@ -88,12 +89,23 @@ class KroftApp:
         # builds LiveRuntimeMetrics + RuntimeSupervisor from it. No kernel change (K5/K6).
         from kernel.observability import LiveMetricsCollector
         self._live_collector = LiveMetricsCollector()
+        # Slice: embedding adapter for semantic episodic retrieval (K5 reuse of
+        # OllamaEmbeddingAdapter). Resolved from env KROFT_EMBEDDING or config.embedding.
+        # "none" -> keyword-overlap fallback (default, network-free). "auto" -> local
+        # Ollama/LM Studio /v1/embeddings when reachable; unavailable -> embedding stays
+        # None and the kernel falls back to keyword-overlap (graceful degradation).
+        embedding_mode = (os.environ.get("KROFT_EMBEDDING")
+                          or getattr(self.config, "embedding", "none") or "none")
+        embedding_adapter = None
+        if embedding_mode == "auto":
+            from adapters.ollama_embedding import OllamaEmbeddingAdapter
+            embedding_adapter = OllamaEmbeddingAdapter()
         # 3) kernel (CognitiveKernel) via the shared composition factory
         self.bus = build_event_bus()
         self.kernel = build_cognitive_kernel(
             node_id=self.config.node_id, llm_client=self.llm,
             memory=self.memory, procedural=self.procedural,
-            live_metrics=self._live_collector,
+            live_metrics=self._live_collector, embedding=embedding_adapter,
         )
         # ТЗ-PHASE-N/O: wire a REAL execution backend (IExecutor) so the cognitive loop
         # records REAL success/failure outcomes instead of the proxy-fallback (always

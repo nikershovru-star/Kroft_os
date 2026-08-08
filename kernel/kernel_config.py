@@ -39,10 +39,14 @@ class KernelConfig:
     # planner can do experience-informed ranking from REAL accumulated success rates.
     # When None, the planner runs without experience bias (backward-compatible).
     procedural: Optional[Any] = None
+    # Slice: optional embedding adapter (IEmbedding) for semantic episodic retrieval.
+    # None -> keyword-overlap fallback (deterministic, network-free by default).
+    embedding: Optional[Any] = None
 
     def merged(self, *, node_id: Any = None, clock: Any = None,
                llm_client: Any = None, live_metrics: Any = None, bus: Any = None,
-               memory: Any = None, procedural: Any = None) -> "KernelConfig":
+               memory: Any = None, procedural: Any = None,
+               embedding: Any = None) -> "KernelConfig":
         """Return a copy with any supplied kwargs overriding this config's fields.
 
         Used by the backward-compatible ``build_kernel(...)`` kwargs path: explicit kwargs
@@ -57,4 +61,5 @@ class KernelConfig:
             bus=bus if bus is not None else self.bus,
             memory=memory if memory is not None else self.memory,
             procedural=procedural if procedural is not None else self.procedural,
+            embedding=embedding if embedding is not None else self.embedding,
         )

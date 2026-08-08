@@ -142,7 +142,7 @@ class KernelBuilder:
             world, attn, res, val, dec, exec_, learn, planner,
             clock=shared_clock, reason=reason, world_model=world_model,
             memory_evolution=memory_evolution, memory=memory,
-            reflection_engine=reflection_engine,
+            reflection_engine=reflection_engine, embedding=cfg.embedding,
         )
 
         # Post-hoc optional wiring (public attach_* API).

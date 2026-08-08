@@ -814,7 +814,8 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
                  live_metrics: Optional[object] = None,
                  config: Optional["KernelConfig"] = None,
                  memory: Optional[object] = None,
-                 procedural: Optional[object] = None) -> CognitiveKernel:
+                 procedural: Optional[object] = None,
+                 embedding: Optional[object] = None) -> CognitiveKernel:
     """Factory: assemble a deterministic, LLM-free reference kernel (I-09).
 
     Backward-compatible thin wrapper. All composition logic now lives in ``KernelBuilder``
@@ -836,6 +837,6 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     base = config if config is not None else KernelConfig()
     resolved = base.merged(node_id=node_id, clock=clock,
                            llm_client=llm_client, live_metrics=live_metrics,
-                           memory=memory, procedural=procedural)
+                           memory=memory, procedural=procedural, embedding=embedding)
     from kernel.kernel_builder import KernelBuilder
     return KernelBuilder(resolved).build()
