@@ -127,7 +127,7 @@ class ReferencePlanner(IPlanner):
         try:
             # FILE: "запиши <content> в <path>" / "сохрани/напиши/создай файл ... в <path>"
             if any(k in low for k in ("запиши", "сохрани", "напиши", "создай файл", "в файл")):
-                parts = re.split(r"\s+в\s+", text, maxsplit=1)
+                parts = re.split(r"\s+в\s+", text, maxsplit=1, flags=re.I)
                 head = parts[0]
                 path = parts[1].strip() if len(parts) > 1 else None
                 if path:

@@ -91,3 +91,40 @@ def test_autonomous_command_goal_executes_and_learns(tmp_path):
     app2.step("выполни echo hello")
     after = app2.procedural._procedures["exec:command"]["runs"]
     assert after > before, (before, after)
+
+
+def test_intent_grammar_case_insensitive_and_negative():
+    """Slice 3-alt hardening: case-insensitive split + negative goals emit no intent."""
+    from kernel.planning import ReferencePlanner
+    from contracts.cognitive_domain import Goal, ConfidenceScore, Provenance
+    from contracts.i_world_model import WorldState
+
+    p = ReferencePlanner(clock=None)
+
+    # case-insensitive: capital 'В' still splits path/content
+    g_ci = Goal(id="g", intent_id="i1", description="Запиши Hello В x.txt",
+                confidence=ConfidenceScore(0.8), provenance=Provenance(source="intent", actor="kernel"))
+    assert p.plan(g_ci, [], WorldState(node_id="n1"), 100)[0].execution_steps == (
+        {"kind": "file", "path": "x.txt", "content": "Hello"},)
+
+    # negative: no file/command keyword -> no structured intent
+    for desc in ("расскажи про архитектуру KROFT", "сохрани спокойствие"):
+        g = Goal(id="g", intent_id="i1", description=desc,
+                 confidence=ConfidenceScore(0.8), provenance=Provenance(source="intent", actor="kernel"))
+        assert p.plan(g, [], WorldState(node_id="n1"), 100)[0].execution_steps is None, desc
+
+
+def test_negative_goal_creates_no_file(tmp_path):
+    """A non-action goal must NOT produce a real file on disk via the public step()."""
+    import os as _os
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    snap = tmp_path / "k.json"
+    app = _make_app(tmp_path, snap)
+
+    app.step("расскажи про архитектуру KROFT")
+
+    # no real file action happened (only the snapshot + vault note may exist)
+    created = [f.name for f in tmp_path.iterdir() if f.is_file() and f != snap]
+    assert not any(f.endswith(".txt") for f in created), created
+    assert app.kernel._outcomes  # loop still ran, just no structured action
