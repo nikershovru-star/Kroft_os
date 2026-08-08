@@ -12,6 +12,7 @@ click:/type:/open: are routed). Default-deny preserved end-to-end.
 """
 
 import os
+import pytest
 
 from contracts.cognitive_domain import (
     Action, ConfidenceScore, Provenance, ProvenanceType,
@@ -116,7 +117,6 @@ def test_live_desktop_gated():
     When both hold, proves the live PyAutoGUIAdapter path is wired and executes a
     desktop step through the opt-in-gated RealWorldExecutor without crashing.
     """
-    import pytest
     if not os.environ.get("DESKTOP_LIVE"):
         pytest.skip("requires live desktop (DESKTOP_LIVE=1)")
     from adapters.desktop_adapter import PyAutoGUIAdapter

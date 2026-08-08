@@ -46,11 +46,13 @@ Architecture constraints throughout (the owner's standing mandate):
 Candidate ranking uses a **value-aware, experience-informed** score. The planner ranks by
 predicted utility; the experience layer biases confidence by past success rate:
 
-```
-score(candidate) = base_value(candidate)
-                  + λ * success_rate(skill_for(candidate))
-                  - μ * failure_rate(skill_for(candidate))
-```
+```python
+# kernel/planning.py — _apply_experience_ranking (Slice 6, stable)
+adj = clamp(base + (sr - 0.5) * 0.4, 0, 1)
+# sr == success_rate of procedural[f"exec:{kind}"]; sr == 0.5 is a no-op (continuity),
+# sr > 0.5 raises confidence, sr < 0.5 lowers it. Only execution-intent candidates
+# (file/command) are adjusted; abstract deliberation is untouched.
+
 
 where `success_rate` / `failure_rate` come from `InMemoryProceduralMemory` (seeded from real
 tick outcomes via `SkillEvolver`, `min_uses=2`, `success_threshold=0.8`). The same
