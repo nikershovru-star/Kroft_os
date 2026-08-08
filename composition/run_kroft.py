@@ -57,6 +57,7 @@ class KroftConfig:
     query: Optional[str] = None  # ТЗ-DAILY-01 / Operator: one-shot query via agent loop (Hermes-desktop tool call)
     agent_runtime: bool = True   # Phase C: AgentRuntime дефолтно подключён к ядру (--no-agent-runtime для legacy path)
     knowledge_snapshot: Optional[str] = None  # ТЗ-KNOWLEDGE-PERSIST-01: JSON snapshot of graph+index (survives restart)
+    desktop_opt_in: bool = False    # P.6: explicit opt-in for desktop (click/type/open_app); default-deny
 
 
 class KroftApp:
@@ -101,7 +102,12 @@ class KroftApp:
         # + deterministic (I-09). No kernel change — attach_executor is the existing
         # post-hoc wiring API (K5/K6).
         from composition.real_world_executor import RealWorldExecutor
-        self.kernel.attach_executor(RealWorldExecutor())
+        # P.6: desktop opt-in is explicit — env KROFT_DESKTOP_OPT_IN=1 OR KroftConfig flag.
+        # Default-deny: without it, RealWorldExecutor blocks all screen-automation steps.
+        # getattr tolerates non-KroftConfig configs (e.g. SimpleNamespace in legacy tests).
+        desktop_opt_in = bool(getattr(self.config, "desktop_opt_in", False)) or \
+            os.environ.get("KROFT_DESKTOP_OPT_IN") == "1"
+        self.kernel.attach_executor(RealWorldExecutor(desktop_opt_in=desktop_opt_in))
         # 4) REAL subsystem components (reused, no new port) — feed the dashboard with live numbers
         self.identity = ReferenceIdentityRegistry()
         self._seed_demo_agents()

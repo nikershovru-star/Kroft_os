@@ -39,24 +39,31 @@ class RealWorldExecutor(IExecutor):
 
     def __init__(self, clock: Optional[NodeLamportClock] = None,
                  base_dir: Optional[str] = None,
-                 policy: Optional[Callable[[dict], bool]] = None) -> None:
+                 policy: Optional[Callable[[dict], bool]] = None,
+                 desktop_opt_in: bool = False) -> None:
         self._base_dir = base_dir or tempfile.gettempdir()
         self._fs = None
         self._sandbox = None
         self._desktop = None
         self._policy = policy  # optional execution policy: step dict -> allow?
+        self._desktop_opt_in = desktop_opt_in  # P.6: explicit opt-in for screen automation
         self._sim = ReferenceExecutor(environment=ReferenceExecutionEnvironment(clock), clock=clock)
 
     def _policy_allows(self, step: dict) -> bool:
-        """ТЗ-PHASE-P.6 (Fix D2): gate planner-generated structured steps.
+        """ТЗ-PHASE-P.6 (Fix D2 + opt-in): gate planner-generated structured steps.
 
         Default (no policy): allow file/command/shell (command/shell already guarded by
         TerminalExecutor blacklist) but DENY desktop — screen automation has no safe
         default. A supplied policy callable decides per-step (reuse existing guards).
+        When the operator explicitly opted in (desktop_opt_in), desktop is permitted;
+        the real execution still funnels through _route_desktop_step's chokepoint.
         """
         if self._policy is not None:
             return bool(self._policy(step))
-        return (step.get("kind") or "").lower() != "desktop"
+        kind = (step.get("kind") or "").lower()
+        if kind == "desktop":
+            return self._desktop_opt_in
+        return True
 
     # --- backend accessors (lazy, keep imports localized) -------------------
     def _get_fs(self):
@@ -256,6 +263,17 @@ class RealWorldExecutor(IExecutor):
             reward=0.9 if success else 0.1, confidence=conf, causal=mark)
 
     def _route_desktop_step(self, action_id, step, conf, mark) -> ExecutionResult:
+        # P.6 default-deny: screen automation has no safe default. When no custom
+        # policy is supplied, desktop runs ONLY if the operator explicitly opted in
+        # (env KROFT_DESKTOP_OPT_IN=1 or KroftConfig). A custom policy callable is
+        # evaluated per real step-dict in _exec_structured_step (it has the full
+        # step with op/name), so we must NOT re-deny here when one is present.
+        # Single chokepoint covers textual + direct Action(kind="desktop") paths;
+        # structured plans also funnel through here after the policy check.
+        if self._policy is None and not self._desktop_opt_in:
+            return ExecutionResult(action_id=action_id, success=False,
+                                    observation="policy_denied:desktop",
+                                    reward=0.0, confidence=conf, causal=mark)
         d = self._get_desktop()
         low = step.lower()
         try:
