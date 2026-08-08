@@ -7,7 +7,9 @@ snapshot is taken (KnowledgeSnapshotStore) and retrieval (ContentIndex AND-searc
 the correct node for >=90% of the pilot corpus. No new storage layer; no contracts change;
 no external books/videos.
 
-Pilot corpus: KROFT_KNOWLEDGE/qa_*.md (70 nodes, 7 types incl. SELF + DECISIONAL).
+Pilot corpus: KROFT_KNOWLEDGE/qa_*.md (506 nodes across 26 owner domains, 7 types
+incl. SELF + DECISIONAL + EXPERIENCE). Scaled from the 70-node pilot to prove the
+ingestion -> graph -> snapshot -> retrieval pipeline teaches KROFT at corpus scale.
 """
 
 import os
@@ -37,7 +39,7 @@ def _load_pilot():
 def test_pilot_ingestion_builds_graph_and_index():
     """Ingest the pilot: graph gets nodes/edges, content index is populated."""
     nodes = _load_pilot()
-    assert len(nodes) >= 60, f"pilot too small: {len(nodes)}"
+    assert len(nodes) >= 500, f"scaled corpus too small: {len(nodes)}"
 
     graph = InMemoryGraphEngine()
     index = ContentIndex()
@@ -104,6 +106,7 @@ def test_pilot_retrieval_finds_correct_node():
         top = index.search(question)  # AND-search, ranked by frequency
         if doc_id in top[:3]:
             hits += 1
-    assert evaluated >= 60, f"too few evaluated: {evaluated}"
+    assert evaluated >= 500, f"too few evaluated: {evaluated}"
     rate = hits / evaluated
+    print(f"[knowledge-pilot] retrieval hit-rate {hits}/{evaluated} = {rate:.3f}")
     assert rate >= 0.90, f"retrieval recall {rate:.2f} < 0.90 ({hits}/{evaluated})"
