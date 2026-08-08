@@ -12,7 +12,7 @@ the deterministic Decision Engine still makes the final pick (I-03 / I-09).
 from __future__ import annotations
 
 import uuid
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from contracts.cognitive_domain import (
     Action,
@@ -83,6 +83,32 @@ class ReferencePlanner(IPlanner):
         utils = [self._world_model.evaluate(st, intent, self._values) for st in rollout]
         return float(min(utils))
 
+    def _build_execution_steps(self, step: ReasoningStep) -> Optional[Tuple[dict, ...]]:
+        """Best-effort structured execution intent from a reasoning step.
+
+        ТЗ-PHASE-P.2 (ADR-O.9 K6-exception): populate Plan.execution_steps so the
+        cognitive loop can drive REAL actions via RealWorldExecutor._exec_plan (PHASE O.3).
+        Returns None when no structured intent can be derived -> backward compatible
+        (textual plan unchanged). Recognises lightweight markers in the step description;
+        any other text yields None until an upstream source emits structured intent.
+        """
+        desc = (step.description or "").strip()
+        low = desc.lower()
+        try:
+            if low.startswith(("exec:", "cmd:", "shell:")):
+                return ({"kind": "command", "cmd": desc.split(":", 1)[1].strip()},)
+            if low.startswith("write:"):
+                _, rest = desc.split("write:", 1)
+                path, _, content = rest.partition("|")
+                return ({"kind": "file", "path": path.strip(), "content": content},)
+            if "click" in low or "type" in low or "open_app" in low or low.startswith("open "):
+                verb = low.split()[0] if low.split() else "click"
+                op = "open_app" if verb == "open" else verb
+                return ({"kind": "desktop", "op": op, "text": desc},)
+        except Exception:  # noqa: BLE001 — any parse failure -> no structured intent
+            return None
+        return None
+
     def plan(self, goal: Goal, reasoning_steps: List[ReasoningStep],
              world: WorldState, budget_tokens: int,
              intent: Optional[Intent] = None) -> List[Plan]:
@@ -93,12 +119,14 @@ class ReferencePlanner(IPlanner):
             plan = Plan(id=_uid("plan"), goal_id=goal.id,
                         steps=(s.description,),
                         confidence=s.confidence,
-                        provenance=Provenance(source="reasoning", actor="kernel"))
+                        provenance=Provenance(source="reasoning", actor="kernel"),
+                        execution_steps=self._build_execution_steps(s))
             # value-aware predicted utility via World Model lookahead (ТЗ-PL-01 flag 2)
             util = self._predicted_utility(plan, world, intent, step=s)
             ranked = Plan(id=plan.id, goal_id=goal.id, steps=plan.steps,
                           confidence=ConfidenceScore(util, ProvenanceType.RULE_INFERENCE),
-                          provenance=plan.provenance)
+                          provenance=plan.provenance,
+                          execution_steps=plan.execution_steps)
             candidates.append(ranked)
 
         if not candidates:
