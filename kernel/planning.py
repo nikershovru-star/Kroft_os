@@ -51,11 +51,16 @@ class ReferencePlanner(IPlanner):
     """
 
     def __init__(self, clock, world_model: Optional[IWorldModel] = None,
-                 values: Optional[IValueSystem] = None) -> None:
+                 values: Optional[IValueSystem] = None,
+                 procedural: Optional[object] = None) -> None:
         # ТЗ-RE-01 flag 1: planner advances the SAME shared node clock as the kernel.
         self._clock = clock
         self._world_model = world_model
         self._values = values
+        # Slice 4: optional procedural memory (InMemoryProceduralMemory) for
+        # experience-informed ranking. Duck-typed (any object with a _procedures
+        # dict keyed by capability), so the planner stays K6-clean (no services import).
+        self._procedural = procedural
 
     def _predicted_utility(self, plan: Plan, world: WorldState,
                           intent: Optional[Intent],
@@ -150,6 +155,44 @@ class ReferencePlanner(IPlanner):
             return None
         return None
 
+    def _apply_experience_ranking(self, candidates: List[Plan]) -> List[Plan]:
+        """Slice 4: bias plan confidence by past procedural success-rate (K5).
+
+        For candidates that carry a structured execution intent (file/command), read
+        the capability's success_rate from the procedural memory and nudge confidence
+        upward toward 1.0 in proportion to experience. Unknown capability (no entry,
+        or zero runs) is left UNCHANGED — so abstract deliberation (choose_blue/red,
+        which has no execution_steps) is never touched and stays deterministic.
+        Deterministic for a given memory state; no new port / planner contract change.
+        """
+        if self._procedural is None:
+            return candidates
+        procs = getattr(self._procedural, "_procedures", None)
+        if not isinstance(procs, dict):
+            return candidates
+        out = []
+        for c in candidates:
+            kind = None
+            if c.execution_steps:
+                first = c.execution_steps[0]
+                if isinstance(first, dict):
+                    kind = first.get("kind")
+            if not kind:
+                out.append(c)
+                continue
+            proc = procs.get(f"exec:{kind}")
+            base = c.confidence.value
+            adj = base
+            if proc and proc.get("runs", 0) > 0:
+                sr = proc.get("success_rate") or (
+                    proc.get("successes", 0) / float(proc["runs"]))
+                # minimal deterministic boost: move base toward 1.0 by sr * 0.3
+                adj = min(1.0, base + (1.0 - base) * float(sr) * 0.3)
+            out.append(Plan(id=c.id, goal_id=c.goal_id, steps=c.steps,
+                            confidence=ConfidenceScore(adj, ProvenanceType.RULE_INFERENCE),
+                            provenance=c.provenance, execution_steps=c.execution_steps))
+        return out
+
     def plan(self, goal: Goal, reasoning_steps: List[ReasoningStep],
              world: WorldState, budget_tokens: int,
              intent: Optional[Intent] = None) -> List[Plan]:
@@ -189,6 +232,10 @@ class ReferencePlanner(IPlanner):
                          execution_steps=goal_steps)
                     for c in candidates
                 ]
+
+        # Slice 4: bias confidence by past procedural success-rate for execution
+        # intent (file/command). Abstract deliberation (no execution_steps) untouched.
+        candidates = self._apply_experience_ranking(candidates)
 
         # rank BEST-first by predicted value-aware utility (planner only ranks)
         candidates.sort(key=lambda p: p.confidence.value, reverse=True)
