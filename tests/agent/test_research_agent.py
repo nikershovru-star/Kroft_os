@@ -93,9 +93,12 @@ def test_optional_llm_synthesis():
 
     class _FakeLlm(ILlm):
         def complete(self, prompt, **kwargs):
-            return f"[synthesis] {prompt[:40]}"
+            from contracts.i_llm import LlmResponse
+            text = prompt.text if hasattr(prompt, "text") else str(prompt)
+            return LlmResponse(text=f"[synthesis] {text[:40]}")
         def stream(self, prompt, **kwargs):
-            yield f"[synthesis] {prompt[:40]}"
+            text = prompt.text if hasattr(prompt, "text") else str(prompt)
+            yield f"[synthesis] {text[:40]}"
 
     agent, _ = _build_research_stack(llm=_FakeLlm())
     result = agent.run("agent behaviour")
