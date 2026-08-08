@@ -262,18 +262,43 @@ class RealWorldExecutor(IExecutor):
             observation=(f"blocked:{out}" if blocked else (out[:200] or "command_done")),
             reward=0.9 if success else 0.1, confidence=conf, causal=mark)
 
+    def _parse_desktop_step(self, step: str) -> dict:
+        """Parse a desktop step string into a structured dict (op/x/y/text/name).
+
+        Mirrors the structured-plan shape ({'kind':'desktop','op':...,'x':..,'y':..,
+        'text':..,'name':..}) so a custom policy sees identical input regardless of
+        whether the step arrived as JSON or as a textual line.
+        """
+        low = (step or "").lower()
+        parts = (step or "").split()
+        if low.startswith("click"):
+            x = int(parts[1]) if len(parts) > 1 else 0
+            y = int(parts[2]) if len(parts) > 2 else 0
+            return {"kind": "desktop", "op": "click", "x": x, "y": y}
+        if low.startswith("type"):
+            text = step.split(" ", 1)[1] if " " in step else ""
+            return {"kind": "desktop", "op": "type", "text": text}
+        if low.startswith("open_app"):
+            name = step.split(" ", 1)[1] if " " in step else ""
+            return {"kind": "desktop", "op": "open_app", "name": name}
+        return {"kind": "desktop", "op": "unknown"}
+
     def _route_desktop_step(self, action_id, step, conf, mark) -> ExecutionResult:
         # P.6 default-deny: screen automation has no safe default. When no custom
         # policy is supplied, desktop runs ONLY if the operator explicitly opted in
         # (env KROFT_DESKTOP_OPT_IN=1 or KroftConfig). A custom policy callable is
-        # evaluated per real step-dict in _exec_structured_step (it has the full
-        # step with op/name), so we must NOT re-deny here when one is present.
-        # Single chokepoint covers textual + direct Action(kind="desktop") paths;
-        # structured plans also funnel through here after the policy check.
+        # evaluated per real step-dict here (parsed from the step string), so it
+        # governs direct/textual desktop paths too — not just structured plans.
         if self._policy is None and not self._desktop_opt_in:
             return ExecutionResult(action_id=action_id, success=False,
                                     observation="policy_denied:desktop",
                                     reward=0.0, confidence=conf, causal=mark)
+        if self._policy is not None:
+            parsed = self._parse_desktop_step(step)
+            if not self._policy_allows(parsed):
+                return ExecutionResult(action_id=action_id, success=False,
+                                        observation="policy_denied:desktop",
+                                        reward=0.0, confidence=conf, causal=mark)
         d = self._get_desktop()
         low = step.lower()
         try:
