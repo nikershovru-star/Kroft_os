@@ -290,6 +290,10 @@ class Plan:
     steps: Tuple[str, ...]               # ordered step ids/descriptions
     confidence: ConfidenceScore
     provenance: Provenance
+    # ТЗ-PHASE-P.1 (ADR-O.9 K6-exception): optional structured execution intent.
+    # Each item is a dict with a 'kind' (file|command|shell|desktop) routed by
+    # RealWorldExecutor._exec_plan (PHASE O.3). None => textual plan (backward compat).
+    execution_steps: Optional[Tuple[dict, ...]] = None
 
 
 @dataclass(frozen=True)
