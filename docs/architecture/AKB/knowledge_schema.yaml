@@ -1,0 +1,468 @@
+# KROFT Knowledge Schema — архитектура знаний системы
+# Machine-readable (YAML). Читается KROFT и arch-gate тестами.
+# НЕ импортируется в runtime (LAW K8). Источник истины для ingestion/graph/persistence/retrieval.
+# Author: Никита (user mandate 2026-08-08). Status: proposed-schema.
+---
+schema_version: 1
+status: proposed
+design_decision:
+  # Ключевое методологическое решение пользователя:
+  # НЕ качать тысячи книг/видео сразу. Сначала Knowledge Schema + 500-1000 эталонных Q&A,
+  # прогнать через ingestion->graph->persistence->retrieval, проверить реальное обучение,
+  # затем масштабировать до 10-20k Q&A. Быстрее и безопаснее для текущей разработки.
+  ingestion_strategy: schema-first-then-qa
+  qa_target_first_wave: [500, 1000]
+  qa_target_scale: [10000, 20000]
+  raw_pdf_freeze: true   # сырые PDF из Library НЕ грузить, пока Schema+QA не валидированы
+
+# 8 типов знаний (ядро KROFT Knowledge System, пункт 60 пользователя)
+# FACTS/CONCEPTS/PROCEDURES/DECISIONS/EXPERIENCE/FAILURES/SELF/RESEARCH
+# (предыдущие 7 типов переформулированы: META-уверенность теперь атрибут
+#  узлов FACTS/SELF/RESEARCH, а не отдельный тип; DECISIONAL выделен отдельно)
+knowledge_types:
+  - id: FACTS
+    question: "что известно?"
+    store: [graph, snapshot.semantic]
+    attrs: [confidence, evidence_level, freshness, temporal_validity]
+    example: '"Python 3.12 is current" (TRUE NOW)'
+  - id: CONCEPTS
+    question: "как всё связано?"
+    store: [graph, snapshot.semantic]
+    example: "entity vs concept; taxonomy vs ontology; causal_graph"
+  - id: PROCEDURES
+    question: "как это сделать?"
+    store: [snapshot.procedural, graph]
+    example: "как добавить новый источник знаний; план из 9 шагов"
+  - id: DECISIONS
+    question: "что выбрать?"
+    store: [decision_rules, graph]
+    example: "IF documents<10k THEN filesystem+BM25; выбор архитектуры по template"
+  - id: EXPERIENCE
+    question: "что произошло раньше?"
+    store: [snapshot.episodes]
+    example: "TASK/ACTION/RESULT/ERROR/LESSON/CORRECTION"
+  - id: FAILURES
+    question: "какие ошибки были?"
+    store: [failure_library, snapshot.episodes]
+    example: "SYMPTOM/CAUSE/DETECTION/FIX/PREVENTION/REGRESSION_TEST"
+  - id: SELF
+    question: "как устроена KROFT?"
+    store: [self_model, snapshot.semantic, runtime_state]
+    example: "KROFT_SELF_KNOWLEDGE: компоненты, ingestion, retrieval, persistence, runtime, code, architecture"
+  - id: RESEARCH
+    question: "что ещё нужно узнать?"
+    store: [research_queue, graph]
+    example: "knowledge gap -> research plan -> experiment -> ingest"
+
+# Тематические слои (26 баз знаний)
+topic_layers:
+  - id: math_for_ai
+    name: "Математика для AI"
+    covers: [linear_algebra, matrices, vectors, eigenvalues, eigenvectors, probability, statistics,
+              bayes, distributions, calculus, derivatives, gradients, optimization, entropy,
+              information_theory, kl_divergence, cosine_similarity]
+    key_questions:
+      - "Что такое gradient?"
+      - "Почему gradient descent работает?"
+      - "Что такое entropy?"
+      - "Почему cosine similarity для embeddings?"
+    knowledge_types: [CONCEPTUAL, FACTUAL]
+  - id: information_theory
+    name: "Теория информации"
+    covers: [shannon_entropy, mutual_information, information_gain, compression,
+              signal_noise, uncertainty, coding_theory]
+    key_questions:
+      - "Как определить, содержит ли документ новую информацию?"
+      - "Чем information gain отличается от similarity?"
+      - "Почему повторение знания не увеличивает ценность базы?"
+    knowledge_types: [CONCEPTUAL, META]
+    # Прямо применимо к очистке Vault (dedup/decay)
+    applies_to: [vault_cleanup, forgetting]
+  - id: scientific_method
+    name: "Научный метод"
+    covers: [hypothesis, experiment, observation, evidence, falsification,
+              reproducibility, peer_review, confidence, uncertainty, causal_inference]
+    key_questions:
+      - "Как отличать факт от гипотезы?"
+      - "Что сделать, прежде чем считать утверждение доказанным?"
+    knowledge_types: [CONCEPTUAL, META, DECISIONAL]
+  - id: causal_thinking
+    name: "Причинно-следственное мышление"
+    covers: [correlation, causation, confounding, causal_graphs, intervention,
+              counterfactual, causal_inference]
+    key_questions:
+      - "Продажи выросли после рекламы != реклама вызвала рост"
+    knowledge_types: [CONCEPTUAL, DECISIONAL]
+  - id: critical_thinking
+    name: "Critical Thinking"
+    covers: [logical_fallacies, assumptions, evidence, claims, arguments, counterarguments,
+              contradictions, source_reliability, bias, framing, manipulation,
+              false_dilemmas, circular_reasoning]
+    key_questions:
+      - "Как найти скрытое предположение?"
+      - "Как проверить аргумент?"
+      - "Что может опровергнуть утверждение?"
+      - "Какие альтернативные объяснения?"
+    knowledge_types: [CONCEPTUAL, META, DECISIONAL]
+  - id: decision_making
+    name: "Decision Making"
+    covers: [decision_trees, expected_value, risk, uncertainty, opportunity_cost,
+              trade_offs, utility, regret, reversible_irreversible, cost_benefit]
+    output_template:
+      # KROFT отвечает НЕ "А лучше", а структурно:
+      fields: [context, constraints, options, advantages, disadvantages,
+               risks, cost, reversibility, recommendation]
+    example: "Выбор между двумя архитектурами"
+    knowledge_types: [DECISIONAL, PROCEDURAL]
+  - id: human_psychology
+    name: "Human Psychology"
+    covers: [cognitive_biases, confirmation_bias, availability_heuristic, anchoring,
+              loss_aversion, sunk_cost, dunning_kruger, motivation, attention,
+              memory, habit_formation, decision_fatigue]
+    purpose: "понимание поведения человека, не 'психолог KROFT'"
+    knowledge_types: [CONCEPTUAL]
+  - id: linguistics
+    name: "Linguistics"
+    covers: [semantics, syntax, pragmatics, morphology, ambiguity, context,
+              discourse, reference_resolution, entity_resolution, multilingual_semantics]
+    key_questions:
+      - "Что пользователь сказал? vs что имел в виду?"
+    knowledge_types: [CONCEPTUAL, PROCEDURAL]
+  - id: knowledge_representation
+    name: "Knowledge Representation"
+    covers: [ontology, taxonomy, hierarchy, entities, relations, predicates, properties,
+              concepts, instances, schemas, knowledge_graphs, rdf, owl, json_ld,
+              semantic_web, temporal_knowledge, provenance]
+    key_questions:
+      - "Чем entity отличается от concept?"
+      - "Чем taxonomy отличается от ontology?"
+      - "Что такое relation?"
+      - "Как представить противоречивые знания?"
+    knowledge_types: [CONCEPTUAL, FACTUAL]
+  - id: databases
+    name: "Databases"
+    covers: [relational, sql, normalization, indexes, transactions, acid, isolation, mvcc,
+              nosql, document_stores, key_value, graph_databases, vector_databases,
+              search_engines]
+    decision_rules:
+      - "Когда SQL?"
+      - "Когда graph DB?"
+      - "Когда vector DB?"
+      - "Когда filesystem?"
+    knowledge_types: [DECISIONAL, CONCEPTUAL]
+  - id: search_ir
+    name: "Search / Information Retrieval"
+    covers: [inverted_index, tf_idf, bm25, embeddings, dense_retrieval, sparse_retrieval,
+              hybrid_search, reranking, query_expansion, semantic_search, faceted_search,
+              relevance, precision, recall, mrr, ndcg]
+    key_questions:
+      - "Почему поиск вернул именно эти 10 документов?"
+      - "Почему нужный документ не найден?"
+    knowledge_types: [CONCEPTUAL, DECISIONAL]
+    applies_to: [retrieval_engine]
+  - id: memory_systems
+    name: "Memory Systems"
+    covers:
+      human: [short_term, working, long_term, episodic, semantic, procedural]
+      ai: [context_memory, conversation_memory, episodic, semantic, procedural,
+           external_memory, retrieval_memory]
+    key_questions:
+      - "Что запомнить? что нет?"
+      - "Когда обновить?"
+      - "Как удалить устаревшее?"
+    knowledge_types: [CONCEPTUAL, PROCEDURAL]
+  - id: forgetting
+    name: "Forgetting / Knowledge Decay"
+    covers: [ttl, expiration, stale_knowledge, versioning, superseded, archival,
+              deletion, confidence_decay, temporal_validity]
+    example:
+      - 'Knowledge: "Python 3.12 is current"'
+      - "↓ 2 years"
+      - 'Knowledge: "Potentially stale"'
+      - "↓ verification"
+      - 'Knowledge: "Superseded"'
+    knowledge_types: [PROCEDURAL, META, DECISIONAL]
+    applies_to: [vault_cleanup]
+  - id: contradiction_mgmt
+    name: "Contradiction Management"
+    covers: [contradiction_detection, conflict_resolution, source_ranking,
+              temporal_resolution, context_resolution, uncertainty, competing_hypotheses]
+    example: "A says X; B says NOT X -> не слепо объединять"
+    knowledge_types: [DECISIONAL, META]
+  - id: self_reflection
+    name: "Self-Reflection (Agent Runtime)"
+    covers: [what_i_did, why_i_did, expected_result, where_error, repeat, other_tool]
+    knowledge_types: [EXPERIENTIAL, META]
+  - id: self_correction
+    name: "Self-Correction"
+    flow: [answer, check, detect_problem, repair, check_again]
+    example: "retrieval 5 docs -> verifier: 2 противоречат -> re-retrieval -> resolved by newer source"
+    knowledge_types: [PROCEDURAL, EXPERIENTIAL]
+  - id: planning
+    name: "Planning"
+    covers: [goals, subtasks, dependencies, prerequisites, planning, replanning,
+              scheduling, resource_constraints, execution, verification]
+    example: "научить работать с новым источником -> 9 шагов (identify..evaluate)"
+    knowledge_types: [PROCEDURAL, DECISIONAL]
+  - id: software_engineering
+    name: "Software Engineering Practices"
+    covers: [git, branching, commits, semantic_versioning, ci_cd, code_review,
+              unit_tests, integration_tests, e2e, contract_tests, property_based,
+              fuzzing, static_analysis, linting, profiling, benchmarking]
+    knowledge_types: [PROCEDURAL]
+  - id: debugging
+    name: "Debugging"
+    covers: [module_not_found, test_failure, api_500, regression, memory_leak,
+              race_condition, bottleneck]
+    knowledge_types: [PROCEDURAL, EXPERIENTIAL]
+  - id: incident_response
+    name: "Incident Response"
+    flow: [incident, detect, contain, diagnose, mitigate, recover, verify, postmortem, prevent]
+    knowledge_types: [PROCEDURAL, EXPERIENTIAL]
+  - id: security_ai
+    name: "Security для AI"
+    covers: [prompt_injection, indirect_prompt_injection, jailbreaks, data_poisoning,
+              model_extraction, data_leakage, insecure_tools, excessive_agency,
+              privilege_escalation, malicious_documents, supply_chain, secrets_exposure,
+              sandbox_escape, ssrf, code_execution, authentication, authorization]
+    knowledge_types: [CONCEPTUAL, DECISIONAL, PROCEDURAL]
+  - id: mcp_tools
+    name: "MCP / Tools"
+    covers: [mcp, tools, resources, prompts, tool_schemas, tool_permissions,
+              tool_discovery, tool_validation, tool_execution, tool_failure, tool_security]
+    knowledge_types: [CONCEPTUAL, PROCEDURAL]
+  - id: human_ai_interaction
+    name: "Human-AI Interaction"
+    covers: [ask_clarification, communicate_uncertainty, explain_decisions, show_sources,
+              request_confirmation, avoid_overconfidence, recover_from_errors]
+    knowledge_types: [PROCEDURAL, SELF]
+  - id: ethics_governance
+    name: "Ethics / AI Governance"
+    covers: [privacy, consent, data_minimization, transparency, explainability,
+              accountability, auditability, human_oversight, access_control, data_retention]
+    knowledge_types: [CONCEPTUAL, DECISIONAL]
+  - id: self_model
+    name: "KROFT Self Model (KROFT_SELF_KNOWLEDGE)"
+    covers: [what_is_kroft, architecture, components, knowledge_layer, ingestion,
+              retrieval, persistence, agent_runtime, tools_available, limitations,
+              tests, launch, restore_state, configs, add_source, add_tool,
+              diagnose_error, past_decisions, why_current_architecture]
+    knowledge_types: [SELF, PROCEDURAL]
+  - id: experience_log
+    name: "Experience (EXPERIENTIAL base)"
+    record_schema: [TASK, CONTEXT, ACTION, RESULT, ERROR, LESSON, CORRECTION]
+    example: "Restore snapshot -> 412 nodes, 17 invalid edges -> pre-restore validation"
+    knowledge_types: [EXPERIENTIAL]
+  - id: decision_rules
+    name: "Decisional Knowledge (rules)"
+    form: "IF <cond> THEN <action>"
+    examples:
+      - "IF documents<10k THEN filesystem+BM25"
+      - "IF semantic_retrieval_required THEN add embeddings"
+      - "IF relationships_central THEN consider graph"
+    knowledge_types: [DECISIONAL]
+  - id: computer_networks
+    name: "Компьютерные сети"
+    covers: [tcp_ip, http_https, dns, tls, sockets, websocket, rest, grpc, proxies,
+              reverse_proxy, load_balancing, nat, firewalls, routing, ipv4, ipv6,
+              latency, bandwidth, packet_loss, retries, timeouts]
+    key_questions:
+      - "Почему API доступен из браузера, но недоступен из контейнера?"
+      - "Почему timeout не означает, что сервер не работает?"
+      - "Что происходит от ввода URL до получения страницы?"
+    knowledge_types: [CONCEPTS, PROCEDURES, SELF]
+  - id: compilers_interpreters
+    name: "Compilers и interpreters"
+    covers: [lexer, parser, ast, compiler, interpreter, bytecode, vm, jit, runtime,
+              garbage_collection, static_analysis]
+    key_questions:
+      - "Чем интерпретатор отличается от компилятора?"
+      - "Что происходит с Python-кодом после запуска?"
+      - "Что такое AST?"
+    knowledge_types: [CONCEPTS, PROCEDURES]
+  - id: distributed_ai
+    name: "Distributed AI"
+    covers: [distributed_inference, model_serving, batching, parallelism,
+              tensor_parallelism, pipeline_parallelism, distributed_memory,
+              distributed_agents, coordination, distributed_retrieval]
+    knowledge_types: [CONCEPTS, PROCEDURES, DECISIONS]
+  - id: gpu_hardware
+    name: "GPU / Hardware (RTX 3060)"
+    covers: [cpu, gpu, cuda, vram, ram, cache, pcie, tensor_cores, quantization,
+              fp32, fp16, bf16, int8, int4, batching, kv_cache]
+    key_questions:
+      - "Почему модель помещается в RAM, но не в VRAM?"
+      - "Почему quantization уменьшает потребление памяти?"
+    knowledge_types: [CONCEPTS, DECISIONS, SELF]
+  - id: llm_inference
+    name: "LLM inference"
+    covers: [token_generation, sampling, temperature, top_p, top_k, repetition_penalty,
+              kv_cache, context_length, batching, speculative_decoding, quantization,
+              model_formats, gguf, ollama, llama_cpp, vllm]
+    knowledge_types: [CONCEPTS, PROCEDURES, SELF]
+  - id: model_evaluation
+    name: "Model Evaluation"
+    covers: [benchmark, test_set, golden_dataset, human_evaluation, automated_evaluation,
+              factuality, groundedness, faithfulness, retrieval_metrics, latency, cost, robustness]
+    key_questions:
+      - "Как доказать, что новая версия KROFT лучше старой?"
+    knowledge_types: [PROCEDURES, EXPERIENCE, RESEARCH]
+  - id: synthetic_data
+    name: "Synthetic Data"
+    covers: [concept_gen, question_gen, answer_gen, counterexample_gen, scenario_gen, test_gen]
+    note: "KROFT генерирует Concept->Q->A->Counterexamples->Scenarios->Tests, НО валидирует, не считая истиной автоматически"
+    knowledge_types: [PROCEDURES, RESEARCH]
+  - id: dataset_engineering
+    name: "Dataset Engineering"
+    covers: [dataset_creation, cleaning, deduplication, normalization, labeling, balancing,
+              train_val_test_split, data_leakage, synthetic_datasets, golden_datasets]
+    knowledge_types: [PROCEDURES, CONCEPTS]
+  - id: data_quality
+    name: "Data Quality"
+    covers: [completeness, consistency, correctness, freshness, uniqueness, validity, provenance]
+    per_record: [quality_score, confidence, freshness, source_authority]
+    knowledge_types: [CONCEPTS, FACTS]
+  - id: data_lineage
+    name: "Data Lineage"
+    covers: [source, transcript, extracted_paragraph, concept, qa, knowledge_node, graph_relation, answer]
+    example: "YouTube->Transcript->Paragraph->Concept->Q&A->Node->Relation->Answer"
+    knowledge_types: [CONCEPTS, SELF]
+  - id: temporal_knowledge
+    name: "Temporal Knowledge"
+    covers: [true_now, true_then, no_longer_true, future, unknown]
+    example: '"Какая версия Python актуальна?" — не вечный факт'
+    knowledge_types: [FACTS, CONCEPTS]
+  - id: context_management
+    name: "Context Management (LLM)"
+    covers: [context_selection, context_compression, summarization, relevance_filtering,
+              context_prioritization, context_budgeting, lost_in_the_middle, context_caching]
+    knowledge_types: [PROCEDURES, DECISIONS]
+  - id: query_understanding
+    name: "Query Understanding"
+    covers: [intent, entities, constraints, time, required_knowledge, search_strategy]
+    example: '"почему вчера после обновления KROFT не видит Vault?" -> проблема/время/компонент/regression'
+    knowledge_types: [PROCEDURES, CONCEPTS]
+  - id: multi_hop_reasoning
+    name: "Multi-hop Reasoning"
+    covers: [question, a, b, c, conclusion]
+    example: "Почему не нашла документ? -> Query->Retriever->Index->Embedding->Document->Metadata"
+    knowledge_types: [CONCEPTS, PROCEDURES]
+  - id: graph_reasoning
+    name: "Graph Reasoning"
+    covers: [graph_traversal, shortest_path, neighborhood, centrality, communities,
+              dependency_graph, causal_graph, temporal_graph, graph_embeddings]
+    knowledge_types: [CONCEPTS, PROCEDURES]
+  - id: ontology_engineering
+    name: "Ontology Engineering"
+    covers: [agent, tool, memory, goal, plan, action]
+    example: "Agent -> Tool/Memory/Goal/Plan/Action (не хаотичная коллекция связей)"
+    knowledge_types: [CONCEPTS, SELF]
+  - id: knowledge_lifecycle
+    name: "Knowledge Lifecycle"
+    stages: [DISCOVERED, EXTRACTED, VALIDATED, ACTIVE, UPDATED, SUPERSEDED, ARCHIVED]
+    knowledge_types: [FACTS, CONCEPTS]
+  - id: knowledge_merging
+    name: "Knowledge Merging"
+    covers: [detect_duplicate, merge, preserve_provenance, resolve_conflicts]
+    knowledge_types: [PROCEDURES, CONCEPTS]
+  - id: knowledge_compression
+    name: "Knowledge Compression"
+    covers: [dedup_to_concepts, preserve_sources]
+    example: "100 docs (A,A,A,B,B,C) -> Concept A/B/C без потери источников"
+    knowledge_types: [PROCEDURES, CONCEPTS]
+  - id: knowledge_expansion
+    name: "Knowledge Expansion"
+    covers: [concept, related_concepts, missing_concepts, questions, research]
+    knowledge_types: [RESEARCH, CONCEPTS]
+  - id: knowledge_gap_detection
+    name: "Knowledge Gap Detection"
+    covers: [detect_gaps, gap_to_research, validate, ingest, test]
+    example: "RAG: embeddings✓ retrieval✓ reranking✗ evaluation✗ query_expansion✗ -> 3 gaps"
+    knowledge_types: [RESEARCH, SELF]
+  - id: curiosity_research_engine
+    name: "Curiosity / Research Engine"
+    covers: [what_to_learn_next, research_plan, compare_methods, run_experiment]
+    example: "Goal: improve retrieval. Known: BM25/Embeddings. Unknown: Hybrid/Reranking/NDCG -> plan"
+    knowledge_types: [RESEARCH]
+  - id: experiment_engine
+    name: "Experiment Engine"
+    covers: [hypothesis, experiment, dataset, measure, result, save_as_experimental_knowledge]
+    example: "Hyp: Hybrid improves recall. Exp: BM25 vs Emb vs Hybrid. Measure Recall@10."
+    knowledge_types: [RESEARCH, EXPERIENCE]
+  - id: simulation
+    name: "Simulation"
+    covers: [what_if_remove_component, predict_state, predict_inconsistency]
+    example: "Remove Persistence -> Restart -> Knowledge lost -> State inconsistency"
+    knowledge_types: [SELF, RESEARCH]
+  - id: failure_knowledge
+    name: "Failure Knowledge (FAILURE_LIBRARY)"
+    covers: [symptom, cause, detection, fix, prevention, regression_test]
+    example: "Symptom: KROFT не видит новый файл. Cause: read-after-write. Fix: refresh index."
+    knowledge_types: [FAILURES, EXPERIENCE]
+  - id: architecture_knowledge
+    name: "Architecture Knowledge (ARCHITECTURE_DECISIONS)"
+    covers: [problem, context, options, decision, why, trade_offs, rejected_alternatives, consequences, date]
+    knowledge_types: [SELF, DECISIONS]
+  - id: code_knowledge
+    name: "Code Knowledge"
+    covers: [file, module, class, function, dependency, test]
+    key_questions:
+      - "Где реализован persistence?"
+      - "Кто вызывает KnowledgeGraphEngine?"
+      - "Какие тесты покрывают модуль?"
+      - "Что сломается при изменении интерфейса X?"
+    knowledge_types: [SELF]
+  - id: runtime_knowledge
+    name: "Runtime Knowledge (CURRENT STATE)"
+    covers: [running_services, loaded_models, active_tools, memory_size, graph_nodes,
+              graph_edges, last_snapshot, last_error, current_config]
+    knowledge_types: [SELF, FACTS]
+  - id: security_knowledge_graph
+    name: "Security Knowledge Graph"
+    covers: [asset, threat, vulnerability, attack, impact, mitigation, control]
+    knowledge_types: [CONCEPTS, SELF]
+  - id: privacy_knowledge
+    name: "Privacy Knowledge"
+    covers: [pii, secrets, credentials, personal_data, data_classification, anonymization,
+              pseudonymization, access_control, retention, deletion, tenant_isolation]
+    knowledge_types: [CONCEPTS, SELF]
+  - id: multi_user_knowledge
+    name: "Multi-user Knowledge"
+    covers: [user_knowledge_space, global_knowledge, shared_knowledge, visibility_rules]
+    example: "User A space / User B space / Global. 'Это нельзя показывать User B'"
+    knowledge_types: [SELF, CONCEPTS]
+
+# Функциональные подсистемы KROFT Knowledge System (поверх 8 типов)
+functional_subsystems:
+  knowledge_lifecycle: "DISCOVERED->EXTRACTED->VALIDATED->ACTIVE->UPDATED->SUPERSEDED->ARCHIVED"
+  knowledge_merging: "detect duplicate -> merge -> preserve provenance -> resolve conflicts"
+  knowledge_compression: "dedup к концептам без потери источников (Vault растёт бесконечно)"
+  knowledge_expansion: "concept -> related -> missing -> questions -> research"
+  knowledge_gap_detection: "gap -> research -> validate -> ingest -> test"
+  curiosity_engine: "что узнать дальше? -> research plan -> experiment"
+  experiment_engine: "hypothesis -> experiment -> measure -> save experimental knowledge"
+  simulation: "what-if remove component -> predict state"
+  failure_library: "SYMPTOM/CAUSE/DETECTION/FIX/PREVENTION/REGRESSION_TEST"
+  top_level_loop: "KNOWLEDGE->MEMORY->EXPERIENCE (GRAPH/STATE/EVENTS) -> REASONING -> PLANNING -> TOOLS -> ACTION -> RESULT -> LEARNING -> KNOWLEDGE"
+
+# Схема записи эталонного Q&A (для ingestion)
+qa_record_schema:
+  id: "QA-XXXX"
+  topic_layer: "<id из topic_layers>"
+  knowledge_type: "<из 8 типов: FACTS|CONCEPTS|PROCEDURES|DECISIONS|EXPERIENCE|FAILURES|SELF|RESEARCH>"
+  question: "..."
+  answer: "..."
+  # для FACTS/SELF/RESEARCH:
+  confidence: "<low|medium|high>"
+  evidence_level: "<I|II|III|IV|V>"   # см. AKB/evidence_levels.yaml
+  temporal_validity: "<true_now|true_then|no_longer_true|future|unknown>"
+  source: "<источник или 'derived'>"
+  related_kb: ["KB-XXX", ...]   # связь с уже накопленными карточками
+
+# Порядок валидации (по твоему указанию)
+validation_pipeline:
+  - "Schema зафиксирована (этот файл, v2: 8 типов знаний + 60 тематических слоёв)"
+  - "Написать 500-1000 эталонных Q&A по всем topic_layers"
+  - "Прогнать ingestion -> graph -> persistence -> retrieval"
+  - "Проверить: нашёлся ли нужный Q&A? почему нет? (precision/recall/MRR/NDCG)"
+  - "Только после валидации масштабировать до 10-20k"
