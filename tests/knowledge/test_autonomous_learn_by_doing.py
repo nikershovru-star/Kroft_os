@@ -61,3 +61,33 @@ def test_autonomous_file_goal_creates_file_and_learns(tmp_path):
     app2.step("запиши hello в x.txt")
     after = app2.procedural._procedures["exec:file"]["runs"]
     assert after > before, (before, after)
+
+
+def test_autonomous_command_goal_executes_and_learns(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    snap = tmp_path / "k.json"
+    app = _make_app(tmp_path, snap)
+
+    # PUBLIC entry point, NO manual plan / execution_steps injection
+    app.step("выполни echo hello")
+
+    # 1) the REAL command ran — kernel recorded a successful outcome
+    assert app.kernel._outcomes, "no ExecutionOutcome recorded"
+    assert all(o.success for o in app.kernel._outcomes)
+
+    # 2) procedural memory learned the 'exec:command' capability (reuse keyed by action)
+    proc = app.procedural._procedures.get("exec:command")
+    assert proc is not None and proc["runs"] >= 1, proc
+
+    # 3) persist + cold boot -> experience restored
+    app._save_knowledge()
+    app2 = _make_app(tmp_path, snap)
+    restored = app2.procedural._procedures.get("exec:command")
+    assert restored is not None and restored["runs"] >= 1, restored
+
+    # 4) repeating the goal grows the accumulated experience (reuse after restart)
+    before = restored["runs"]
+    app2.step("выполни echo hello")
+    after = app2.procedural._procedures["exec:command"]["runs"]
+    assert after > before, (before, after)
