@@ -537,6 +537,15 @@ class KroftApp:
         if plan is None:
             return "demo", self._demo_skill
         plan_steps = tuple(str(s) for s in getattr(plan, "steps", ()))
+        # ТЗ-PHASE-P.6-followup: when the planner emitted structured execution intent,
+        # derive the skill capability from the REAL action kind so learning/reuse is
+        # keyed by what was actually executed (file/command/desktop), not by the
+        # textual plan steps. Reuses Plan.execution_steps (P.1); composition-only (K5/K6).
+        exec_steps = getattr(plan, "execution_steps", None)
+        if exec_steps:
+            first_kind = (exec_steps[0] or {}).get("kind") if exec_steps else None
+            if first_kind:
+                return f"exec:{first_kind}", self._demo_skill
         if not plan_steps:
             return "demo", self._demo_skill
         # exact steps match
