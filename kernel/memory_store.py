@@ -19,9 +19,14 @@ class InMemoryLayeredMemory(ILayeredMemory):
         self._episodes: List[Episode] = []
         self._normative: List[Policy] = []
         self._semantic: List[SemanticFact] = []
+        # Optional hook fired after each record_episode (e.g. embedding-cache
+        # invalidation in CognitiveKernel). None = no-op. K5: impl-only extension.
+        self.on_record_episode = None
 
     def record_episode(self, episode: Episode) -> None:
         self._episodes.append(episode)
+        if self.on_record_episode is not None:
+            self.on_record_episode()
 
     def commit_normative(self, policy: Policy) -> None:
         self._normative.append(policy)

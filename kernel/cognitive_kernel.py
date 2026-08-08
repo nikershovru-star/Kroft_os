@@ -348,6 +348,13 @@ class CognitiveKernel(ICognitiveKernel):
         # the O1 Self-Evolving guard. Reflection never writes memory itself.
         self._reflection_engine = reflection_engine
         self._embedding = embedding  # Slice: semantic episodic retrieval (K5 reuse of adapters/embedding)
+        # Episode-embedding cache: summary -> vector. Avoids re-embedding the same
+        # episode summary on every retrieval (perf). Invalidated on record_episode
+        # via the memory hook below; rebuilt lazily on next retrieval (not persisted).
+        self._embedding_cache: Dict[str, List[float]] = {}
+        self._query_cache: Dict[str, List[float]] = {}
+        if self._memory is not None:
+            self._memory.on_record_episode = self._embedding_cache.clear
         self._outcomes: list = []
         # ТЗ-EX-01: real execution backend (None => proxy fallback, backward compat).
         self._executor = None
@@ -418,16 +425,27 @@ class CognitiveKernel(ICognitiveKernel):
         return dot / (na * nb) if na and nb else 0.0
 
     def _retrieve_by_embedding(self, text: str, eps: List["Episode"], k: int) -> List["Episode"]:
-        try:
-            q = self._embedding.embed(text)
-        except Exception:
-            return []  # adapter unavailable -> graceful no-retrieval
+        # Query vector: cache by text so identical goals don't re-embed.
+        q_key = text or ""
+        if q_key in self._query_cache:
+            q = self._query_cache[q_key]
+        else:
+            try:
+                q = self._embedding.embed(q_key)
+            except Exception:
+                return []  # adapter unavailable -> graceful no-retrieval
+            self._query_cache[q_key] = q
         scored = []
         for ep in eps:
-            try:
-                v = self._embedding.embed(ep.summary or "")
-            except Exception:
-                continue
+            key = ep.summary or ""
+            if key in self._embedding_cache:
+                v = self._embedding_cache[key]  # cache hit: no re-embed
+            else:
+                try:
+                    v = self._embedding.embed(key)
+                except Exception:
+                    continue
+                self._embedding_cache[key] = v  # cache the new summary vector
             sim = self._cosine(q, v)
             if sim >= 0.5:
                 scored.append((sim, ep))
