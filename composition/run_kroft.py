@@ -572,7 +572,17 @@ class KroftApp:
         InMemoryProceduralMemory + KnowledgeSnapshotStore; no new port/layer/DTO (K5/K6).
         """
         from contracts.i_skill_evolver import SkillUsageStats
-        all_outcomes = list(getattr(self.kernel, "_outcomes", []))
+        kout = getattr(self.kernel, "_outcomes", None)
+        if not isinstance(kout, list):
+            return
+        # ТЗ-SLICE6: bound _outcomes growth to a recent window so observers see a bounded
+        # list; shift the consumed watermark accordingly. Done BEFORE snapshotting.
+        _OUTCOMES_LIMIT = 64
+        if len(kout) > _OUTCOMES_LIMIT:
+            trimmed = len(kout) - _OUTCOMES_LIMIT
+            kout[:] = kout[trimmed:]
+            self._outcomes_evolved = max(0, self._outcomes_evolved - trimmed)
+        all_outcomes = list(kout)
         # ТЗ-SLICE5-HYGIENE: count each real action EXACTLY once. _procedures['runs'] is
         # incremented only by the NEW outcomes since the last evolve (single-write); the
         # SkillEvolver gate still receives CUMULATIVE uses (so min_uses thresholds fire).
