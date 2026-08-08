@@ -11,6 +11,7 @@ the deterministic Decision Engine still makes the final pick (I-03 / I-09).
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import List, Optional, Tuple
 
@@ -109,6 +110,46 @@ class ReferencePlanner(IPlanner):
             return None
         return None
 
+    def _goal_intent_steps(self, goal: Goal) -> Optional[Tuple[dict, ...]]:
+        """Recognise file/command intent from a natural-language GOAL (Slice 3 / D3).
+
+        Complements ``_build_execution_steps`` (which only reads explicit markers in
+        reasoning-step text). When the reasoning layer emits no structured intent, the
+        planner still recognises a real user goal like "запиши hello в x.txt" or
+        "выполни echo hi" and emits the corresponding execution_steps so the cognitive
+        loop can drive REAL actions via RealWorldExecutor (PHASE O.3) autonomously.
+        Returns None when no intent is recognised. K6-clean: kernel/planning only.
+        """
+        text = (goal.description or "").strip()
+        if not text:
+            return None
+        low = text.lower()
+        try:
+            # FILE: "запиши <content> в <path>" / "сохрани/напиши/создай файл ... в <path>"
+            if any(k in low for k in ("запиши", "сохрани", "напиши", "создай файл", "в файл")):
+                parts = re.split(r"\s+в\s+", text, maxsplit=1)
+                head = parts[0]
+                path = parts[1].strip() if len(parts) > 1 else None
+                if path:
+                    content = re.sub(
+                        r"^(запиши|сохрани|напиши|создай файл|в файл)\s*", "", head,
+                        flags=re.I,
+                    ).strip()
+                    if content:
+                        return ({"kind": "file", "path": path, "content": content},)
+            if low.startswith("write ") or low.startswith("create "):
+                path = low.split(" ", 1)[1].strip()
+                if path:
+                    return ({"kind": "file", "path": path, "content": ""},)
+            # COMMAND: "выполни <cmd>" / "run <cmd>" / "execute <cmd>" / "эхо/echo <cmd>"
+            if low.startswith(("выполни", "run ", "execute ", "эхо ", "echo ")):
+                cmd = text.split(" ", 1)[1] if " " in text else text
+                if cmd:
+                    return ({"kind": "command", "cmd": cmd},)
+        except Exception:  # noqa: BLE001 — any parse failure -> no structured intent
+            return None
+        return None
+
     def plan(self, goal: Goal, reasoning_steps: List[ReasoningStep],
              world: WorldState, budget_tokens: int,
              intent: Optional[Intent] = None) -> List[Plan]:
@@ -135,6 +176,19 @@ class ReferencePlanner(IPlanner):
                                     steps=(f"explore-for:{goal.description}",),
                                     confidence=ConfidenceScore(0.4, ProvenanceType.RULE_INFERENCE),
                                     provenance=Provenance(source="planner", actor="kernel")))
+
+        # Slice 3 / D3: if reasoning steps yielded no structured intent, try to
+        # recognise it from the natural-language GOAL itself so the loop can drive
+        # REAL actions autonomously (file / command) without external markers.
+        if not any(c.execution_steps for c in candidates):
+            goal_steps = self._goal_intent_steps(goal)
+            if goal_steps:
+                candidates = [
+                    Plan(id=c.id, goal_id=c.goal_id, steps=c.steps,
+                         confidence=c.confidence, provenance=c.provenance,
+                         execution_steps=goal_steps)
+                    for c in candidates
+                ]
 
         # rank BEST-first by predicted value-aware utility (planner only ranks)
         candidates.sort(key=lambda p: p.confidence.value, reverse=True)
