@@ -4,11 +4,10 @@ Integration between Wave 11 (AgentPlatform), Wave 12 (Learning), and Wave 14
 (autonomy). Reuses the mock shape from test_agent_platform.py.
 """
 from __future__ import annotations
-
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from contracts.i_llm import LlmResponse, ModelQuery
 from contracts.i_workflow import IExecutor, IPlanner, Step, StepStatus, Workflow, WorkflowStatus

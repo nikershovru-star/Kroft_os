@@ -8,9 +8,9 @@ from __future__ import annotations
 import os
 import sys
 
-import pytest
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import pytest
 
 LIVE = os.environ.get("AUTONOMY_LIVE", "0") == "1"
 pytestmark = pytest.mark.skipif(not LIVE, reason="set AUTONOMY_LIVE=1 to run live autonomy path")

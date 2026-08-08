@@ -13,8 +13,6 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from contracts.i_agent_platform import AgentStatus
 from contracts.i_workflow import WorkflowStatus
 from adapters.rule_based_planner import RuleBasedPlanner
