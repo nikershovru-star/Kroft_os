@@ -36,6 +36,10 @@ def test_episodic_retrieval_informs_planning(tmp_path):
     eps = app.kernel._memory.get_episodes()
     assert eps, "no episode recorded after first goal"
     first_ep_summary = eps[0].summary
+    # Slice 6, Step 2: episode summaries are LEAN — structured intent only
+    # (kind:path/cmd), the file CONTENT is NOT embedded (keeps episodes light;
+    # retrieval still works via path/cmd token overlap).
+    assert "hello" not in first_ep_summary, first_ep_summary
 
     # --- second, SIMILAR goal: planning should now reference the past episode
     app.step("запиши hello в x.txt")
