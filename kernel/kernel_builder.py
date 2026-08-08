@@ -96,7 +96,10 @@ class KernelBuilder:
         world_model = ReferenceWorldModel(shared_clock)
 
         # ТЗ-PL-01: Planner ranks candidates by predicted value-aware utility; Decision picks.
-        planner = ReferencePlanner(shared_clock, world_model=world_model, values=val)
+        # ТЗ-SLICE5: wire procedural memory so the planner can bias confidence by past
+        # success-rate (experience-informed ranking). None -> no experience bias (legacy).
+        planner = ReferencePlanner(shared_clock, world_model=world_model, values=val,
+                                  procedural=cfg.procedural)
 
         # ТЗ-LLM-01: optional LLM advisor behind ILLMAdvisor; None -> pure reference path.
         # NOTE: reason/planner are ALWAYS the LLMAdvisor variants (mirrors the pre-refactor
@@ -106,7 +109,8 @@ class KernelBuilder:
         if cfg.llm_client is not None:
             advisor = cfg.llm_client if isinstance(cfg.llm_client, ILLMAdvisor) else adapter_for(cfg.llm_client)
         reason = LLMAdvisorReasoning(shared_clock, attn, soft_source, advisor=advisor)
-        planner = LLMAdvisorPlanner(shared_clock, world_model=world_model, values=val, advisor=advisor)
+        planner = LLMAdvisorPlanner(shared_clock, world_model=world_model, values=val,
+                                    advisor=advisor, procedural=cfg.procedural)
 
         # Флаг 2 / ТЗ-LLM-02: wire live collector into advisor wrappers (no-op if None).
         if cfg.live_metrics is not None:

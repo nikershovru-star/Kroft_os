@@ -35,10 +35,14 @@ class KernelConfig:
     # ТЗ-LIVE-01: inject a pre-loaded memory store so a kernel can RESUME across restarts
     # (state replayed from JsonMemoryStore). When None, a fresh in-memory store is built.
     memory: Optional[ILayeredMemory] = None
+    # ТЗ-SLICE5: inject a pre-loaded procedural memory (InMemoryProceduralMemory) so the
+    # planner can do experience-informed ranking from REAL accumulated success rates.
+    # When None, the planner runs without experience bias (backward-compatible).
+    procedural: Optional[Any] = None
 
     def merged(self, *, node_id: Any = None, clock: Any = None,
                llm_client: Any = None, live_metrics: Any = None, bus: Any = None,
-               memory: Any = None) -> "KernelConfig":
+               memory: Any = None, procedural: Any = None) -> "KernelConfig":
         """Return a copy with any supplied kwargs overriding this config's fields.
 
         Used by the backward-compatible ``build_kernel(...)`` kwargs path: explicit kwargs
@@ -52,4 +56,5 @@ class KernelConfig:
             live_metrics=live_metrics if live_metrics is not None else self.live_metrics,
             bus=bus if bus is not None else self.bus,
             memory=memory if memory is not None else self.memory,
+            procedural=procedural if procedural is not None else self.procedural,
         )

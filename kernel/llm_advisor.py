@@ -124,8 +124,11 @@ class LLMAdvisorPlanner(ReferencePlanner):
     LLM-free by construction. The advisor only adds ONE re-ranked (boosted) Plan; the
     deterministic Decision Engine makes the final pick (I-03).
     """
-    def __init__(self, clock, world_model=None, values=None, advisor: Optional[ILLMAdvisor] = None) -> None:
-        super().__init__(clock, world_model=world_model, values=values)
+    def __init__(self, clock, world_model=None, values=None, advisor: Optional[ILLMAdvisor] = None,
+                 procedural: Optional[object] = None) -> None:
+        # ТЗ-SLICE5: forward procedural memory so experience-informed ranking works even
+        # when an LLM advisor wraps the reference planner (advisor=None -> pure path still ranks).
+        super().__init__(clock, world_model=world_model, values=values, procedural=procedural)
         self._advisor = advisor
         self._collector: Optional[ILiveMetricsCollector] = None  # ТЗ-OBS-01 Флаг 2 / ТЗ-LLM-02
 

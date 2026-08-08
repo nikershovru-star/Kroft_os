@@ -798,6 +798,6 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     base = config if config is not None else KernelConfig()
     resolved = base.merged(node_id=node_id, clock=clock,
                            llm_client=llm_client, live_metrics=live_metrics,
-                           memory=memory)
+                           memory=memory, procedural=procedural)
     from kernel.kernel_builder import KernelBuilder
     return KernelBuilder(resolved).build()
