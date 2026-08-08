@@ -186,8 +186,13 @@ class ReferencePlanner(IPlanner):
             if proc and proc.get("runs", 0) > 0:
                 sr = proc.get("success_rate") or (
                     proc.get("successes", 0) / float(proc["runs"]))
-                # minimal deterministic boost: move base toward 1.0 by sr * 0.3
-                adj = min(1.0, base + (1.0 - base) * float(sr) * 0.3)
+                # Slice 6: symmetric experience bias around sr=0.5.
+                #   sr > 0.5 -> adj > base (learned success raises confidence)
+                #   sr < 0.5 -> adj < base (learned failure lowers confidence)
+                #   sr == 0.5 -> adj == base (continuity); unknown cap -> unchanged.
+                # Deterministic, monotonic in sr, clamped to [0,1].
+                delta = (float(sr) - 0.5) * 0.4
+                adj = min(1.0, max(0.0, base + delta))
             out.append(Plan(id=c.id, goal_id=c.goal_id, steps=c.steps,
                             confidence=ConfidenceScore(adj, ProvenanceType.RULE_INFERENCE),
                             provenance=c.provenance, execution_steps=c.execution_steps))
