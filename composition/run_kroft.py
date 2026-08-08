@@ -72,6 +72,10 @@ class KroftApp:
         # 1) memory stores: layered (kernel reasoning) + procedural (skills / evolution)
         self.memory = InMemoryLayeredMemory()
         self.procedural = InMemoryProceduralMemory()
+        # ТЗ-SLICE5-HYGIENE: high-water mark of outcomes already fed into procedural
+        # memory, so each real action is counted EXACTLY once (no N-fold accumulation
+        # across ticks). _outcomes itself is left intact for observers/tests.
+        self._outcomes_evolved = 0
         from adapters.subprocess_sandbox import SubprocessSandbox
         self._sandbox = SubprocessSandbox()
         self.evolver = SkillEvolver(self._sandbox, self.procedural, min_uses=2, success_threshold=0.8)
@@ -568,24 +572,37 @@ class KroftApp:
         InMemoryProceduralMemory + KnowledgeSnapshotStore; no new port/layer/DTO (K5/K6).
         """
         from contracts.i_skill_evolver import SkillUsageStats
-        outcomes = [o for o in getattr(self.kernel, "_outcomes", [])]
-        if not outcomes:
+        all_outcomes = list(getattr(self.kernel, "_outcomes", []))
+        # ТЗ-SLICE5-HYGIENE: count each real action EXACTLY once. _procedures['runs'] is
+        # incremented only by the NEW outcomes since the last evolve (single-write); the
+        # SkillEvolver gate still receives CUMULATIVE uses (so min_uses thresholds fire).
+        # _outcomes itself is left intact for observers/tests.
+        if len(all_outcomes) < self._outcomes_evolved:
+            self._outcomes_evolved = 0
+        new_outcomes = all_outcomes[self._outcomes_evolved:]
+        if not new_outcomes:
             return
+        self._outcomes_evolved += len(new_outcomes)
         capability, skill = self._resolve_skill_from_plan()
-        uses = len(outcomes)
-        successes = sum(1 for o in outcomes if getattr(o, "success", False))
-        success_rate = successes / uses if uses else 0.0
+        # single-write accumulation for the procedural record
+        new_uses = len(new_outcomes)
+        new_successes = sum(1 for o in new_outcomes if getattr(o, "success", False))
+        # cumulative stats for the SkillEvolver gate (min_uses / success_threshold)
+        total_uses = len(all_outcomes)
+        total_successes = sum(1 for o in all_outcomes if getattr(o, "success", False))
+        success_rate = total_successes / total_uses if total_uses else 0.0
         # accumulate into the per-skill procedure stats so persistence carries the record
         if capability not in self.procedural._procedures:
             self.procedural._procedures[capability] = {
                 "capability": capability, "runs": 0, "successes": 0,
             }
         rec = self.procedural._procedures[capability]
-        rec["runs"] = int(rec.get("runs", 0)) + uses
-        rec["successes"] = int(rec.get("successes", 0)) + successes
+        rec["runs"] = int(rec.get("runs", 0)) + new_uses
+        rec["successes"] = int(rec.get("successes", 0)) + new_successes
+        rec["success_rate"] = (rec["successes"] / rec["runs"]) if rec["runs"] else 0.0
         try:
             evolved = self.evolver.evolve_skill(
-                skill, SkillUsageStats(capability=capability, uses=uses,
+                skill, SkillUsageStats(capability=capability, uses=total_uses,
                                        success_rate=success_rate)
             )
             if evolved is not None and evolved is not skill:
