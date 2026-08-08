@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import uuid
 import json
+import re
 from typing import Callable, Dict, List, Optional
 
 from contracts.cognitive_domain import (
@@ -386,6 +387,29 @@ class CognitiveKernel(ICognitiveKernel):
         return True
 
     # -- ICognitiveKernel ------------------------------------------------------
+    def _retrieve_similar_episodes(self, text: str, k: int = 3) -> List["Episode"]:
+        """Slice 3-alt: retrieve past experiences similar to a goal (K5, keyword overlap).
+
+        Minimal, dependency-free similarity over ``Episode.summary`` vs the goal text.
+        Returns top-k by token overlap, best-first. No new retrieval engine (reuses the
+        existing layered-memory Episode store, which already persists + restores).
+        """
+        eps = self._memory.get_episodes() if self._memory is not None else []
+        if not eps or not text:
+            return []
+        goal_tokens = {t for t in re.findall(r"[^\W_]+", text.lower()) if len(t) > 2}
+        if not goal_tokens:
+            return []
+        scored = []
+        for ep in eps:
+            ep_tokens = {t for t in re.findall(r"[^\W_]+", (ep.summary or "").lower())
+                        if len(t) > 2}
+            overlap = len(goal_tokens & ep_tokens)
+            if overlap > 0:
+                scored.append((overlap, ep))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [ep for _, ep in scored[:k]]
+
     def tick(self, intent: Intent) -> CognitiveState:
         """Advance the FSM one full deliberative cycle (system-2). Returns end state."""
         # Idle -> Observe
@@ -413,6 +437,23 @@ class CognitiveKernel(ICognitiveKernel):
         candidates = self._planner.plan(goal, steps, world_snapshot, 100, intent=intent)
         for p in candidates:
             self._emit(CognitiveEventType.PLAN_GENERATED, p.id, p.confidence)
+        # Slice 3-alt: inform planning with retrieved past experience (reuse as
+        # CONTEXT, not just a runs-counter). Episodes already persist + restore, so
+        # this works across restarts. K5: keyword-overlap over Episode.summary.
+        # The retrieved context is folded into EVERY candidate's steps so the
+        # DECIDED plan always carries the past-experience reference (provenance-by-step),
+        # regardless of which candidate wins. Scoped to goals that already carry a
+        # structured execution intent (file/command) so abstract deliberation
+        # (choose_blue/red) stays clean. No new port / planner change.
+        similar = self._retrieve_similar_episodes(intent.text)
+        if similar and any(c.execution_steps for c in candidates):
+            ctx = " | ".join(f"past-experience: {ep.summary}" for ep in similar)
+            candidates = [
+                Plan(id=c.id, goal_id=c.goal_id, steps=c.steps + (ctx,),
+                     confidence=c.confidence, provenance=c.provenance,
+                     execution_steps=c.execution_steps)
+                for c in candidates
+            ]
         # flag D: Decision is now world-aware — pass WorldState + Intent so a
         # production engine reads them directly (no bind()-hack).
         decision = self._decision.select(goal, candidates, self._values,
@@ -515,8 +556,16 @@ class CognitiveKernel(ICognitiveKernel):
         # Self-Evolving guard. Single write path => no duplicate consolidation (ФЛАГ 1).
         if self._memory_evolution is not None and self._memory is not None:
             from contracts.i_cognitive_kernel import IValueSystem
+            plan = self._last_selected_plan
+            exec_steps = plan.execution_steps if plan is not None else None
+            exec_part = ""
+            if exec_steps:
+                exec_part = "||exec:" + ";".join(
+                    f"{s.get('kind')}:{s.get('path') or s.get('cmd') or ''}"
+                    for s in exec_steps if isinstance(s, dict)
+                )
             episode = Episode(
-                id=decision.id, summary=f"decided:{'|'.join(self._last_selected_plan.steps)}",
+                id=decision.id, summary=f"decided:{'|'.join(plan.steps)}" + exec_part,
                 confidence=decision.confidence,
                 provenance=Provenance(source="learn", actor="kernel"),
             )
