@@ -26,7 +26,21 @@ PILOT_DIR = os.path.join(
 
 
 def _load_pilot():
-    files = sorted(f for f in os.listdir(PILOT_DIR) if f.startswith("qa_") and f.endswith(".md"))
+    # Bound to the 506-node pilot. The scaled 10k+ corpus lives in the same dir
+    # but is exercised only by the gated KNOWLEDGE_SCALE test, so the always-run
+    # suite never ingests it (keeps wall-time ~minutes, not tens of minutes).
+    files = []
+    for f in os.listdir(PILOT_DIR):
+        if not (f.startswith("qa_") and f.endswith(".md")):
+            continue
+        nid = f[:-3]
+        try:
+            if int(nid.split("_")[1]) > 506:
+                continue
+        except (IndexError, ValueError):
+            continue
+        files.append(f)
+    files = sorted(files)
     nodes = []
     for f in files:
         doc_id = f[:-3]  # strip .md
