@@ -12,6 +12,7 @@ K5/K6: composition-only wiring; kernel/contracts untouched beyond P.1-P.3.
 """
 
 from __future__ import annotations
+import pytest
 
 import json
 import os
@@ -53,6 +54,7 @@ def _exec_and_learn(app, action, capability_key):
     return result
 
 
+@pytest.mark.slow
 def test_learn_by_doing_file_and_command_and_reload():
     tmp = tempfile.mkdtemp()
     snap = os.path.join(tmp, "knowledge.json")

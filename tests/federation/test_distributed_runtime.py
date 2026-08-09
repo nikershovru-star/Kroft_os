@@ -116,6 +116,7 @@ def test_raft_election_callback():
 
 # ---------- TCP EventBus ----------
 
+@pytest.mark.slow
 def test_tcp_bus_fanout():
     b1 = TcpEventBus("a", 8791); b2 = TcpEventBus("b", 8792)
     received = []
@@ -129,6 +130,7 @@ def test_tcp_bus_fanout():
     b1.leave(); b2.leave()
 
 
+@pytest.mark.slow
 def test_tcp_bus_peers():
     b1 = TcpEventBus("a", 8793); b2 = TcpEventBus("b", 8794)
     b2.join(["127.0.0.1:8793"])  # start b2 server first

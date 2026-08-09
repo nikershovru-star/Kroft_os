@@ -10,6 +10,7 @@ TerminalExecutor, ReferenceExecutor. Kernel/contracts untouched (K5/K6).
 """
 
 from __future__ import annotations
+import pytest
 
 import os
 import tempfile
@@ -119,6 +120,7 @@ def test_unknown_kind_falls_back_to_sim():
     assert hasattr(r, "success")
 
 
+@pytest.mark.slow
 def test_run_kroft_wires_real_world_executor():
     app = KroftApp(KroftConfig(node_id="o1", llm="none", ticks=0,
                               vault="C:/Users/Nikita/Documents/Obsidian Vault/02-Projects/KROFT_OS"))

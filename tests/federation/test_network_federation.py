@@ -116,6 +116,7 @@ def test_real_cognitive_event_over_tcp():
     ta.disconnect(); tb.disconnect()
 
 
+@pytest.mark.slow
 def test_partition_then_reconnect_causal_merge():
     """PARTITION (peer down) -> facts buffered; RECONNECT -> idempotent causal merge.
 
@@ -258,6 +259,7 @@ def test_receiver_locked_after_attach():
     ta.disconnect(); tb.disconnect()
 
 
+@pytest.mark.slow
 def test_determinism_repeated_runs():
     """Federation is deterministic: same result across repeated runs (no flake)."""
     for _ in range(2):

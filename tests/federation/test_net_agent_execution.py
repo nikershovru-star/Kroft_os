@@ -20,6 +20,7 @@ the layer-import gate) because kernel/adapters may NOT cross-import (K1/K6).
 """
 
 from __future__ import annotations
+import pytest
 
 import threading
 
@@ -102,6 +103,7 @@ def test_remote_agent_execution_success_raises_trust():
 # ---------------------------------------------------------------------------
 # 3. trust evolves from REAL network outcome: forced agent FAILURE lowers
 # ---------------------------------------------------------------------------
+@pytest.mark.slow
 def test_remote_agent_execution_failure_lowers_trust():
     nodeA, nodeB, trustA, trustB, tA, tB = _agent_pair()
     try:
@@ -149,6 +151,7 @@ def test_no_remote_agent_executor_keeps_previous_behaviour():
 # ---------------------------------------------------------------------------
 # 5. determinism (I-09): two sequential remote agent dispatches resolve by request_id
 # ---------------------------------------------------------------------------
+@pytest.mark.slow
 def test_remote_agent_execution_determinism_correlation_by_request_id():
     nodeA, nodeB, trustA, trustB, tA, tB = _agent_pair()
     try:

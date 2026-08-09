@@ -16,6 +16,7 @@ the layer-import gate) because kernel/adapters may NOT cross-import (K1/K6).
 """
 
 from __future__ import annotations
+import pytest
 
 import threading
 
@@ -110,6 +111,7 @@ def test_tcp_trust_gating_excludes_low_trust_node():
 # ---------------------------------------------------------------------------
 # 4. determinism: two sequential dispatches correlate by request_id
 # ---------------------------------------------------------------------------
+@pytest.mark.slow
 def test_tcp_determinism_correlation_by_request_id():
     nodeA, nodeB, trustA, trustB, tA, tB = _dispatch_pair()
     try:
@@ -125,6 +127,7 @@ def test_tcp_determinism_correlation_by_request_id():
 # ---------------------------------------------------------------------------
 # 5. clean shutdown / teardown (no dangling threads / port leak)
 # ---------------------------------------------------------------------------
+@pytest.mark.slow
 def test_tcp_clean_teardown_no_leak():
     nodeA, nodeB, trustA, trustB, tA, tB = _dispatch_pair()
     threads_before = threading.active_count()
