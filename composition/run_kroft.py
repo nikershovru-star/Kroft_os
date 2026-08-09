@@ -59,7 +59,10 @@ class KroftConfig:
     knowledge_snapshot: Optional[str] = None  # ТЗ-KNOWLEDGE-PERSIST-01: JSON snapshot of graph+index (survives restart)
     desktop_opt_in: bool = False    # P.6: explicit opt-in for desktop (click/type/open_app); default-deny
     embedding: str = "none"         # Slice: "none" (keyword fallback) | "auto" (local Ollama /v1/embeddings if reachable)
-
+    knowledge_corpus: Optional[str] = None  # Live KROFT_KNOWLEDGE corpus dir; default off.
+                                            # When set, the corpus is ingested lazily on the
+                                            # first query (boot stays fast; boot-ingest of a 10k+
+                                            # corpus would exceed the 60s budget).
 
 class KroftApp:
     """Bootable KROFT_OS: kernel + optional LLM + evolution + optional federation + dashboard.
@@ -132,7 +135,9 @@ class KroftApp:
         # Ingests REAL vault notes into the graph so memory_notes becomes a live count.
         from services.content_index import ContentIndex
         from services.knowledge_engine import build_knowledge_engine
-        self.engine = build_knowledge_engine(graph=self.graph, content_index=ContentIndex())
+        self.content_index = ContentIndex()
+        self.engine = build_knowledge_engine(graph=self.graph, content_index=self.content_index)
+        self._corpus_ingested = False  # lazy KROFT_KNOWLEDGE corpus ingest flag
         self.vault_reader = ObsidianVaultReader(self.config.vault)
         # ТЗ-KNOWLEDGE-PERSIST-01: restore prior graph + index BEFORE live ingest,
         # so a cold boot reuses on-disk knowledge (starts "already learned").
@@ -316,6 +321,50 @@ class KroftApp:
             except Exception:
                 continue  # a single bad note must not abort the whole ingestion
         return len(self.graph.nodes())
+
+    # ---- Live KROFT_KNOWLEDGE corpus (ТЗ-KNOWLEDGE-LIVE): retrieval-augmented reasoning ----
+    def _ingest_corpus(self, path: Optional[str]) -> int:
+        """Ingest the atomic Q&A corpus (KROFT_KNOWLEDGE) via the existing
+        KnowledgeEngine (reuses graph + ContentIndex; no new storage layer).
+
+        Graceful: missing/empty path -> 0 nodes. Idempotent: a second call is a
+        no-op because _corpus_ingested guards it. Returns the ingested node count.
+        """
+        if not path or not os.path.isdir(path):
+            return 0
+        count = 0
+        for f in sorted(os.listdir(path)):
+            if not (f.startswith("qa_") and f.endswith(".md")):
+                continue
+            doc_id = f[:-3]
+            full = os.path.join(path, f)
+            try:
+                with open(full, encoding="utf-8") as fh:
+                    text = fh.read()
+                self.engine.ingest(doc_id, text)
+                count += 1
+            except Exception:
+                continue  # one bad file must not abort the corpus ingest
+        self._corpus_ingested = True
+        return count
+
+    def query(self, question: str) -> "dict":
+        """Retrieval-augmented answer over the live KROFT_KNOWLEDGE corpus.
+
+        The corpus is ingested lazily on the first query (boot stays fast even
+        for a 10k+ corpus). Returns a dict with the top-3 node ids and the
+        leading citation (node_id) so callers can attribute the answer.
+        """
+        corpus = getattr(self.config, "knowledge_corpus", None)
+        if corpus and not self._corpus_ingested:
+            self._ingest_corpus(corpus)
+        top = self.content_index.search(question)
+        top3 = list(top[:3])
+        return {
+            "question": question,
+            "top3": top3,
+            "citation": top3[0] if top3 else None,
+        }
 
     # ---- ТЗ-KNOWLEDGE-PERSIST-01 + ТЗ-PHASE-E: snapshot persistence of live knowledge ----
     def _restore_graph_and_index(self) -> None:
