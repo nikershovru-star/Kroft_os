@@ -1,0 +1,331 @@
+# Golden retrieval-evaluation dataset for the 84 P0 Knowledge Nodes.
+# Evaluation layer ONLY — does NOT modify the 84 nodes, runtime, contracts,
+# storage, GraphQueryEngine or ContentIndex.
+#
+# Query authoring rules (Этап 5):
+#  - queries are NATURAL user phrasings, NOT copies of node.question
+#  - paraphrase / indirect categories intentionally use words that may NOT
+#    appear verbatim in the target node (to test real retrieval, not string match)
+#  - negative queries have NO correct node among the 84
+#
+# category: direct|conceptual|practical|troubleshooting|comparison|indirect
+# difficulty: easy|medium|hard
+
+positive:
+  # --- direct factual (10) ---
+  - query: "Как называется вид памяти на видеокарте и чем он отличается от оперативной?"
+    expected_nodes: [KROFT-Q-000007]
+    acceptable_nodes: [KROFT-Q-000014]
+    category: direct
+    difficulty: easy
+  - query: "Что делает контейнер и чем он не похож на виртуальную машину?"
+    expected_nodes: [KROFT-Q-000016]
+    acceptable_nodes: []
+    category: direct
+    difficulty: easy
+  - query: "Какой механизм в нейросетях превращает ошибку в обновление весов?"
+    expected_nodes: [KROFT-Q-000038]
+    acceptable_nodes: []
+    category: direct
+    difficulty: medium
+  - query: "Какая техника поиска похожа на смысл текста через векторы?"
+    expected_nodes: [KROFT-Q-000053]
+    acceptable_nodes: []
+    category: direct
+    difficulty: medium
+  - query: "Что такое RAG и зачем он нужен языковой модели?"
+    expected_nodes: [KROFT-Q-000001]
+    acceptable_nodes: [KROFT-F-000002]
+    category: direct
+    difficulty: easy
+  - query: "Что такое функции вызова инструментов у агента?"
+    expected_nodes: [KROFT-Q-000067]
+    acceptable_nodes: []
+    category: direct
+    difficulty: easy
+  - query: "В чём разница между дообучением модели и подачей документов при генерации?"
+    expected_nodes: [KROFT-Q-000044]
+    acceptable_nodes: [KROFT-Q-000001]
+    category: direct
+    difficulty: medium
+  - query: "Что такое усиление с подкреплением?"
+    expected_nodes: [KROFT-Q-000045]
+    acceptable_nodes: []
+    category: direct
+    difficulty: easy
+  - query: "Что означает галлюцинация модели и как её уменьшить?"
+    expected_nodes: [KROFT-Q-000047]
+    acceptable_nodes: []
+    category: direct
+    difficulty: easy
+  - query: "Что такое агентская память и из чего она состоит?"
+    expected_nodes: [KROFT-Q-000070]
+    acceptable_nodes: []
+    category: direct
+    difficulty: easy
+
+  # --- conceptual (10) ---
+  - query: "Почему две параллельные задачи могут замедлять друг друга из-за общего кэша?"
+    expected_nodes: [KROFT-Q-000006]
+    acceptable_nodes: [KROFT-Q-000004]
+    category: conceptual
+    difficulty: medium
+  - query: "Почему важно не смешивать слишком много ответственностей в одном модуле?"
+    expected_nodes: [KROFT-Q-000036]
+    acceptable_nodes: [KROFT-Q-000031, KROFT-Q-000019]
+    category: conceptual
+    difficulty: medium
+  - query: "Зачем нужно отделять сущности и отношения в виде графа знаний?"
+    expected_nodes: [KROFT-Q-000060]
+    acceptable_nodes: [KROFT-Q-000061]
+    category: conceptual
+    difficulty: medium
+  - query: "Почему модель должна ссылаться на найденные документы, а не выдумывать?"
+    expected_nodes: [KROFT-Q-000065]
+    acceptable_nodes: [KROFT-Q-000047]
+    category: conceptual
+    difficulty: medium
+  - query: "Зачем знать происхождение факта в базе знаний?"
+    expected_nodes: [KROFT-Q-000062]
+    acceptable_nodes: []
+    category: conceptual
+    difficulty: easy
+  - query: "Почему корреляция не значит причину, когда агент делает выводы?"
+    expected_nodes: [KROFT-Q-000073]
+    acceptable_nodes: []
+    category: conceptual
+    difficulty: medium
+  - query: "Зачем агенту критическое мышление при анализе аргументов?"
+    expected_nodes: [KROFT-Q-000074]
+    acceptable_nodes: []
+    category: conceptual
+    difficulty: medium
+  - query: "Что такое отражение наблюдения в цикле агента?"
+    expected_nodes: [KROFT-Q-000077]
+    acceptable_nodes: []
+    category: conceptual
+    difficulty: easy
+  - query: "Почему слишком большой контекст может навредить ответу?"
+    expected_nodes: [KROFT-Q-000050]
+    acceptable_nodes: [KROFT-Q-000071]
+    category: conceptual
+    difficulty: medium
+  - query: "В чём смысл разбиения задачи на независимые шаги с зависимостями?"
+    expected_nodes: [KROFT-P-000084]
+    acceptable_nodes: [KROFT-P-000068]
+    category: conceptual
+    difficulty: medium
+
+  # --- practical / how-to (10) ---
+  - query: "Как мне написать хороший автоматический тест для функции?"
+    expected_nodes: [KROFT-P-000024]
+    acceptable_nodes: []
+    category: practical
+    difficulty: easy
+  - query: "Как безопасно сохранить изменения в системе, чтобы не сломать порты?"
+    expected_nodes: [KROFT-P-000026]
+    acceptable_nodes: [KROFT-P-000034]
+    category: practical
+    difficulty: medium
+  - query: "Программа падает с ошибкой что модуль не найден — что делать?"
+    expected_nodes: [KROFT-P-000027]
+    acceptable_nodes: []
+    category: practical
+    difficulty: easy
+  - query: "Как понять, что новая версия системы стала лучше старой?"
+    expected_nodes: [KROFT-P-000046]
+    acceptable_nodes: []
+    category: practical
+    difficulty: medium
+  - query: "Как проверить, что поиск по базе выдал подходящий документ?"
+    expected_nodes: [KROFT-P-000057]
+    acceptable_nodes: []
+    category: practical
+    difficulty: medium
+  - query: "Как агенту распланировать сложную задачу на шаги?"
+    expected_nodes: [KROFT-P-000068]
+    acceptable_nodes: [KROFT-P-000084]
+    category: practical
+    difficulty: easy
+  - query: "Как агент может сам заметить ошибку и исправить её?"
+    expected_nodes: [KROFT-P-000078]
+    acceptable_nodes: []
+    category: practical
+    difficulty: medium
+  - query: "Что делать если внешний инструмент агента вернул ошибку 500?"
+    expected_nodes: [KROFT-P-000082]
+    acceptable_nodes: []
+    category: practical
+    difficulty: easy
+  - query: "Как ограничить полномочия агента чтобы он не делал лишнего?"
+    expected_nodes: [KROFT-Q-000079]
+    acceptable_nodes: [KROFT-Q-000081]
+    category: practical
+    difficulty: medium
+  - query: "Как проверить что адаптер не сломал контракт порта?"
+    expected_nodes: [KROFT-P-000034]
+    acceptable_nodes: [KROFT-P-000035]
+    category: practical
+    difficulty: medium
+
+  # --- troubleshooting (5) ---
+  - query: "Поиск по базе выдаёт не по теме и не по фактам — где искать причину?"
+    expected_nodes: [KROFT-P-000003]
+    acceptable_nodes: [KROFT-P-000058, KROFT-Q-000058]
+    category: troubleshooting
+    difficulty: hard
+  - query: "Система начала сильно свопиться и тормозить — в чём может быть дело?"
+    expected_nodes: [KROFT-Q-000012]
+    acceptable_nodes: [KROFT-Q-000009]
+    category: troubleshooting
+    difficulty: medium
+  - query: "Почему приложение доступно в браузере но не работает из контейнера?"
+    expected_nodes: [KROFT-Q-000017]
+    acceptable_nodes: []
+    category: troubleshooting
+    difficulty: medium
+  - query: "Как найти что в коде появилась регрессия после изменений?"
+    expected_nodes: [KROFT-P-000028]
+    acceptable_nodes: []
+    category: troubleshooting
+    difficulty: medium
+  - query: "Модель галлюцинирует в RAG — с чего начать диагностику?"
+    expected_nodes: [KROFT-Q-000047]
+    acceptable_nodes: [KROFT-P-000003, KROFT-Q-000065]
+    category: troubleshooting
+    difficulty: hard
+
+  # --- comparison / decision (5) ---
+  - query: "Когда лучше использовать абстракцию а когда она только мешает?"
+    expected_nodes: [KROFT-Q-000032]
+    acceptable_nodes: [KROFT-Q-000031]
+    category: comparison
+    difficulty: medium
+  - query: "Что выбрать многоагентную систему или одного агента?"
+    expected_nodes: [KROFT-Q-000069]
+    acceptable_nodes: []
+    category: comparison
+    difficulty: easy
+  - query: "В каких случаях Retrieval вообще не нужен модели?"
+    expected_nodes: [KROFT-Q-000066]
+    acceptable_nodes: []
+    category: comparison
+    difficulty: medium
+  - query: "Чем трансформер отличается от рекуррентных сетей и свёрточных?"
+    expected_nodes: [KROFT-Q-000052]
+    acceptable_nodes: []
+    category: comparison
+    difficulty: medium
+  - query: "Когда непрерывная интеграция полезна а когда избыточна?"
+    expected_nodes: [KROFT-Q-000030]
+    acceptable_nodes: []
+    category: comparison
+    difficulty: medium
+
+  # --- indirect / paraphrased (10) ---
+  - query: "Почему видеокарта может одновременно считать тысячи вещей за раз?"
+    expected_nodes: [KROFT-Q-000013]
+    acceptable_nodes: [KROFT-Q-000014]
+    category: indirect
+    difficulty: hard
+  - query: "Какая штука в GPU ускоряет именно умножение матриц при выводе?"
+    expected_nodes: [KROFT-Q-000014]
+    acceptable_nodes: [KROFT-Q-000013]
+    category: indirect
+    difficulty: hard
+  - query: "Зачем модели запоминать недавние токены в отдельном буфере при генерации?"
+    expected_nodes: [KROFT-Q-000049]
+    acceptable_nodes: [KROFT-Q-000071]
+    category: indirect
+    difficulty: hard
+  - query: "Как объединить результаты обычного текстового поиска и векторного в один список?"
+    expected_nodes: [KROFT-Q-000055]
+    acceptable_nodes: [KROFT-Q-000056]
+    category: indirect
+    difficulty: hard
+  - query: "Почему косинус берут чтобы понять насколько близки два смысла?"
+    expected_nodes: [KROFT-Q-000054]
+    acceptable_nodes: []
+    category: indirect
+    difficulty: hard
+  - query: "Как не дать агенту удалить базу данных по ошибке?"
+    expected_nodes: [KROFT-Q-000079]
+    acceptable_nodes: [KROFT-Q-000081]
+    category: indirect
+    difficulty: hard
+  - query: "Почему нельзя просто скопить все знания в параметры модели и забыть про документы?"
+    expected_nodes: [KROFT-Q-000001]
+    acceptable_nodes: [KROFT-F-000002]
+    category: indirect
+    difficulty: hard
+  - query: "Как понять что один класс меняется по многим разным причинам и это плохо?"
+    expected_nodes: [KROFT-Q-000020]
+    acceptable_nodes: [KROFT-Q-000019]
+    category: indirect
+    difficulty: hard
+  - query: "Зачем разбивать документ на куски и какой размер куска выбрать?"
+    expected_nodes: [KROFT-Q-000059]
+    acceptable_nodes: []
+    category: indirect
+    difficulty: hard
+  - query: "Почему поиск по ключевым словам находит не всё что нужно и надо добавить смысл?"
+    expected_nodes: [KROFT-Q-000063]
+    acceptable_nodes: [KROFT-Q-000053]
+    category: indirect
+    difficulty: hard
+
+negative:
+  - "Как настроить Kubernetes Ingress для canary-деплоя?"
+  - "Что такое квантовая запутанность и как её применить в ML?"
+  - "Как написать микросервис на Go с gRPC?"
+  - "Что такое блокчейн и смарт-контракты?"
+  - "Как обучить диффузионную модель генерировать видео?"
+  - "Что такое налоговая ставка НДС в Германии в 2026?"
+  - "Какие права у арендатора квартиры в Берлине?"
+  - "Как настроить PostgreSQL репликацию master-slave?"
+  - "Что такое React hooks и useEffect?"
+  - "Как работает протокол BGP и маршрутизация в интернете?"
+
+graph_scenarios:
+  - name: "cache concept cluster"
+    start_node: KROFT-Q-000006
+    via: get_neighbors
+    expect_reachable: [KROFT-Q-000004, KROFT-Q-000007, KROFT-Q-000013]
+  - name: "SOLID cluster"
+    start_node: KROFT-Q-000019
+    via: get_neighbors
+    expect_reachable: [KROFT-Q-000020, KROFT-Q-000021, KROFT-Q-000031]
+  - name: "RAG cluster"
+    start_node: KROFT-Q-000001
+    via: get_neighbors
+    expect_reachable: [KROFT-Q-000053, KROFT-Q-000055, KROFT-Q-000062]
+  - name: "agent cluster"
+    start_node: KROFT-Q-000067
+    via: get_neighbors
+    expect_reachable: [KROFT-Q-000069, KROFT-Q-000070, KROFT-Q-000072]
+  - name: "ML cluster"
+    start_node: KROFT-Q-000037
+    via: get_neighbors
+    expect_reachable: [KROFT-Q-000038, KROFT-Q-000041, KROFT-Q-000040]
+  - name: "backlink from L3 node to source SRC-020 group"
+    start_node: KROFT-Q-000036
+    via: backlinks
+    expect_reachable: [KROFT-Q-000019, KROFT-Q-000031]
+  - name: "provenance tag traversal SRC-002"
+    start_node: KROFT-Q-000004
+    via: nodes_by_tag
+    tag: source:SRC-002
+    expect_reachable: [KROFT-Q-000006, KROFT-Q-000008, KROFT-Q-000013]
+  - name: "provenance tag traversal SRC-007"
+    start_node: KROFT-Q-000037
+    via: nodes_by_tag
+    tag: source:SRC-007
+    expect_reachable: [KROFT-Q-000038, KROFT-Q-000040, KROFT-Q-000045]
+  - name: "related concept shares_concept L02 cache"
+    start_node: KROFT-Q-000004
+    via: get_neighbors
+    expect_reachable: [KROFT-Q-000006, KROFT-Q-000008]
+  - name: "related concept shares_concept agents"
+    start_node: KROFT-Q-000072
+    via: get_neighbors
+    expect_reachable: [KROFT-Q-000069, KROFT-Q-000081, KROFT-Q-000073]
