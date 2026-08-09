@@ -21,7 +21,10 @@ from typing import List, Optional
 from contracts import IEmbedding
 
 DEFAULT_BASE_URL = "http://localhost:11434/v1"
-DEFAULT_MODEL = "nomic-embed-text"  # Ollama's common local embedding model
+# ТЗ: default embedding model = bge-m3 (best R@5 on the KROFT_KNOWLEDGE golden set).
+# Graceful fallback chain: bge-m3 -> nomic-embed-text -> (raise -> caller keyword-overlap).
+DEFAULT_MODEL = "bge-m3"
+FALLBACK_MODELS = ("nomic-embed-text",)
 
 
 class OllamaEmbeddingAdapter(IEmbedding):
@@ -32,6 +35,11 @@ class OllamaEmbeddingAdapter(IEmbedding):
     lets transport errors propagate — the kernel's retrieval path catches them and
     degrades to keyword-overlap. This keeps the default boot deterministic and
     network-free when no local embedding server is running.
+
+    Model fallback (ТЗ): if the configured model (default bge-m3) is unavailable on
+    the local server, ``embed`` retries each FALLBACK_MODELS entry once before
+    re-raising; callers (CognitiveKernel._retrieve_similar_episodes) then degrade to
+    keyword-overlap. Non-fatal at boot: a missing model never crashes wiring.
     """
 
     def __init__(self, model: str = DEFAULT_MODEL,
@@ -43,9 +51,9 @@ class OllamaEmbeddingAdapter(IEmbedding):
                          or DEFAULT_BASE_URL).rstrip("/")
         self.api_key = api_key or os.environ.get("KROFT_EMBEDDING_API_KEY") or None
 
-    def embed(self, text: str) -> List[float]:
+    def _embed_with(self, model: str, text: str) -> List[float]:
         url = f"{self.base_url}/embeddings"
-        payload = json.dumps({"input": text, "model": self.model}).encode("utf-8")
+        payload = json.dumps({"input": text, "model": model}).encode("utf-8")
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -53,3 +61,16 @@ class OllamaEmbeddingAdapter(IEmbedding):
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             return data["data"][0]["embedding"]
+
+    def embed(self, text: str) -> List[float]:
+        # Try the configured model first, then each fallback once.
+        tried = [self.model, *FALLBACK_MODELS]
+        last_err: Optional[Exception] = None
+        for m in tried:
+            try:
+                return self._embed_with(m, text)
+            except Exception as e:  # model missing / server down / timeout
+                last_err = e
+                continue
+        # All models failed -> let the caller degrade to keyword-overlap.
+        raise last_err if last_err is not None else RuntimeError("embedding unavailable")
