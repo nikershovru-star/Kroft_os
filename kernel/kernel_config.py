@@ -42,11 +42,17 @@ class KernelConfig:
     # Slice: optional embedding adapter (IEmbedding) for semantic episodic retrieval.
     # None -> keyword-overlap fallback (deterministic, network-free by default).
     embedding: Optional[Any] = None
+    # Retrieval-augmented reasoning: an optional pre-built knowledge index (e.g.
+    # services.content_index.ContentIndex) the kernel queries during tick to inject
+    # top-k corpus context into planning. Duck-typed: any object with .search(text)
+    # returning List[str] of node ids works. None -> no knowledge injection (the
+    # reference kernel stays LLM-free + deterministic, backward-compatible).
+    knowledge_index: Optional[Any] = None
 
     def merged(self, *, node_id: Any = None, clock: Any = None,
                llm_client: Any = None, live_metrics: Any = None, bus: Any = None,
                memory: Any = None, procedural: Any = None,
-               embedding: Any = None) -> "KernelConfig":
+               embedding: Any = None, knowledge_index: Any = None) -> "KernelConfig":
         """Return a copy with any supplied kwargs overriding this config's fields.
 
         Used by the backward-compatible ``build_kernel(...)`` kwargs path: explicit kwargs
@@ -62,4 +68,5 @@ class KernelConfig:
             memory=memory if memory is not None else self.memory,
             procedural=procedural if procedural is not None else self.procedural,
             embedding=embedding if embedding is not None else self.embedding,
+            knowledge_index=knowledge_index if knowledge_index is not None else self.knowledge_index,
         )

@@ -103,12 +103,19 @@ class KroftApp:
         if embedding_mode == "auto":
             from adapters.ollama_embedding import OllamaEmbeddingAdapter
             embedding_adapter = OllamaEmbeddingAdapter()
+        # 2b) Knowledge index (ContentIndex) — built early so it can be wired into
+        # the cognitive kernel when a live corpus is configured (retrieval-augmented
+        # reasoning, ТЗ). The KnowledgeEngine is built later (after the graph).
+        from services.content_index import ContentIndex
+        self.content_index = ContentIndex()
         # 3) kernel (CognitiveKernel) via the shared composition factory
+        corpus = getattr(self.config, "knowledge_corpus", None)
         self.bus = build_event_bus()
         self.kernel = build_cognitive_kernel(
             node_id=self.config.node_id, llm_client=self.llm,
             memory=self.memory, procedural=self.procedural,
             live_metrics=self._live_collector, embedding=embedding_adapter,
+            knowledge_index=self.content_index if corpus else None,
         )
         # ТЗ-PHASE-N/O: wire a REAL execution backend (IExecutor) so the cognitive loop
         # records REAL success/failure outcomes instead of the proxy-fallback (always
@@ -133,9 +140,7 @@ class KroftApp:
         self.graph = InMemoryGraphEngine()
         # KnowledgeEngine (ТЗ-KNOWLEDGE-ENGINE-01, ADR-091) — reused, NOT duplicated.
         # Ingests REAL vault notes into the graph so memory_notes becomes a live count.
-        from services.content_index import ContentIndex
         from services.knowledge_engine import build_knowledge_engine
-        self.content_index = ContentIndex()
         self.engine = build_knowledge_engine(graph=self.graph, content_index=self.content_index)
         self._corpus_ingested = False  # lazy KROFT_KNOWLEDGE corpus ingest flag
         self.vault_reader = ObsidianVaultReader(self.config.vault)
@@ -581,6 +586,12 @@ class KroftApp:
     def step(self, goal_text: str = "demo goal") -> Any:
         """Advance one tick (kernel FSM) + evolve the demo skill; return a read-only dashboard snapshot.""" 
         from contracts.cognitive_domain import ConfidenceScore, Provenance
+        # Lazy-ingest the live KROFT_KNOWLEDGE corpus (if configured) so the wired
+        # knowledge index is populated before the tick's retrieval-augmented reasoning
+        # queries it (ТЗ: knowledge_index wired into the kernel on corpus config).
+        corpus = getattr(self.config, "knowledge_corpus", None)
+        if corpus and not self._corpus_ingested:
+            self._ingest_corpus(corpus)
         self.kernel.tick(Intent(id="intent-1", text=goal_text, confidence=ConfidenceScore(0.8),
                                 provenance=Provenance(source="demo", actor="run_kroft")))
         # ТЗ-PHASE-L: evolve procedural memory from REAL tick outcomes (not fake stats).

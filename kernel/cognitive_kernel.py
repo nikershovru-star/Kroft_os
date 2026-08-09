@@ -307,7 +307,8 @@ class CognitiveKernel(ICognitiveKernel):
                  memory_evolution: Optional["IMemoryEvolution"] = None,
                  memory: Optional["ILayeredMemory"] = None,
                  reflection_engine: Optional["IReflectionEngine"] = None,
-                 embedding: Optional["IEmbedding"] = None) -> None:
+                 embedding: Optional["IEmbedding"] = None,
+                 knowledge_index: Optional[object] = None) -> None:
         # ТЗ-WM-01 flag A: default clock MUST derive node_id from the world, never
         # the literal "kernel" (ТЗ-RE-01 already wired node_origin=node_id when a
         # clock is injected; this closes the residual default-construction path).
@@ -348,6 +349,10 @@ class CognitiveKernel(ICognitiveKernel):
         # the O1 Self-Evolving guard. Reflection never writes memory itself.
         self._reflection_engine = reflection_engine
         self._embedding = embedding  # Slice: semantic episodic retrieval (K5 reuse of adapters/embedding)
+        # Retrieval-augmented reasoning: optional pre-built knowledge index (duck-typed,
+        # .search(text) -> List[str] node ids). When None, no knowledge context is
+        # injected during tick (reference kernel stays LLM-free + deterministic).
+        self._knowledge_index = knowledge_index
         # Episode-embedding cache: summary -> vector. Avoids re-embedding the same
         # episode summary on every retrieval (perf). Invalidated on record_episode
         # via the memory hook below; rebuilt lazily on next retrieval (not persisted).
@@ -466,6 +471,37 @@ class CognitiveKernel(ICognitiveKernel):
         scored.sort(key=lambda x: x[0], reverse=True)
         return [ep for _, ep in scored[:k]]
 
+    def _retrieve_knowledge_context(self, text: str, k: int = 3) -> List[str]:
+        """Retrieval-augmented reasoning: top-k corpus nodes as injectable context.
+
+        Queries the wired ``knowledge_index`` (duck-typed: any ``.search(text)``
+        returning ``List[str]`` node ids). Returns strings shaped
+        ``knowledge: <node_id>: <snippet>`` for folding into plan steps. Returns []
+        when no index is wired, the query is empty, or retrieval raises (graceful
+        no-injection — keeps the kernel deterministic + LLM-free by default).
+        """
+        if self._knowledge_index is None or not text:
+            return []
+        try:
+            top = self._knowledge_index.search(text)
+        except Exception:
+            return []
+        if not top:
+            return []
+        out: List[str] = []
+        getter = getattr(self._knowledge_index, "get_snippet", None)
+        for nid in top[:k]:
+            snippet = ""
+            if callable(getter):
+                try:
+                    snippet = getter(nid) or ""
+                except Exception:
+                    snippet = ""
+            # snippet may be long/raw; keep a compact, injectable preview.
+            snip = (snippet[:160].replace("\n", " ") if snippet else nid)
+            out.append(f"knowledge: {nid}: {snip}")
+        return out
+
     def tick(self, intent: Intent) -> CognitiveState:
         """Advance the FSM one full deliberative cycle (system-2). Returns end state."""
         # Idle -> Observe
@@ -506,6 +542,20 @@ class CognitiveKernel(ICognitiveKernel):
             ctx = " | ".join(f"past-experience: {ep.summary}" for ep in similar)
             candidates = [
                 Plan(id=c.id, goal_id=c.goal_id, steps=c.steps + (ctx,),
+                     confidence=c.confidence, provenance=c.provenance,
+                     execution_steps=c.execution_steps)
+                for c in candidates
+            ]
+        # Retrieval-augmented reasoning (KROFT Self-Model / live corpus): mirror the
+        # past-experience injection above — query the wired knowledge index for the
+        # top-3 corpus nodes matching the intent and fold them into EVERY candidate's
+        # steps as `knowledge: <node_id>: <snippet>` context. Scoped to "corpus wired
+        # AND retrieval non-empty" so abstract deliberation (choose_blue/red) stays
+        # clean + deterministic when no corpus is attached. No new port / planner change.
+        knowledge_ctx = self._retrieve_knowledge_context(intent.text)
+        if knowledge_ctx and candidates:
+            candidates = [
+                Plan(id=c.id, goal_id=c.goal_id, steps=c.steps + tuple(knowledge_ctx),
                      confidence=c.confidence, provenance=c.provenance,
                      execution_steps=c.execution_steps)
                 for c in candidates
@@ -833,7 +883,8 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
                  config: Optional["KernelConfig"] = None,
                  memory: Optional[object] = None,
                  procedural: Optional[object] = None,
-                 embedding: Optional[object] = None) -> CognitiveKernel:
+                 embedding: Optional[object] = None,
+                 knowledge_index: Optional[object] = None) -> CognitiveKernel:
     """Factory: assemble a deterministic, LLM-free reference kernel (I-09).
 
     Backward-compatible thin wrapper. All composition logic now lives in ``KernelBuilder``
@@ -855,6 +906,7 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     base = config if config is not None else KernelConfig()
     resolved = base.merged(node_id=node_id, clock=clock,
                            llm_client=llm_client, live_metrics=live_metrics,
-                           memory=memory, procedural=procedural, embedding=embedding)
+                           memory=memory, procedural=procedural, embedding=embedding,
+                           knowledge_index=knowledge_index)
     from kernel.kernel_builder import KernelBuilder
     return KernelBuilder(resolved).build()
