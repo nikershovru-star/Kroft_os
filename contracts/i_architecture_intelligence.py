@@ -86,3 +86,31 @@ class IEvolutionPlanner(ABC):
     @abstractmethod
     def plan(self) -> EvolutionRoadmap:
         ...
+
+
+# --- L8 Architecture Synthesizer --------------------------------------------
+
+@dataclass
+class SynthesisProposal:
+    """A consolidated ADR proposal joining L5/L6/L7 outputs (ADR-0XX)."""
+    title: str
+    summary: str
+    proposed_adr_id: str
+    change_request: str
+    simulation: Optional[SimulationResult] = None
+    debt: Optional[DebtReport] = None
+    roadmap: Optional[EvolutionRoadmap] = None
+    confidence: float = 0.0          # 0.0 (weak) .. 1.0 (strong)
+    simulation_ok: bool = True
+    generated_at: str = ""
+
+
+class IArchitectureSynthesizer(ABC):
+    """L8: joins simulator + debt + evolution into one ADR proposal (KB-Update loop)."""
+
+    @abstractmethod
+    def synthesize(self, simulator: "IChangeSimulator",
+                   debt_engine: "ITechDebtAuditor",
+                   evolution_engine: "IEvolutionPlanner") -> SynthesisProposal:
+        """Fold L5/L6/L7 outputs into a single SynthesisProposal."""
+

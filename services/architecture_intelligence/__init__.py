@@ -20,11 +20,13 @@ from contracts.i_architecture_intelligence import (
     DebtItem,
     DebtReport,
     EvolutionRoadmap,
+    IArchitectureSynthesizer,
     IChangeSimulator,
     IEvolutionPlanner,
     ITechDebtAuditor,
     RoadmapItem,
     SimulationResult,
+    SynthesisProposal,
 )
 from contracts.i_execution_sandbox import IExecutionSandbox
 from contracts.i_telemetry import ITelemetrySink
@@ -187,3 +189,69 @@ class EvolutionEngine(IEvolutionPlanner):
                     priority="high", proposed_adr="ADR-TBD-debt",
                 ))
         return EvolutionRoadmap(items=items, generated_at=_now())
+
+
+class ArchitectureSynthesizer(IArchitectureSynthesizer):
+    """L8: fold L5/L6/L7 outputs into a single ADR proposal (ADR-0XX).
+
+    Closes the research -> synthesize -> ADR -> KB-Update loop of the
+    architecture-intelligence maturity ladder. Does NOT apply changes; it only
+    proposes. K8-clean: services + contracts + stdlib (reuses AKB/telemetry,
+    never runtime code).
+    """
+
+    def synthesize(self, simulator: "IChangeSimulator",
+                   debt_engine: "ITechDebtAuditor",
+                   evolution_engine: "IEvolutionPlanner") -> SynthesisProposal:
+        if simulator is None or debt_engine is None or evolution_engine is None:
+            raise TypeError("synthesize requires simulator, debt_engine, evolution_engine instances")
+        sim = simulator.simulate_imports([])
+        debt = debt_engine.audit()
+        roadmap = evolution_engine.plan()
+
+        simulation_ok = sim.ok
+        roadmap_items = roadmap.items or []
+        has_roadmap = len(roadmap_items) > 0
+
+        # Confidence: base 0.5, +0.3 if simulation clean, +0.2 if a roadmap exists.
+        confidence = 0.5
+        if simulation_ok:
+            confidence += 0.3
+        if has_roadmap:
+            confidence += 0.2
+        confidence = max(0.0, min(1.0, confidence))
+
+        proposed_adr_id = "ADR-TBD-synth"
+        if has_roadmap and roadmap_items[0].proposed_adr:
+            proposed_adr_id = roadmap_items[0].proposed_adr
+
+        # change_request: textual fold of roadmap titles + high-severity debt.
+        cr_parts: List[str] = []
+        for it in roadmap_items:
+            cr_parts.append(f"- {it.priority}: {it.title} (rationale: {it.rationale})")
+        for d in debt.items:
+            if d.severity == "high":
+                cr_parts.append(f"- DEBT[high]: {d.detail} (evidence: {d.evidence})")
+        change_request = "\n".join(cr_parts)
+
+        title = "Synthesized architecture evolution proposal"
+        if has_roadmap:
+            title = f"Synthesized proposal: {roadmap_items[0].title}"
+
+        summary = (
+            f"sim_ok={simulation_ok} debt_score={debt.score:.2f} "
+            f"roadmap_items={len(roadmap_items)} confidence={confidence:.2f}"
+        )
+
+        return SynthesisProposal(
+            title=title,
+            summary=summary,
+            proposed_adr_id=proposed_adr_id,
+            change_request=change_request,
+            simulation=sim,
+            debt=debt,
+            roadmap=roadmap,
+            confidence=confidence,
+            simulation_ok=simulation_ok,
+            generated_at=_now(),
+        )
