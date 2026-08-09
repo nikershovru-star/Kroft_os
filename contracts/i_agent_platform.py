@@ -108,3 +108,34 @@ class IAgentPlatform(abc.ABC):
         chat agent: `agent.ask("Hello") -> "..."`.
         """
         raise NotImplementedError
+
+
+# --- L8 Autonomous Research Scheduler (ADR-0XX) -------------------------------
+
+@dataclass
+class ResearchFinding:
+    """One autonomous research finding: a goal, its answer, and provenance."""
+    goal: str
+    answer: str
+    success: bool
+    source_hits: Tuple[str, ...] = ()
+    tick: int = 0
+
+
+class IResearchScheduler(abc.ABC):
+    """L8: autonomous loop that SELF-SETS research goals and accrues findings."""
+
+    @abc.abstractmethod
+    def tick(self) -> "Optional[ResearchFinding]":
+        """Run ONE autonomous research step; return the finding or None if idle."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def run_for(self, n: int) -> "List[ResearchFinding]":
+        """Run up to `n` ticks, returning all findings collected in this call."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def findings(self) -> "List[ResearchFinding]":
+        """Return the accumulated finding history (KB-Update feed)."""
+        raise NotImplementedError
