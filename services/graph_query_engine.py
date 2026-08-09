@@ -1725,6 +1725,49 @@ class GraphQueryEngine(IGraphQuery):
         result = sorted(scores.items(), key=lambda x: (-x[1], x[0]))
         return result[:top_k]
 
+    def query_with_abstention(
+        self,
+        query: str,
+        top_k: int = 10,
+        semantic_threshold: Optional[float] = None,
+    ) -> "tuple[List[Tuple[str, float]], bool]":
+        """Semantic retrieval with cosine-gated abstention (ADR-0XX).
+
+        Reads the HONEST cosine scores straight from ``SemanticIndex.search``
+        (NOT via ``semantic_search`` — that method is rebound to a Jaccard stub
+        at the bottom of this module). Filters candidates to those whose cosine
+        is >= ``semantic_threshold`` (0..1). Returns ``(results, abstained)``.
+
+        ``abstained`` is ``True`` iff no candidate cleared the threshold — the
+        engine refuses to answer rather than surface a low-confidence / out-of-
+        corpus (hallucinated) node.
+
+        Zero regression:
+          - no wired ``semantic_index``/``embedding``  -> ([], True)
+          - ``semantic_threshold is None``             -> ([], True)
+        (no vector signal => cannot assert a match).
+        """
+        if self._semantic_index is None or self._embedding is None:
+            return [], True
+        if semantic_threshold is None:
+            return [], True
+        if not query or not query.strip():
+            return [], True
+
+        q_emb = self._embedding.embed(query)
+        # Pull MORE candidates than top_k so filtering at the threshold does not
+        # starve the result list of borderline-valid hits.
+        candidates = self._semantic_index.search(q_emb, top_k=max(top_k * 4, 50))
+
+        kept: List[Tuple[str, float]] = []
+        for nid, score in candidates:
+            if score >= semantic_threshold:
+                kept.append((nid, score))
+            if len(kept) >= top_k:
+                break
+        abstained = len(kept) == 0
+        return kept, abstained
+
     def fuzzy_search(self, query: str) -> List[str]:
         """Fuzzy full-text AND-search over the shared ContentIndex (Stage 20).
 

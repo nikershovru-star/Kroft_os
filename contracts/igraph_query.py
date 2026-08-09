@@ -44,3 +44,24 @@ class IGraphQuery(IService):
     @abstractmethod
     def stats(self) -> Dict[str, object]:
         """Compute {total_nodes, total_edges, avg_degree, orphan_count} live."""
+
+    @abstractmethod
+    def query_with_abstention(
+        self,
+        query: str,
+        top_k: int = 10,
+        semantic_threshold: Optional[float] = None,
+    ) -> "tuple[List[Tuple[str, float]], bool]":
+        """Semantic/hybrid retrieval WITH confidence-gated abstention (ADR-0XX).
+
+        Returns ``(results, abstained)`` where ``results`` is a best-first list of
+        ``(node_id, cosine_score)`` tuples filtered to those at or above
+        ``semantic_threshold`` (cosine, 0..1), and ``abstained`` is ``True`` iff no
+        candidate cleared the threshold (the engine REFUSES to answer rather than
+        return a low-confidence / hallucinated node).
+
+        Zero regression: with no wired semantic_index+embedding, or with
+        ``semantic_threshold is None``, returns ``([], True)`` (no vector signal
+        available -> cannot assert a match). Callers that do not want abstention
+        keep using ``search()`` / ``hybrid_search()`` unchanged.
+        """
