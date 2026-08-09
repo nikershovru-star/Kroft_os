@@ -19,3 +19,7 @@ stubs/
 cache/
 .DS_Store
 *.egg-info/
+
+# Eval artifacts (generated, not source)
+tests/calibration.json
+tests/embedding_eval_results.json
