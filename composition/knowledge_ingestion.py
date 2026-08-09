@@ -190,11 +190,13 @@ def ingest_directory(
         "semantic_index": semantic_index,
         "embedding": embedding,
         "engine": engine,
-        # PHASE 6D: primary retrieval path = pure semantic (verified best mode on
-        # golden dataset: R@5=0.420 vs hybrid 0.180 vs lexical 0.000). Lexical
-        # (engine.search) and hybrid (engine.hybrid_search) remain available.
-        # No new API — this is a composition-layer wiring choice only.
-        "primary_retriever": engine.semantic_search,
+        # PHASE 6E (owner decision): primary retrieval path = hybrid_search.
+        # hybrid_search calls SemanticIndex.search directly (correct cosine on
+        # bge-m3, R@5=0.90) and fuses with lexical via RRF. It deliberately
+        # bypasses the monkey-patched engine.semantic_search (lexical Jaccard),
+        # which would otherwise degrade retrieval. GraphQueryEngine / monkey-patch
+        # untouched. No new API — composition-layer wiring choice only.
+        "primary_retriever": engine.hybrid_search,
         "store": store,
         "nodes": nodes,
         "counts": {
