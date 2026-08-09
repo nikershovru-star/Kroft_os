@@ -53,6 +53,27 @@ def build_llm_client(
     )
 
 
+def build_omniroute_client(
+    combo: str = "kroft-free",
+    gateway: str = "http://localhost:3000/v1",
+    timeout: float = 120.0,
+    **kwargs,
+) -> ILlm:
+    """OmniRoute gateway support (ТЗ-OMNI-01) — reuses OpenAiCompatibleClient (K5/K6).
+
+    OmniRoute is an external OpenAI-compatible AI gateway (one /v1 endpoint, smart
+    combo routing, quota-aware auto-fallback). It exposes a combo name as the
+    ``model`` routing-key, so we point the existing OpenAiCompatibleClient at the
+    gateway and pass ``model=combo``. No new port, no new adapter, no kernel change.
+
+    Keyless by default (free-tier gateways need no API key). Embeddings stay local
+    (bge-m3 via Ollama) — only chat/reasoning is routed through OmniRoute.
+    """
+    return build_llm_client(
+        base_url=gateway, model=combo, api_key="", timeout=timeout, **kwargs
+    )
+
+
 def detect_local_ollama(host: str = "http://localhost:11434", timeout: float = 2.0) -> bool:
     """Best-effort probe: is an Ollama-compatible /models endpoint reachable on ``host``?
 

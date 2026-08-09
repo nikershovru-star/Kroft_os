@@ -526,6 +526,15 @@ class KroftApp:
             return None  # LLM-free deterministic run (I-09)
         if mode == "mock":
             return _MockLlm()
+        if mode == "omniroute":
+            # External OmniRoute AI gateway (ТЗ-OMNI-01, ADR-089). Reuses the
+            # existing OpenAiCompatibleClient via the factory alias — no new port
+            # or adapter. Combo routing + quota-aware fallback live in OmniRoute.
+            from composition.llm_client_factory import build_omniroute_client
+            try:
+                return build_omniroute_client()
+            except Exception:
+                return None
         # "auto": build a real client. Opt-in OmniRoute via KROFT_LLM_BASE_URL (ТЗ-OMNI-01, ADR-089).
         # Без переменной — прежний путь (одиночный Ollama-клиент localhost:11434/v1), дефолт НЕ меняем.
         # С переменной — строим OmniRouter из одного ProviderSpec (keyless), graceful к retrieval-only.
