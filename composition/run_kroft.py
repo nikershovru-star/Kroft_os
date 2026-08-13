@@ -103,6 +103,7 @@ class KroftApp:
         if embedding_mode == "auto":
             from adapters.ollama_embedding import OllamaEmbeddingAdapter
             embedding_adapter = OllamaEmbeddingAdapter()
+        self.embedding_adapter = embedding_adapter  # P1-A: reuse for semantic retrieval
         # 2b) Knowledge index (ContentIndex) — built early so it can be wired into
         # the cognitive kernel when a live corpus is configured (retrieval-augmented
         # reasoning, ТЗ). The KnowledgeEngine is built later (after the graph).
@@ -196,9 +197,15 @@ class KroftApp:
         self.writer_executor = WriterAgentExecutor(writer_agent)
         self.planner_executor = PlannerAgentExecutor(planner_agent)
         self.finance_executor = FinanceAgentExecutor(finance_agent)
+        self.loop_executor = LoopAgentExecutor(
+            default_agent_id="agent-loop", llm_client=self.llm, budget=5,
+            knowledge_index=self.content_index,
+            memory=self.memory,
+            embedding=self.embedding_adapter)  # ТЗ-L10.4: reuse SAME EmbeddingAdapter as main kernel (no new subsystem)
         self.agent_executor = MultiAgentExecutor([
             self.research_executor, self.architect_executor, self.programmer_executor,
             self.writer_executor, self.planner_executor, self.finance_executor,
+            self.loop_executor,
         ])
         # Phase C (Wave C1/C2/C3/C6): Agent Runtime — дефолтно подключён к ядру
         # (product-mode: больше не опциональный флаг). Routed capabilities всегда идут

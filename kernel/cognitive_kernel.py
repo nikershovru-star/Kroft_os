@@ -538,7 +538,15 @@ class CognitiveKernel(ICognitiveKernel):
         # structured execution intent (file/command) so abstract deliberation
         # (choose_blue/red) stays clean. No new port / planner change.
         similar = self._retrieve_similar_episodes(intent.text)
-        if similar and any(c.execution_steps for c in candidates):
+        # ТЗ-L10.4: open past-experience injection to the autonomous loop context too.
+        # The loop kernel's node_id is set to "agent-loop" by AgentLoop, so this reuses
+        # an EXISTING runtime/capability signal (no new global state). Structured goals
+        # (file/command, carrying execution_steps) keep their existing behavior unchanged;
+        # abstract loop goals now also fold restored episodes into the plan, enabling
+        # cross-restart causal learning without a new subsystem.
+        autonomous_loop_context = self._node_id.startswith("agent-loop")
+        if similar and (any(c.execution_steps for c in candidates)
+                        or autonomous_loop_context):
             ctx = " | ".join(f"past-experience: {ep.summary}" for ep in similar)
             candidates = [
                 Plan(id=c.id, goal_id=c.goal_id, steps=c.steps + (ctx,),

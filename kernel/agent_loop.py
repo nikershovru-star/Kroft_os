@@ -21,6 +21,8 @@ from typing import List, Optional, Tuple
 from contracts.cognitive_domain import (
     ConfidenceScore,
     Intent,
+    Observation,
+    Episode,
     Provenance,
     ProvenanceType,
 )
@@ -34,11 +36,15 @@ class AgentLoop(IAgentLoop):
     """Iterative goal-driven loop over a single cognitive kernel (ТЗ-AGENT-LOOP-01)."""
 
     def __init__(self, node_id: str = "agent-loop", llm_client=None,
-                 timeout: float = 30.0, kernel=None) -> None:
+                 timeout: float = 30.0, kernel=None, knowledge_index=None,
+                 memory=None, embedding=None) -> None:
         self._node_id = node_id
         self._llm_client = llm_client
         self._timeout = timeout
-        self._kernel = kernel  # optional injected kernel (tests / resume a running kernel)
+        self._kernel = kernel
+        self._knowledge_index = knowledge_index
+        self._memory = memory  # ТЗ-L10: share run_kroft's layered memory so loop learning persists
+        self._embedding = embedding  # ТЗ-L10.4: reuse existing EmbeddingAdapter for semantic episodic retrieval
 
     def run(self, goal: str, budget: int = 5) -> AgentLoopResult:
         if budget < 1:
@@ -46,7 +52,11 @@ class AgentLoop(IAgentLoop):
                                    final_outcome="", memory_delta=(),
                                    error="budget must be >= 1")
         kernel = self._kernel if self._kernel is not None else build_kernel(
-            self._node_id, llm_client=self._llm_client)
+            self._node_id, llm_client=self._llm_client,
+            knowledge_index=self._knowledge_index,
+            memory=self._memory,
+            embedding=self._embedding)
+        self._kernel = kernel  # keep reference so feedback writes to the live world
         kernel.attach_executor(ReferenceExecutor())
 
         observations: List[str] = []
@@ -54,13 +64,17 @@ class AgentLoop(IAgentLoop):
         final_outcome = ""
         try:
             for step in range(budget):
-                # Feedback: the intent carries all prior observations so the planner
-                # re-plans against what already happened (observation-feedback loop).
+                # Feedback: the intent carries prior RETRIEVED knowledge (real outcome of
+                # previous ticks) so the next reasoning/retrieval is grounded in it — without
+                # polluting retrieval with the full observation log. Observations are still
+                # recorded locally for the result trail.
+                prior_knowledge = [
+                    s for s in observations if isinstance(s, str) and s.startswith("knowledge:")
+                ]
                 intent_text = goal
-                if observations:
-                    intent_text = (
-                        f"{goal}\n\nObservations so far:\n"
-                        + "\n".join(f"- {o}" for o in observations)
+                if prior_knowledge:
+                    intent_text = goal + "\n\nPrior knowledge from earlier steps:\n" + "\n".join(
+                        f"- {k}" for k in prior_knowledge[-3:]
                     )
                 intent = Intent(
                     id=f"{self._node_id}-step-{step}",
@@ -72,6 +86,24 @@ class AgentLoop(IAgentLoop):
                 plan = kernel._last_selected_plan
                 outcome = "|".join(plan.steps) if plan is not None else "no-plan"
                 observations.append(f"step {steps + 1}: {outcome}")
+                # ТЗ-L8 feedback: fold the REAL retrieved knowledge from this tick into
+                # the kernel's WorldState so the NEXT tick's reasoning is grounded in it.
+                # Only real retrieved content (lines "knowledge: <node>: <snippet>") is
+                # added — never synthetic text. This is what makes Plan N+1 differ from Plan N.
+                if plan is not None:
+                    for s in plan.steps:
+                        if isinstance(s, str) and s.startswith("knowledge:"):
+                            try:
+                                kernel._world.update(
+                                    Observation(
+                                        id=f"{self._node_id}-obs-{steps + 1}",
+                                        content=s,
+                                        confidence=ConfidenceScore(0.8, ProvenanceType.OBSERVATION),
+                                        provenance=Provenance(source="agent-loop", actor="agent-loop"),
+                                    )
+                                )
+                            except Exception:
+                                pass  # observation write must never break the loop
                 steps += 1
                 final_outcome = outcome
                 # Stop when the kernel stops producing a plan (goal reached / no further plan).

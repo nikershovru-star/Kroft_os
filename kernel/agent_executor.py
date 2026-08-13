@@ -94,17 +94,25 @@ class LoopAgentExecutor(IAgentExecutor):
     """
 
     def __init__(self, default_agent_id: str = "agent-loop", llm_client=None,
-                 budget: int = 5) -> None:
+                 budget: int = 5, knowledge_index=None, memory=None,
+                 embedding=None) -> None:
         self._default_agent_id = default_agent_id
         self._llm_client = llm_client
         self._budget = budget
+        self._knowledge_index = knowledge_index
+        self._memory = memory  # ТЗ-L10: shared layered memory (persisted by run_kroft)
+        self._embedding = embedding  # ТЗ-L10.4: reuse existing EmbeddingAdapter for semantic episodic retrieval
+        self.capability = "loop"  # lawful routing key (ТЗ-L8: dedicated capability)
 
     def execute(self, goal: OrchestrationGoal) -> TaskOutcome:
         node_id = f"{self._default_agent_id}:{goal.goal_id}"
         goal_text = str(goal.payload if goal.payload is not None else goal.capability)
         try:
             from kernel.agent_loop import AgentLoop
-            loop = AgentLoop(node_id=node_id, llm_client=self._llm_client)
+            loop = AgentLoop(node_id=node_id, llm_client=self._llm_client,
+                             knowledge_index=self._knowledge_index,
+                             memory=self._memory,
+                             embedding=self._embedding)
             result = loop.run(goal_text, budget=self._budget)
             return TaskOutcome(
                 success=result.success,
