@@ -72,8 +72,16 @@ class KnowledgeSnapshotStore:
         parent = os.path.dirname(self._path)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        with open(self._path, "w", encoding="utf-8") as fh:
+        # Atomic write (ТЗ-L10.8): never replace the canonical snapshot with a
+        # partially-written file. Write to a sibling .tmp, fsync, then os.replace
+        # (atomic rename on POSIX/Windows). On crash mid-write only the .tmp is
+        # left behind; the original remains valid.
+        tmp = self._path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, ensure_ascii=False, indent=2, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, self._path)
         return self._path
 
     def load(self) -> Optional[Dict[str, Any]]:
@@ -83,8 +91,20 @@ class KnowledgeSnapshotStore:
         try:
             with open(self._path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
+        except json.JSONDecodeError:
+            # Corruption detected: preserve the broken file as .corrupt for manual
+            # recovery instead of silently destroying it (minimal scope — no backup
+            # system). The runtime then degrades gracefully from empty state.
+            _corrupt = self._path + ".corrupt"
+            try:
+                if os.path.isfile(_corrupt):
+                    os.remove(_corrupt)
+                os.replace(self._path, _corrupt)
+            except Exception:
+                pass
+            return None
         except Exception:
-            return None  # corrupt snapshot -> treat as missing (graceful degrade)
+            return None  # other read error -> graceful degrade
         return data
 
     def load_trust(self, data: Optional[Dict[str, Any]] = None) -> TrustState:

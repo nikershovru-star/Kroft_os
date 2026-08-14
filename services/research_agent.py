@@ -93,7 +93,12 @@ class ResearchAgent(IAgentPlatform):
                     "\n".join(f"{h.source}: {h.content[:120]}" for h in hits)
                 )
             else:
-                result = result.with_tools("no matches in the knowledge graph")
+                # Stage 4: signal a knowledge gap instead of a silent "no matches".
+                # The agent does NOT auto-ingest here (that is S4.4, gated by config);
+                # it surfaces the gap so an upstream planner / autonomous loop can act.
+                result = result.with_gap(True).with_tools(
+                    "KNOWLEDGE_GAP: no matches in the knowledge graph for this query"
+                )
 
         result = result.with_status(AgentStatus.DONE)
         return result

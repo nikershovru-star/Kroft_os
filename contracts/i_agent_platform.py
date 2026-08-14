@@ -59,6 +59,7 @@ class AgentResult:
     route_log: Tuple[str, ...] = ()
     tool_results: Tuple[str, ...] = ()
     error: str = ""
+    gap_detected: bool = False  # Stage 4: knowledge-gap signal (0 hits on a non-trivial query)
     optimization_recommendations: Tuple["Recommendation", ...] = ()  # Wave 13: observe-only
     autonomy_log: Tuple["EvaluationReport", ...] = ()  # Wave 14: observe-only
 
@@ -85,6 +86,10 @@ class AgentResult:
 
     def with_status(self, status: str, error: str = "") -> "AgentResult":
         return self.__class__(**{**self.__dict__, "status": status, "error": error})
+
+    def with_gap(self, detected: bool = True) -> "AgentResult":
+        """Stage 4: flag a knowledge gap (e.g. 0 hits on a non-trivial query)."""
+        return self.__class__(**{**self.__dict__, "gap_detected": detected})
 
     @property
     def is_success(self) -> bool:
