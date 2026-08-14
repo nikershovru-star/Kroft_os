@@ -196,3 +196,131 @@ class KnowledgeSnapshotStore:
         if not isinstance(raw, dict):
             return {}
         return {k: list(v) for k, v in raw.items() if isinstance(v, list)}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V3 — Safe Recovery / Rollback (ТЗ-KNOWLEDGE-SAFE-RECOVERY-01)
+# Composition-only seam (Флаг C): owns file I/O so the snapshot store stays
+# axis-clean. Versioned copies + a sha256 manifest give point-in-time recovery
+# WITHOUT touching the canonical _snapshot.json on the hot path. Rolling back
+# only SWAPS the canonical file for a kept version (atomic os.replace), never
+# destroying the current one first (it becomes the next version).
+# ─────────────────────────────────────────────────────────────────────────────
+import datetime  # noqa: E402  (stdlib; lazy at module bottom)
+import hashlib  # noqa: E402  (stdlib; lazy at module bottom)
+
+
+class SnapshotVersioner:
+    """Keep dated, sha256-verified versions of a canonical snapshot + roll back.
+
+    Layout (alongside the canonical snapshot):
+        <snap>.versions/manifest.json        # [{version, sha256, ts, label}]
+        <snap>.versions/snapshot.v1.json     # immutable copy at save time
+        <snap>.versions/snapshot.v2.json ...
+
+    K1/K8: stdlib only; this is a composition I/O seam, NOT a runtime module.
+    The canonical snapshot is never overwritten by save_version() — only a NEW
+    version file is written; rollback() swaps the canonical for a chosen version.
+    """
+
+    def __init__(self, snapshot_path: str, keep: int = 10) -> None:
+        self._path = snapshot_path
+        self._keep = keep
+        self._vdir = snapshot_path + ".versions"
+
+    # ---- helpers ----
+    def _sha256(self, path: str) -> str:
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def _manifest_path(self) -> str:
+        return os.path.join(self._vdir, "manifest.json")
+
+    def _load_manifest(self) -> list:
+        if not os.path.isfile(self._manifest_path()):
+            return []
+        try:
+            with open(self._manifest_path(), "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def _save_manifest(self, entries: list) -> None:
+        os.makedirs(self._vdir, exist_ok=True)
+        tmp = self._manifest_path() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(entries, fh, ensure_ascii=False, indent=2, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, self._manifest_path())
+
+    # ---- public API ----
+    def save_version(self, label: str = "") -> Optional[str]:
+        """Snapshot the CURRENT canonical file as a new immutable version.
+
+        Returns the new version path, or None when the canonical file is absent
+        (nothing to version yet). Does NOT mutate the canonical file.
+        """
+        if not os.path.isfile(self._path):
+            return None
+        os.makedirs(self._vdir, exist_ok=True)
+        manifest = self._load_manifest()
+        version = len(manifest) + 1
+        dest = os.path.join(self._vdir, f"snapshot.v{version}.json")
+        # copy (never move) the canonical file -> version is immutable
+        with open(self._path, "rb") as src, open(dest, "wb") as out:
+            while True:
+                buf = src.read(1 << 20)
+                if not buf:
+                    break
+                out.write(buf)
+        entry = {
+            "version": version,
+            "sha256": self._sha256(dest),
+            "ts": datetime.datetime.now().isoformat(timespec="seconds"),
+            "label": label,
+            "path": dest,
+        }
+        manifest.append(entry)
+        # prune oldest beyond keep
+        if len(manifest) > self._keep:
+            for old in manifest[: len(manifest) - self._keep]:
+                try:
+                    if os.path.isfile(old["path"]):
+                        os.remove(old["path"])
+                except Exception:
+                    pass
+            manifest = manifest[-self._keep:]
+        self._save_manifest(manifest)
+        return dest
+
+    def list_versions(self) -> list:
+        """Newest-last list of {version, sha256, ts, label}."""
+        return self._load_manifest()
+
+    def rollback(self, version: int) -> str:
+        """Swap the canonical file for version N; the PRE-rollback canonical is
+        first preserved as a new version (so rollback is itself reversible).
+
+        Returns the (now-restored) canonical path. Raises ValueError on unknown
+        version. The chosen version file is NOT deleted (immutable history).
+        """
+        manifest = self._load_manifest()
+        by_ver = {e["version"]: e for e in manifest}
+        if version not in by_ver or not os.path.isfile(by_ver[version]["path"]):
+            raise ValueError(f"version {version} not found")
+        # keep current as a recoverable version first
+        self.save_version(label=f"pre-rollback-to-v{version}")
+        # atomic swap canonical <- chosen version
+        with open(by_ver[version]["path"], "rb") as src, open(self._path + ".tmp", "wb") as out:
+            while True:
+                buf = src.read(1 << 20)
+                if not buf:
+                    break
+                out.write(buf)
+        os.replace(self._path + ".tmp", self._path)
+        return self._path

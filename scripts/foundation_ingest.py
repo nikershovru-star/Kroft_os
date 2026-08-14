@@ -404,3 +404,90 @@ def autonomous_ingest_step(snapshot_path: str,
         snapshot_path, extracted_dir=str(extracted_dir), output_path=out, skip_embed=True
     )
     return {"gap_entries": gap_stems, "ingested": True, "report": report}
+
+
+# --- Stage 5 V1: knowledge-gap planner (ТЗ-KNOWLEDGE-GAP-PLANNER-01) ---
+class GapPlanner:
+    """Turns a detected knowledge gap into an actionable ingest plan (ТЗ V1).
+
+    Reuses autonomous_ingest_step (S4.4): it does NOT re-implement gap detection.
+    Instead it (1) accepts a set of research GOALS, (2) inspects the catalog to
+    find which catalog entries are MISSING from the graph AND have a sidecar on
+    disk, (3) ranks them (e.g. by goal-relevance keyword overlap), and (4) returns
+    a deterministic plan the supervisor can execute (autonomous_ingest_step).
+
+    K6: lives in scripts/ (composition), may import concrete ingest helpers.
+    LLM-free (I-09): ranking is deterministic keyword overlap, no network.
+
+    Example:
+        planner = GapPlanner(snapshot_path, catalog_path, extracted_dir)
+        plan = planner.plan(goals=["cybernetics control theory"])
+        if plan["actions"]:
+            result = autonomous_ingest_step(snapshot_path, catalog_path,
+                                            extracted_dir, output_path=tmp)
+    """
+
+    def __init__(self, snapshot_path: str, catalog_path: str,
+                 extracted_dir: str | None = None) -> None:
+        self._snapshot = snapshot_path
+        self._catalog = catalog_path
+        self._extracted = Path(extracted_dir or EXTRACTED)
+
+    def _present_stems(self) -> set:
+        store = KnowledgeSnapshotStore(self._snapshot)
+        snap = store.load()
+        if snap is None:
+            return set()
+        stems = set()
+        for n in snap.get("graph", {}).get("nodes", []):
+            meta = n.get("meta") or n.get("metadata") or {}
+            src = meta.get("source") or {}
+            sid = src.get("id", "")
+            stems.add(sid.replace(".pdf", ""))
+        return stems
+
+    def _goal_tokens(self, goals) -> set:
+        stop = {"the", "a", "an", "of", "and", "or", "to", "in", "on", "for"}
+        toks = set()
+        for g in goals or []:
+            toks.update(t for t in _tokenize(g) if t not in stop)
+        return toks
+
+    def plan(self, goals: list[str] | None = None) -> dict:
+        """Build an ingest plan for the given goals (or the full catalog gaps).
+
+        Returns:
+            {
+              "actions": [ {stem, title, author, legal, goal_overlap, has_sidecar} ],
+              "gaps_total": int, "actionable": int,
+            }
+        The supervisor executes `actions` via autonomous_ingest_step; this method
+        is pure (no snapshot mutation, no ingest).
+        """
+        catalog = _load_catalog(self._catalog)
+        present = self._present_stems()
+        goal_toks = self._goal_tokens(goals)
+        actions = []
+        for stem, entry in catalog.items():
+            if stem in present:
+                continue  # already in graph
+            sidecar = self._extracted / f"{stem}.json"
+            has_sidecar = sidecar.is_file()
+            # goal relevance: overlap of catalog title/author tokens with goal tokens
+            hay = _tokenize((entry.get("title", "") + " " + entry.get("author", "")).lower())
+            overlap = len(goal_toks & set(hay)) if goal_toks else 0
+            actions.append({
+                "stem": stem,
+                "title": entry.get("title", stem),
+                "author": entry.get("author", "unknown"),
+                "legal": entry.get("legal", "unknown"),
+                "goal_overlap": overlap,
+                "has_sidecar": has_sidecar,
+            })
+        # rank: actionable first (has sidecar), then by goal overlap desc
+        actions.sort(key=lambda a: (not a["has_sidecar"], -a["goal_overlap"]))
+        return {
+            "actions": actions,
+            "gaps_total": len(actions),
+            "actionable": sum(1 for a in actions if a["has_sidecar"]),
+        }
