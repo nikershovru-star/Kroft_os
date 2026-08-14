@@ -82,7 +82,19 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
     c.register_instance("SessionStore", SessionStore(
         persistence_path=_os.path.join(data_dir, "session.json"),
     ))
-    c.register_instance("Embedding", MockEmbeddingAdapter())
+    # STAGE 3 STEP 2 (wiring only): wire a REAL embedding adapter so the stock
+    # boot-path RAG (GraphQueryEngine.semantic_search / hybrid_search) actually
+    # uses the restored foundation SemanticIndex instead of a no-op mock.
+    # Reuses OllamaEmbeddingAdapter (bge-m3 @ localhost:11434, same endpoint the
+    # foundation vectors were built with). Graceful: if Ollama is unavailable,
+    # fall back to MockEmbeddingAdapter so boot never fails (semantic degrades
+    # to lexical-only, zero regression).
+    try:
+        from adapters.ollama_embedding import OllamaEmbeddingAdapter
+        _embedding_adapter = OllamaEmbeddingAdapter(model="bge-m3")
+    except Exception:
+        _embedding_adapter = MockEmbeddingAdapter()
+    c.register_instance("Embedding", _embedding_adapter)
     # TZ-EXECUTION-001 / ADR-039: subprocess sandbox as the IExecutionSandbox impl.
     bus = c.resolve("IEventBus")
     sandbox = SubprocessSandbox(default_timeout=30.0, bus=bus)
@@ -190,6 +202,51 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
     )
     c.register_instance("SchedulerService", sched)
     _wire_scheduler(c)
+    # STAGE 3 STEP 1 (wiring only): load the KROFT Knowledge Foundation snapshot so
+    # the stock main.py boot sees the 49 foundation PDFs (nodes/edges/vectors/index)
+    # instead of starting blind on empty in-memory stores. Reuses the existing
+    # KnowledgeSnapshotStore (NO new mechanism, NO legacy data/*.json). Graceful:
+    # missing file -> no-op (boot as before); load error -> warn + continue.
+    # The foundation snapshot is stored in ENGINE shape (nodes:{id,label,metadata},
+    # edges:{source_id,target_id,type}); map resiliently to the builder API which
+    # accepts (id,label,meta) / (from,to,relation) so both shapes load.
+    _foundation_snap = _os.path.abspath(_os.path.join(
+        _os.path.dirname(__file__), "..", "KROFT_KNOWLEDGE_FOUNDATION", "_snapshot.json"))
+    if _os.path.isfile(_foundation_snap):
+        try:
+            from composition.knowledge_persistence import KnowledgeSnapshotStore
+            _store = KnowledgeSnapshotStore(_foundation_snap)
+            _data = _store.load()
+            if _data:
+                _gb = c.resolve("IGraphBuilder")
+                for _n in _data.get("graph", {}).get("nodes", []):
+                    _nid = _n.get("id")
+                    if not _nid:
+                        continue
+                    _nmeta = _n.get("meta") or _n.get("metadata") or {}
+                    _gb.add_node(_nid, _n.get("label", ""), _nmeta)
+                for _e in _data.get("graph", {}).get("edges", []):
+                    _ef = _e.get("from") or _e.get("source_id")
+                    _et = _e.get("to") or _e.get("target_id")
+                    if not _ef or not _et:
+                        continue
+                    _erel = _e.get("relation") or _e.get("type") or "links_to"
+                    _gb.add_edge(_ef, _et, _erel)
+                c.resolve("ContentIndex").restore(_data.get("index", {}))
+                _vecs = _store.load_semantic_vectors()
+                _si = c.resolve("SemanticIndex")
+                if getattr(_si, "restore", None) is not None:
+                    try:
+                        _si.restore(_vecs)
+                    except Exception:
+                        for _nid, _vec in _vecs.items():
+                            _si.add(_nid, _vec)
+                else:
+                    for _nid, _vec in _vecs.items():
+                        _si.add(_nid, _vec)
+        except Exception as _err:  # never abort boot on foundation-load failure
+            import sys as _sys
+            print(f"[warn] foundation snapshot load skipped: {_err}", file=_sys.stderr)
     return c
 
 

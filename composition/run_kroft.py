@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -41,6 +42,81 @@ from services.skill_evolution import SkillEvolver
 from services.skill_marketplace import SkillRepository
 from services.task_store import TaskStore
 from contracts.model_registry import ModelRegistry
+from services.knowledge_graph.engine import NodeType
+from contracts.knowledge_graph import EdgeType
+
+
+def _builder_relation_to_edge_type(rel: str) -> str:
+    """Map a builder-shaped edge relation to a valid EdgeType name.
+
+    Ingestion emits free-form relations (has_chunk/from_work/shares_concept/
+    same_source); the live engine only accepts the closed EdgeType enum, so we
+    normalise. Unknown relations fall back to REFERENCES (safe, never raises).
+    """
+    mapping = {
+        "has_chunk": "CONTAINS",
+        "from_work": "CONTAINS",
+        "contains": "CONTAINS",
+        "same_source": "REFERENCES",
+        "shares_concept": "REFERENCES",
+        "links_to": "REFERENCES",
+        "references": "REFERENCES",
+    }
+    name = mapping.get((rel or "").lower(), "REFERENCES")
+    try:
+        EdgeType(name)
+    except Exception:
+        name = "REFERENCES"
+    return name
+
+
+def _convert_builder_graph_to_engine(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert an InMemoryGraphBuilder-shaped graph snapshot (as written by the
+    ingestion pipeline) into the InMemoryGraphEngine shape (as consumed by
+    KroftRunner.graph.restore). Minimal, lossless field mapping so a restart
+    actually restores the graph instead of silently dropping it.
+
+    builder:  nodes=[{id,label,meta}], edges=[{from,to,relation}]
+    engine:   nodes=[{id,type,label,metadata,...}], edges=[{source_id,target_id,type}]
+    """
+    nodes = []
+    for nd in raw.get("nodes", []) or []:
+        nid = nd.get("id") or nd.get("id")
+        if not nid:
+            continue
+        meta = nd.get("meta") or {}
+        # Infer a coarse NodeType from the builder meta (work vs chunk).
+        ntype = NodeType.NOTE
+        if isinstance(meta, dict):
+            if meta.get("type") == "work":
+                ntype = NodeType.NOTE  # work-nodes are also notes in the foundation graph
+            elif "answer" in meta or "source" in meta:
+                ntype = NodeType.NOTE
+        nodes.append({
+            "id": nid,
+            "type": ntype,
+            "label": nd.get("label", str(nid)),
+            "metadata": meta if isinstance(meta, dict) else {},
+            "version": 1,
+            "created_at": "",
+            "modified_at": "",
+            "tenant_id": "default",
+        })
+    edges = []
+    for ed in raw.get("edges", []) or []:
+        src = ed.get("from") or ed.get("source_id")
+        tgt = ed.get("to") or ed.get("target_id")
+        if not src or not tgt:
+            continue
+        edges.append({
+            "source_id": src,
+            "target_id": tgt,
+            "type": _builder_relation_to_edge_type(
+                ed.get("relation") or ed.get("type") or "links_to"),
+            "weight": 1.0,
+            "evidence": "",
+        })
+    return {"nodes": nodes, "edges": edges}
 
 
 @dataclass
@@ -56,9 +132,15 @@ class KroftConfig:
     interactive: bool = False    # ТЗ-DAILY-01: read queries from stdin -> agent loop -> answer
     query: Optional[str] = None  # ТЗ-DAILY-01 / Operator: one-shot query via agent loop (Hermes-desktop tool call)
     agent_runtime: bool = True   # Phase C: AgentRuntime дефолтно подключён к ядру (--no-agent-runtime для legacy path)
-    knowledge_snapshot: Optional[str] = None  # ТЗ-KNOWLEDGE-PERSIST-01: JSON snapshot of graph+index (survives restart)
+    # ТЗ-KNOWLEDGE-PERSIST-01: JSON snapshot of graph+index (survives restart).
+    # DEFAULT: load the KROFT Knowledge Foundation snapshot so a stock boot
+    # starts "already learned" from the 49 foundation PDFs without a manual flag.
+    knowledge_snapshot: Optional[str] = str(
+        Path(__file__).resolve().parent.parent / "KROFT_KNOWLEDGE_FOUNDATION" / "_snapshot.json"
+    )
     desktop_opt_in: bool = False    # P.6: explicit opt-in for desktop (click/type/open_app); default-deny
     embedding: str = "none"         # Slice: "none" (keyword fallback) | "auto" (local Ollama /v1/embeddings if reachable)
+    debug: bool = False               # P1-D: print retrieved node/source/chunk + LLM context
     knowledge_corpus: Optional[str] = None  # Live KROFT_KNOWLEDGE corpus dir; default off.
                                             # When set, the corpus is ingested lazily on the
                                             # first query (boot stays fast; boot-ingest of a 10k+
@@ -148,6 +230,7 @@ class KroftApp:
         # ТЗ-KNOWLEDGE-PERSIST-01: restore prior graph + index BEFORE live ingest,
         # so a cold boot reuses on-disk knowledge (starts "already learned").
         self._snapshot_store = None
+        self._runtime_store = None  # STEP 19 PHASE A: runtime state store (separate file)
         # ТЗ-PHASE-M.6: external configs (e.g. SimpleNamespace in agent tests) may omit
         # knowledge_snapshot; use getattr so run_kroft stays compatible without changing
         # the KroftConfig contract (K5/K6: no new field/adapter).
@@ -155,7 +238,26 @@ class KroftApp:
         if _knowledge_snapshot:
             from composition.knowledge_persistence import KnowledgeSnapshotStore
             self._snapshot_store = KnowledgeSnapshotStore(_knowledge_snapshot)
+            # STEP 19 PHASE A — WRITE-PATH CONTAINMENT:
+            # Runtime state (trust/procedural/episodes/semantic/normative) lives
+            # in a SEPARATE file (_runtime_snapshot.json) so _save_knowledge can
+            # NEVER overwrite the canonical foundation snapshot (which carries
+            # builder/meta + the dense foundation semantic_vectors). Previously
+            # _save_knowledge wrote engine-format snapshot() over _snapshot.json,
+            # destroying meta/source (see STEP 18 forensic).
+            _rt_dir = os.path.dirname(_knowledge_snapshot) or "."
+            self._runtime_store = KnowledgeSnapshotStore(
+                os.path.join(_rt_dir, "_runtime_snapshot.json"))
             self._restore_graph_and_index()
+            # P1-A: wire SemanticIndex over the restored Foundation vectors so the
+            # runtime can do real semantic/hybrid retrieval. Reuses the existing
+            # SemanticIndex + ContentIndex + OllamaEmbeddingAdapter(bge-m3); a
+            # thin RRF wrapper (below) fuses lexical+semantic (no new engine).
+            from services.semantic_index import SemanticIndex
+            self.semantic_index = SemanticIndex()
+            _vecs = self._snapshot_store.load_semantic_vectors()
+            for _nid, _vec in _vecs.items():
+                self.semantic_index.add(_nid, _vec)
         self._live_note_count = self._ingest_vault_notes()  # 0 when no vault (graceful)
         self.trust = ReferenceTrustRegistry()
         self._seed_demo_trust()
@@ -184,6 +286,7 @@ class KroftApp:
         from services.writer_agent import WriterAgent, WriterAgentExecutor
         from services.planner_agent import PlannerAgent, PlannerAgentExecutor
         from services.finance_agent import FinanceAgent, FinanceAgentExecutor
+        from kernel.agent_executor import LoopAgentExecutor
         from services.multi_agent_executor import MultiAgentExecutor
         research_agent = ResearchAgent(search=self.search, llm=self.llm, top_k=5)
         architect_agent = ArchitectAgent(search=self.search, llm=self.llm, top_k=5)
@@ -378,7 +481,65 @@ class KroftApp:
             "citation": top3[0] if top3 else None,
         }
 
-    # ---- ТЗ-KNOWLEDGE-PERSIST-01 + ТЗ-PHASE-E: snapshot persistence of live knowledge ----
+    # ---- P1-A / P1-B: semantic + hybrid retrieval over restored Foundation ----
+    def _retrieved_context(self, hits):
+        """P1-D: build (node_id, source, chunk_text) list from hybrid/semantic hits.
+
+        Reads chunk text straight from the graph node meta (the restored
+        Foundation), so the LLM sees RETRIEVED knowledge, not just the query.
+        """
+        ctx = []
+        for item in hits:
+            nid = item[0] if isinstance(item, (list, tuple)) else item
+            node = self.graph.get_node(nid)
+            meta = (node.metadata if node else {}) or {}
+            src = meta.get("source", {}) or {}
+            ctx.append({
+                "node_id": nid,
+                "source": src.get("id", ""),
+                "title": src.get("title", ""),
+                "pages": f"{src.get('page_start', '')}-{src.get('page_end', '')}",
+                "text": (meta.get("answer") or meta.get("question") or "")[:600],
+            })
+        return ctx
+
+    def semantic_search(self, question: str, top_k: int = 5):
+        """P1-A: vector retrieval via SemanticIndex + OllamaEmbeddingAdapter(bge-m3).
+
+        Returns [(node_id, cosine_score), ...] best-first. Without --embedding
+        auto (no wired embedding_adapter) -> [] (zero regression).
+        """
+        if getattr(self, "semantic_index", None) is None or self.embedding_adapter is None:
+            return []
+        q_emb = self.embedding_adapter.embed(question)
+        return self.semantic_index.search(q_emb, top_k=top_k)
+
+    def hybrid_search(self, question: str, top_k: int = 5):
+        """P1-B: RRF fusion (k=60) of lexical (ContentIndex) + semantic (SemanticIndex).
+
+        Reuses the SAME components and RRF formula as GraphQueryEngine.hybrid_search
+        (no new engine). Zero regression: if embedding is unwired, degrades to lexical.
+        """
+        if not question or not question.strip():
+            return []
+        question = question.strip()
+        # Lexical: ContentIndex.search (frequency sort preserved).
+        lexical = list(self.content_index.search(question)) if getattr(self, "content_index", None) else []
+        # Semantic: SemanticIndex directly (request more candidates for RRF overlap).
+        semantic: list = []
+        if getattr(self, "semantic_index", None) is not None and self.embedding_adapter is not None:
+            q_emb = self.embedding_adapter.embed(question)
+            semantic = self.semantic_index.search(q_emb, top_k=max(top_k * 3, 50))
+        # RRF fusion, k=60
+        k = 60
+        scores: dict = {}
+        for rank, nid in enumerate(lexical, start=1):
+            scores[nid] = scores.get(nid, 0.0) + 1.0 / (k + rank)
+        for rank, (nid, _) in enumerate(semantic, start=1):
+            scores[nid] = scores.get(nid, 0.0) + 1.0 / (k + rank)
+        return sorted(scores.items(), key=lambda x: (-x[1], x[0]))[:top_k]
+
+
     def _restore_graph_and_index(self) -> None:
         """Load graph + content index from disk (graceful: missing -> no-op)."""
         if self._snapshot_store is None:
@@ -387,7 +548,15 @@ class KroftApp:
         if not data:
             return  # first run or corrupt snapshot -> build from vault only
         try:
-            self.graph.restore(data.get("graph", {}))
+            raw_graph = data.get("graph", {}) or {}
+            # Ingestion writes the graph via InMemoryGraphBuilder (nodes:
+            # [{id,label,meta}], edges: [{from,to,relation}]), but the live
+            # kernel graph is an InMemoryGraphEngine (nodes: [{id,type,label,
+            # metadata,...}], edges: [{source_id,target_id,type}]). Convert the
+            # builder-shaped snapshot into the engine shape so restart actually
+            # restores the graph instead of silently dropping it (ТЗ PHASE 6).
+            engine_graph = _convert_builder_graph_to_engine(raw_graph)
+            self.graph.restore(engine_graph)
         except Exception:
             pass  # a broken graph blob must not abort boot; live ingest still runs
         try:
@@ -397,18 +566,18 @@ class KroftApp:
 
     def _restore_trust(self) -> None:
         """ТЗ-PHASE-E: overlay saved running-trust over the demo seed (graceful)."""
-        if self._snapshot_store is None:
+        if self._runtime_store is None:
             return
-        saved = self._snapshot_store.load_trust()
+        saved = self._runtime_store.load_trust()
         for author, score in saved.items():
             # reuse the same direct-assignment replay pattern as run_evolution.py
             self.trust._running[author] = float(score)
 
     def _restore_procedural(self) -> None:
         """ТЗ-PHASE-F: overlay saved skills + procedure stats over the demo seed."""
-        if self._snapshot_store is None:
+        if self._runtime_store is None:
             return
-        saved = self._snapshot_store.load_procedural()
+        saved = self._runtime_store.load_procedural()
         if not saved:
             return
         # procedure usage stats (runs/successes/success_rate) — plain dict replay
@@ -435,9 +604,9 @@ class KroftApp:
 
     def _restore_episodic(self) -> None:
         """ТЗ-PHASE-G: restore recorded Episode list into layered memory."""
-        if self._snapshot_store is None:
+        if self._runtime_store is None:
             return
-        saved = self._snapshot_store.load_episodic()
+        saved = self._runtime_store.load_episodic()
         if not saved:
             return
         # reuse the EXISTING converter (K5, no new serializer)
@@ -453,9 +622,9 @@ class KroftApp:
 
     def _restore_semantic(self) -> None:
         """ТЗ-PHASE-H: restore consolidated SemanticFacts into layered memory."""
-        if self._snapshot_store is None:
+        if self._runtime_store is None:
             return
-        saved = self._snapshot_store.load_semantic()
+        saved = self._runtime_store.load_semantic()
         if not saved:
             return
         from kernel.persistence import _semantic_from_dict  # reuse existing (K5)
@@ -469,9 +638,9 @@ class KroftApp:
 
     def _restore_normative(self) -> None:
         """ТЗ-PHASE-H: restore normative/soft Policies into layered memory."""
-        if self._snapshot_store is None:
+        if self._runtime_store is None:
             return
-        saved = self._snapshot_store.load_normative()
+        saved = self._runtime_store.load_normative()
         if not saved:
             return
         from kernel.persistence import _policy_from_dict  # reuse existing (K5)
@@ -485,7 +654,7 @@ class KroftApp:
 
     def _save_knowledge(self) -> None:
         """Persist graph + content index + running-trust + procedural + episodes to disk."""
-        if self._snapshot_store is None:
+        if self._runtime_store is None:
             return
         from kernel.persistence import _episode_to_dict  # reuse existing serializer (K5)
         from kernel.persistence import _semantic_to_dict  # reuse existing (K5)
@@ -496,10 +665,18 @@ class KroftApp:
                 "node_count": len(self.graph.nodes()),
                 "edge_count": len(self.graph.edges()),
                 "saved_at": datetime.now(timezone.utc).isoformat(),
+                "kind": "runtime",  # STEP 19 PHASE A: this file carries ONLY runtime
+                                    # state (trust/procedural/episodes/...), NOT the
+                                    # canonical foundation graph. The foundation
+                                    # snapshot (_snapshot.json) is owned by
+                                    # foundation_ingest.py and must never be
+                                    # overwritten by _save_knowledge.
             }
-            self._snapshot_store.save(
-                self.graph.snapshot(),
-                self.engine._content_index.snapshot(),
+            # Runtime state → separate _runtime_snapshot.json. Foundation graph
+            # (builder/meta + dense vectors) is intentionally NOT written here.
+            self._runtime_store.save(
+                {"nodes": [], "edges": []},  # empty graph: foundation owns graph
+                {"_index": {}, "_doc_terms": {}},  # empty index: foundation owns index
                 meta,
                 trust=self.trust._running,
                 procedural={
@@ -519,6 +696,10 @@ class KroftApp:
                 episodes=[_episode_to_dict(e) for e in self.memory._episodes],
                 semantic=[_semantic_to_dict(f) for f in self.memory._semantic],
                 normative=[_policy_to_dict(p) for p in self.memory._normative],
+                # Runtime snapshot carries NO foundation vectors (they live in
+                # _snapshot.json). Explicit empty dict avoids any accidental
+                # overwrite/merge of the dense foundation vector layer.
+                semantic_vectors={},
             )
         except Exception:
             pass  # persistence failure must never crash the agent loop
@@ -548,12 +729,15 @@ class KroftApp:
         from composition.llm_client_factory import build_llm_client
         from contracts.i_model_router import ProviderSpec
         base_url = os.environ.get("KROFT_LLM_BASE_URL")
-        model = os.environ.get("KROFT_LLM_MODEL")  # None -> дефолт factory (Ollama "auto")
+        model = os.environ.get("KROFT_LLM_MODEL")  # None -> auto-resolve local Ollama model
         # Таймаут 120s: холодная загрузка локальной модели (qwen3.5:9b ~6.5GB) превышает дефолт 30s.
         timeout = float(os.environ.get("KROFT_LLM_TIMEOUT", "120"))
         if not base_url:
-            # Дефолтный Ollama-путь. model из KROFT_LLM_MODEL (если задана), иначе auto.
+            # Дефолтный Ollama-путь. "auto" -> резолвим в первую доступную локальную
+            # модель (ТЗ P1-C: Ollama не знает модель "auto", нужно реальное имя).
             try:
+                if model in (None, "", "auto"):
+                    model = self._resolve_ollama_model()
                 if model:
                     return build_llm_client(model=model, timeout=timeout)
                 return build_llm_client(timeout=timeout)
@@ -570,6 +754,35 @@ class KroftApp:
             return build_llm_client(providers=[spec], timeout=timeout)
         except Exception:
             return None
+
+    @staticmethod
+    def _resolve_ollama_model(host: str = "http://localhost:11434",
+                               timeout: float = 3.0) -> Optional[str]:
+        """P1-C: resolve Ollama 'auto' to a real LOCAL-LLM model name.
+
+        Ollama rejects model='auto' (HTTP 404). Query /api/tags and return the
+        first model that is a CHAT/LLM model (not an embedding model — those
+        reject /v1/chat/completions with HTTP 400). Returns None on any failure
+        (graceful -> factory falls back to retrieval-only).
+        """
+        import json as _json
+        import urllib.request as _urllib
+        _EMBED_MARKERS = ("bge-m3", "mxbai", "embed", "paraphrase", "nomic",
+                          "e5", "gte", "snowflake", "voyage")
+        try:
+            req = _urllib.Request(f"{host.rstrip('/')}/api/tags",
+                                   headers={"Accept": "application/json"})
+            with _urllib.urlopen(req, timeout=timeout) as _resp:
+                _data = _json.loads(_resp.read().decode("utf-8"))
+            _models = _data.get("models") or []
+            # Prefer an explicit LLM model (skip embedding models).
+            for _m in _models:
+                _name = (_m.get("name") or _m.get("model") or "").lower()
+                if not any(_mk in _name for _mk in _EMBED_MARKERS):
+                    return _m.get("name") or _m.get("model")
+        except Exception:
+            pass
+        return None
 
     def _wire_federation(self) -> None:
         from adapters.hmac_signer import HmacSigner
@@ -779,13 +992,45 @@ class KroftApp:
         # ТЗ-PHASE-L: evolve procedural memory from the REAL outcome of this tick.
         self._evolve_procedural_from_runtime()
         self.task_store.update(task_id, "done")
-        # answer from the live graph (real vault content)
-        hits = self.search.search(query, top_k=5)
+        # P1-A/B/C: retrieve via hybrid (lexical+semantic RRF) over restored Foundation.
+        hits = self.hybrid_search(query, top_k=5)
+        # graceful fallback to the legacy graph-only search if hybrid is unwired
         if not hits:
-            return f"[no hits] query processed (task {task_id}); vault has no match for: {query}"
-        lines = [f"[answer] {h.source} (conf={h.confidence.value:.2f}, rel={h.relevance})"
-                 for h in hits]
-        self._save_knowledge()  # ТЗ-KNOWLEDGE-PERSIST-01: persist after each query
+            hits = [(h, 0.0) for h in self.search.search(query, top_k=5)]
+        if not hits:
+            return f"[no hits] query processed (task {task_id}); foundation has no match for: {query}"
+        # P1-D: build context from RETRIEVED chunk text (not just the query).
+        ctx = self._retrieved_context(hits)
+        debug = bool(getattr(self.config, "debug", False)) or os.environ.get("KROFT_DEBUG") == "1"
+        if debug:
+            _dbg = "\n".join(
+                f"  - {c['node_id']} | {c['source']} p{c['pages']}\n"
+                f"    {c['text'][:200]}" for c in ctx
+            )
+            print(f"[debug][retrieval] query={query!r}\n{_dbg}")
+        if self.llm is not None:
+            # P1-C: generate an answer from retrieved knowledge via the existing LLM adapter.
+            context_block = "\n\n".join(
+                f"[#{i+1}] {c['source']} (p{c['pages']})\n{c['text']}"
+                for i, c in enumerate(ctx)
+            )
+            prompt = (
+                "You are KROFT, a knowledge-grounded assistant. Use ONLY the retrieved "
+                "context below to answer. If the context is insufficient, say so.\n\n"
+                f"CONTEXT:\n{context_block}\n\nQUESTION: {query}\n\nANSWER:"
+            )
+            if debug:
+                print(f"[debug][llm-context] {prompt[:400]}...")
+            resp = self.llm.complete(__import__("contracts.i_llm", fromlist=["ModelQuery"]).ModelQuery(
+                prompt=prompt, local=True, task="reasoning"))
+            answer = getattr(resp, "text", "") or ""
+            if debug:
+                print(f"[debug][llm-answer] {answer[:200]}")
+            self._save_knowledge()  # ТЗ-KNOWLEDGE-PERSIST-01: persist after each query
+            return answer
+        # --llm none (non-generative mode): return retrieved citations (backward compatible)
+        lines = [f"[answer] {c['source']} (p{c['pages']}) {c['node_id']}" for c in ctx]
+        self._save_knowledge()
         return "\n".join(lines)
 
     @staticmethod
@@ -793,6 +1038,11 @@ class KroftApp:
         """Map a free-text query to a wired agent capability (or None for the legacy path)."""
         from contracts.i_orchestrator import OrchestrationGoal  # noqa: F401 (kept local)
         q = (query or "").lower()
+        # ТЗ-L8: dedicated autonomous-loop capability routed FIRST so explicit
+        # self-directed/multi-step requests reach LoopAgentExecutor (not research/planning).
+        if any(tok in q for tok in ("autonomous", "agent loop", "multi-step loop",
+                                     "self-directed", "recursive plan", "run a loop")):
+            return "loop"
         if any(tok in q for tok in ("adr", "architecture", "architect", "design decision",
                                      "system design", "constitutional")):
             return "architecture"
@@ -862,12 +1112,16 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
     p.add_argument("--query", default=None,
                    help="ТЗ-DAILY-01 / Operator: one-shot query -> agent loop -> print answer -> exit "
                         "(no stdin). Используется Hermes-desktop для вызова KROFT_OS как инструмента.")
+    p.add_argument("--embedding", choices=["none", "auto"], default="none",
+                   help="P1-A: 'none' (keyword fallback) | 'auto' (local Ollama bge-m3 embeddings).")
+    p.add_argument("--debug", action="store_true",
+                   help="P1-D: print retrieved node IDs / source / chunk text and LLM context.")
     a = p.parse_args(argv)
     return KroftConfig(
         node_id=a.node_id, llm=a.llm, federation=a.federation,
         ticks=a.ticks, run_demo=not a.no_demo, vault=a.vault, interactive=a.interactive,
         agent_runtime=a.agent_runtime, query=a.query,
-        knowledge_snapshot=a.knowledge_snapshot,
+        knowledge_snapshot=a.knowledge_snapshot, debug=a.debug, embedding=a.embedding,
     )
 
 

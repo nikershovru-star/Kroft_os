@@ -160,6 +160,7 @@ def ingest_directory(
             graph_state=builder.get_graph(),
             index_state=index.snapshot(),
             semantic=[{k: v for k, v in n.items() if k not in ("_body", "_path")} for n in nodes],
+            semantic_vectors=semantic_index.snapshot(),
         )
 
     # Semantic retrieval (PHASE 6B): wire existing SemanticIndex + local Ollama
@@ -170,9 +171,25 @@ def ingest_directory(
     embedding = OllamaEmbeddingAdapter(model="bge-m3")
     for n in nodes:
         nid = n["id"]
+        # Variant D document representation (retrieval-quality fix 2026-08-10):
+        # enrich the embedded text with source metadata (title, author) and
+        # tags so entity-specific queries ("Shannon ...", "Newell/Simon ...")
+        # match the right document. Controlled 30-node benchmark proved D
+        # beats the old question+answer (Variant B) on Shannon/Newell queries
+        # without regressing conceptual ones. bge-m3, chunking, SemanticIndex,
+        # GraphQueryEngine and RRF are all unchanged.
+        source = n.get("source", {}) or {}
+        title = source.get("title", "") or ""
+        author = source.get("author", "") or ""
+        question = n.get("question", "") or ""
+        answer = n.get("answer", "") or ""
+        tags = " ".join(n.get("tags", []) or [])
+        related_concepts = " ".join(n.get("related_concepts", []) or [])
         vec_text = " ".join(
-            [n.get("question", ""), n.get("answer", "")]
-            + list(n.get("related_concepts", []) or [])
+            part for part in [
+                title, author, question, answer, tags, related_concepts,
+            ]
+            if part
         )
         try:
             semantic_index.add(nid, embedding.embed(vec_text))

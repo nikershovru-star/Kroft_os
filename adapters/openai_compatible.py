@@ -59,7 +59,10 @@ class OpenAiCompatibleClient(ILlm):
             "model": self._model,
             "messages": [{"role": "user", "content": query.prompt}],
             "temperature": 0.2,
-            "max_tokens": 512,  # Ollama висит без явного лимита (генерирует до контекста)
+            "max_tokens": 512,  # Ollama виснет без явного лимита (генерирует до контекста)
+            # Ollama qwen3.x: отключаем thinking, чтобы получить текстовый ответ
+            # (иначе content=null). 'think' — нативный параметр Ollama для qwen3.
+            "think": False,
         }
         if query.json_mode:
             payload["response_format"] = {"type": "json_object"}

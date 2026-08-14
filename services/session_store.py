@@ -88,8 +88,14 @@ class SessionStore:
             return
         try:
             os.makedirs(os.path.dirname(self._path), exist_ok=True)
-            with open(self._path, "w", encoding="utf-8") as f:
+            # Atomic write (ТЗ-L10.7): write to .tmp, fsync, atomic rename so a
+            # crash never leaves a partially-written session file.
+            tmp = self._path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(self._data, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self._path)
         except Exception:
             pass
 
@@ -99,5 +105,14 @@ class SessionStore:
         try:
             with open(self._path, "r", encoding="utf-8") as f:
                 self._data = json.load(f)
+        except json.JSONDecodeError:
+            # Preserve corrupt session as .corrupt for diagnosis (no backup system).
+            _corrupt = self._path + ".corrupt"
+            try:
+                if os.path.isfile(_corrupt):
+                    os.remove(_corrupt)
+                os.replace(self._path, _corrupt)
+            except Exception:
+                pass
         except Exception:
             pass

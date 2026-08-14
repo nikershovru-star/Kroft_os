@@ -1699,6 +1699,13 @@ class GraphQueryEngine(IGraphQuery):
             return []
         query = query.strip()
 
+        # Lexical: OR over query tokens (not AND). ContentIndex.search is an
+        # AND-intersection, which returns [] for long natural-language queries
+        # (e.g. "What is entropy in information theory according to Shannon?")
+        # because no single chunk contains ALL tokens. OR over tokens lets a
+        # chunk mentioning just "entropy" surface, and RRF then fuses it with
+        # the semantic rank. This is a minimal ranking fix; the AND search()
+        # API is left intact for exact-match callers.
         # Lexical: List[str] from existing search()
         lexical = self.search(query)
 

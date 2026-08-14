@@ -1,0 +1,500 @@
+# Knowledge Foundation v1 — каталог легальных источников (KROFT_OS)
+# Машинно-читаемый: читается Hermes + скриптом fetch_foundation.py.
+# НЕ импортируется в runtime (LAW K8).
+# legal: public_domain | author_draft | open_access | author_page
+# NOTE: копирайт-книги без легальной ссылки помечены legal: copyrighted (не качать).
+
+core_v1:  # 15 ключевых источников
+  - author: "Aristotle"
+    title: "Organon"
+    section: 01_logic
+    legal: public_domain
+    url: "https://archive.org/download/organoncooke01arisuoft/organoncooke01arisuoft.pdf"
+    filename:
+      - aristotle_organon
+  - author: "Francis Bacon"
+    title: "Novum Organum"
+    section: 02_philosophy
+    legal: public_domain
+    url: "https://archive.org/download/baconsnovumorgan00bacouoft/baconsnovumorgan00bacouoft.pdf"
+    filename:
+      - francis_bacon_novum_organum
+  - author: "Rene Descartes"
+    title: "Discourse on the Method"
+    section: 02_philosophy
+    legal: public_domain
+    url: "https://archive.org/download/discourseonmetho1912desc/discourseonmetho1912desc.pdf"
+    filename:
+      - rene_descartes_discourse_on_the_method
+  - author: "Karl Popper"
+    title: "The Logic of Scientific Discovery"
+    section: 13_scientific_method
+    legal: web_only
+    url: "https://archive.org/details/logicofscientifi0000popp"
+    filename:
+      - popper_logic_scientific_discovery
+  - author: "Claude Shannon"
+    title: "A Mathematical Theory of Communication"
+    section: 04_information_theory
+    legal: public_domain
+    url: "https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf"
+    filename:
+      - claude_shannon_a_mathematical_theory_of_communication
+      - shannon_theory_communication
+  - author: "Norbert Wiener"
+    title: "Cybernetics: Control and Communication in the Animal and the Machine"
+    section: 12_control_systems
+    legal: public_domain
+    url: "https://monoskop.org/images/3/31/Wiener_Norbert_The_Machine_Age_v3_1949.pdf"
+    filename:
+      - norbert_wiener_cybernetics__control_and_communication_in_the_animal_and_the_mach
+      - wiener_cybernetics
+  - author: "Allen Newell, Herbert A. Simon"
+    title: "Human Problem Solving"
+    section: 06_cognition
+    legal: open_access
+    url: "http://iiif.library.cmu.edu/file/Newell_box00049_fld04211_doc0001/Newell_box00049_fld04211_doc0001.pdf"
+    filename:
+      - allen_newell__herbert_a__simon_human_problem_solving
+  - author: "Herbert A. Simon"
+    title: "The Sciences of the Artificial (3rd ed.)"
+    section: 06_cognition
+    legal: open_access
+    url: "https://monoskop.org/images/9/9c/Simon_Herbert_A_The_Sciences_of_the_Artificial_3rd_ed.pdf"
+    filename:
+      - herbert_a__simon_the_sciences_of_the_artificial__3rd_ed
+  - author: "Stuart Russell, Peter Norvig"
+    title: "Artificial Intelligence: A Modern Approach (AIMA, 4ed)"
+    section: 05_ai
+    legal: author_draft
+    url: "https://lib.ysu.am/disciplines_bk/efdd4d1d4c2087fe1cbe03d9ced67f34.pdf"
+    filename:
+      - russell_norvig_aima
+  - author: "Judea Pearl"
+    title: "Causality"
+    section: 05_ai
+    legal: author_draft
+    url: ""
+    filename:
+      - pearl_causality
+  - author: "Richard S. Sutton, Andrew G. Barto"
+    title: "Reinforcement Learning: An Introduction (2ed draft)"
+    section: 05_ai
+    legal: author_draft
+    url: "http://incompleteideas.net/book/bookdraft2017nov5.pdf"
+    filename:
+      - richard_s__sutton__andrew_g__barto_reinforcement_learning__an_introduction__2ed_
+  - author: "Andrew Tanenbaum"
+    title: "Modern Operating Systems"
+    section: 07_computer_science
+    legal: author_draft
+    url: ""
+    filename:
+      - tanenbaum_modern_os
+  - author: "Martin Kleppmann"
+    title: "Designing Data-Intensive Applications"
+    section: 08_software_architecture
+    legal: author_draft
+    url: "https://0-lucas.github.io/digital-garden/99.-Books/Martin-Kleppmann---Designing-Data-Intensive-Applications_-O%E2%80%99Reilly-Media-(2017).pdf"
+    filename:
+      - martin_kleppmann_designing_data-intensive_applications
+  - author: "Eric Evans"
+    title: "Domain-Driven Design"
+    section: 08_software_architecture
+    legal: author_draft
+    url: "https://msstest.sankuai.com/v1/mss_156341e12eb248878e532dd820706c40/mall-data-init/ddd-en.compressed.pdf"
+    filename:
+      - eric_evans_domain-driven_design
+      - evans_ddd
+  - author: "Douglas Hofstadter"
+    title: "Godel, Escher, Bach"
+    section: 03_mathematics
+    legal: copyrighted
+    url: ""
+
+extended:  # ещё легально доступное из списка пользователя
+  - author: "Immanuel Kant"
+    title: "Critique of Pure Reason"
+    section: 02_philosophy
+    legal: public_domain
+    url: "https://ia600809.us.archive.org/32/items/immanuelkantscri032379mbp/immanuelkantscri032379mbp.pdf"
+    filename:
+      - immanuel_kant_critique_of_pure_reason
+  - author: "Bertrand Russell"
+    title: "The Problems of Philosophy"
+    section: 02_philosophy
+    legal: public_domain
+    url: "https://archive.org/download/problemsofphilo00russuoft/problemsofphilo00russuoft.pdf"
+    filename:
+      - bertrand_russell_the_problems_of_philosophy
+  - author: "Peter Norvig"
+    title: "Paradigms of AI Programming (Lisp code + PDF)"
+    section: 05_ai
+    legal: web_only
+    url: "https://norvig.github.io/paip-lisp/"
+  - author: "Christopher Bishop"
+    title: "Pattern Recognition and Machine Learning"
+    section: 05_ai
+    legal: author_draft
+    url: "https://www.microsoft.com/en-us/research/wp-content/uploads/2006/01/Bishop-Pattern-Recognition-and-Machine-Learning-2006.pdf"
+    filename:
+      - christopher_bishop_pattern_recognition_and_machine_learning
+  - author: "Leslie Lamport"
+    title: "Time, Clocks, and the Ordering of Events in a Distributed System"
+    section: 09_distributed_systems
+    legal: open_access
+    url: "https://lamport.azurewebsites.net/pubs/time-clocks.pdf"
+    filename:
+      - leslie_lamport_time__clocks__and_the_ordering_of_events_in_a_distributed_system
+  - author: "Antonio Damasio"
+    title: "Descartes' Error"
+    section: 06_cognition
+    legal: copyrighted
+    url: ""
+  - author: "John Anderson"
+    title: "The Architecture of Cognition"
+    section: 06_cognition
+    legal: copyrighted
+    url: ""
+  - author: "Norbert Wiener"
+    title: "The Human Use of Human Beings"
+    section: 12_control_systems
+    legal: open_access
+    url: "https://monoskop.org/images/6/60/Wiener_Norbert_The_Human_Use_of_Human_Beings_1989.pdf"
+    filename:
+      - norbert_wiener_the_human_use_of_human_beings
+  - author: "Thomas Kuhn"
+    title: "The Structure of Scientific Revolutions"
+    section: 13_scientific_method
+    legal: copyrighted
+    url: ""
+  - author: "Imre Lakatos"
+    title: "The Methodology of Scientific Research Programmes"
+    section: 13_scientific_method
+    legal: copyrighted
+    url: ""
+  - author: "Richard Feynman"
+    title: "The Meaning of It All / Surely You're Joking"
+    section: 13_scientific_method
+    legal: copyrighted
+    url: ""
+  - author: "Carl Sagan"
+    title: "The Demon-Haunted World"
+    section: 13_scientific_method
+    legal: copyrighted
+    url: ""
+
+# Следующий слой (отдельная волна): LLM/Transformers/Agents/RAG/Memory
+next_layer:
+  - "Attention Is All You Need (Vaswani et al.) — arXiv 1706.03762"
+  - "LLM Agents surveys (2024-2026)"
+  - "RAG papers (Lewis et al. 2020)"
+  - "Memory architectures for LLM agents (MemGPT и др.)"
+
+# === ОСТАЛЬНОЙ СПИСОК ПОЛЬЗОВАТЕЛЯ (~41 книга) ===
+# legal: copyrighted  -> НЕ скачивать (нет легального PDF)
+# legal: search_only  -> есть PD-версия, но только search-страница (не прямой PDF)
+# legal: no_link      -> не найдено легальной ссылки
+remaining:
+  # 01_logic / 02_philosophy
+  - author: "Aristotle"
+    title: "Metaphysics"
+    section: 02_philosophy
+    legal: public_domain
+    url: "https://ia802806.us.archive.org/30/items/aristotlesmetaph0001aris/aristotlesmetaph0001aris.pdf"
+    filename:
+      - aristotle_metaphysics
+  - author: "Plato"
+    title: "The Republic"
+    section: 02_philosophy
+    legal: public_domain
+    url: "https://ia802802.us.archive.org/20/items/PlatoTheRepublicCambridgeTomGriffith/Plato%20The%20Republic%20(Cambridge%2C%20Tom%20Griffith).pdf"
+    filename:
+      - plato_the_republic
+  - author: "David Hume"
+    title: "An Enquiry Concerning Human Understanding"
+    section: 02_philosophy
+    legal: public_domain
+    url: "https://archive.org/download/enquiryconcernin01hume/enquiryconcernin01hume.pdf"
+    filename:
+      - david_hume_an_enquiry_concerning_human_understanding
+  - author: "Daniel Kahneman"
+    title: "Thinking, Fast and Slow"
+    section: 02_philosophy
+    legal: copyrighted
+    url: ""
+  # 03_mathematics
+  - author: "George Polya"
+    title: "How to Solve It"
+    section: 03_mathematics
+    legal: public_domain
+    url: "https://www.hlevkin.com/hlevkin/90MathPhysBioBooks/Math/Polya/George_Polya_How_To_Solve_It_.pdf"
+    filename:
+      - george_polya_how_to_solve_it
+  - author: "Courant & Robbins"
+    title: "What Is Mathematics?"
+    section: 03_mathematics
+    legal: author_draft
+    url: "https://www.cimat.mx/~gil/docencia/2017/mate_elem/[Courant,Robbins]What_Is_Mathematics(2nd_edition_1996)v2.pdf"
+    filename:
+      - courant___robbins_what_is_mathematics
+  - author: "Georg Cantor"
+    title: "Contributions to Set Theory"
+    section: 03_mathematics
+    legal: no_link
+    url: ""
+  - author: "John von Neumann"
+    title: "The Computer and the Brain"
+    section: 03_mathematics
+    legal: public_domain
+    url: "https://archive.org/download/0300181116TheComputerBrain_201901/0300181116_The%20Computer%20Brain.pdf"
+    filename:
+      - john_von_neumann_the_computer_and_the_brain
+  # 05_ai
+  - author: "Ian Goodfellow, Yoshua Bengio, Aaron Courville"
+    title: "Deep Learning"
+    section: 05_ai
+    legal: author_draft
+    url: "https://github.com/janishar/mit-deep-learning-book-pdf/raw/master/complete-book-pdf/deeplearningbook.pdf"
+    filename:
+      - goodfellow_bengio_courville_deep_learning_2016
+  - author: "Kevin Murphy"
+    title: "Probabilistic Machine Learning: An Introduction"
+    section: 05_ai
+    legal: author_draft
+    url: "https://github.com/probml/pml-book/releases/latest/download/book1.pdf"
+    filename:
+      - kevin_murphy_probabilistic_machine_learning__an_introduction
+  - author: "Judea Pearl, Dana Mackenzie"
+    title: "The Book of Why"
+    section: 05_ai
+    legal: author_draft
+    url: ""
+    filename:
+      - pearl_book_of_why
+  # 06_cognition
+  - author: "Allen Newell"
+    title: "Unified Theories of Cognition"
+    section: 06_cognition
+    legal: no_link
+    url: "https://iiif.library.cmu.edu/file/Newell_box00012_fld00859_doc0003/Newell_box00012_fld00859_doc0003.pdf"
+  - author: "Douglas Hofstadter"
+    title: "I Am a Strange Loop"
+    section: 06_cognition
+    legal: copyrighted
+    url: ""
+  - author: "Antonio Damasio"
+    title: "Descartes' Error"
+    section: 06_cognition
+    legal: copyrighted
+    url: ""
+  - author: "John Anderson"
+    title: "The Architecture of Cognition"
+    section: 06_cognition
+    legal: copyrighted
+    url: ""
+  # 07_computer_science
+  - author: "Andrew Tanenbaum"
+    title: "Computer Networks"
+    section: 07_computer_science
+    legal: author_draft
+    url: "https://networking.harshkapadia.me/files/books/computer-networks-tanenbaum-5th-edition.pdf"
+    filename:
+      - andrew_tanenbaum_computer_networks
+  - author: "James Kurose, Keith Ross"
+    title: "Computer Networking: A Top-Down Approach"
+    section: 07_computer_science
+    legal: author_draft
+    url: "https://broman.dev/download/Computer%20Networking:%20A%20Top-Down%20Approach%206th%20Edition.pdf"
+    filename:
+      - james_kurose__keith_ross_computer_networking__a_top-down_approach
+  - author: "Robert Love"
+    title: "Linux Kernel Development"
+    section: 07_computer_science
+    legal: copyrighted
+    url: ""
+  - author: "Bryant & O'Hallaron"
+    title: "Computer Systems: A Programmer's Perspective"
+    section: 07_computer_science
+    legal: author_draft
+    url: "https://www.cs.sfu.ca/~ashriram/Courses/CS295/assets/books/CSAPP_2016.pdf"
+    filename:
+      - bryant___o_hallaron_computer_systems__a_programmer_s_perspective
+  # 08_software_architecture
+  - author: "Robert C. Martin"
+    title: "Clean Architecture"
+    section: 08_software_architecture
+    legal: copyrighted
+    url: "https://raw.githubusercontent.com/sdcuike/Clean-Code-Collection-Books/master/Clean%20Architecture%20A%20Craftsman%27s%20Guide%20to%20Software%20Structure%20and%20Design.pdf"
+  - author: "Robert C. Martin"
+    title: "Clean Code"
+    section: 08_software_architecture
+    legal: copyrighted
+    url: "https://wtcdev.blob.core.windows.net/assets/07800881-9bcd-41bb-8b10-fc1f0105bd44/1/Clean_Code_A_Handbook_of_Agile_Software_Craftmanship.pdf"
+  - author: "Martin Fowler"
+    title: "Patterns of Enterprise Application Architecture"
+    section: 08_software_architecture
+    legal: copyrighted
+    url: ""
+  - author: "Michael Feathers"
+    title: "Working Effectively with Legacy Code"
+    section: 08_software_architecture
+    legal: copyrighted
+    url: "https://github.com/andresetevejob/software-development-ebooks-2/blob/master/%5BWorking%20Effectively%20with%20Legacy%20Code%20(Robert%20C.%20Martin%20Series)%20Kindle%20Edition%20by%20Michael%20Feathers%20-%202005%5D.pdf"
+  - author: "Gang of Four"
+    title: "Design Patterns"
+    section: 08_software_architecture
+    legal: copyrighted
+    url: ""
+  - author: "Steve McConnell"
+    title: "Code Complete"
+    section: 08_software_architecture
+    legal: copyrighted
+    url: ""
+  # 09_distributed_systems
+  - author: "Leslie Lamport"
+    title: "The Part-Time Parliament (Paxos)"
+    section: 09_distributed_systems
+    legal: open_access
+    url: "https://lamport.azurewebsites.net/pubs/paxos-simple.pdf"
+    filename:
+      - leslie_lamport_the_part-time_parliament__paxos
+  - author: "Maarten van Steen, Andrew Tanenbaum"
+    title: "Distributed Systems (4th ed.)"
+    section: 09_distributed_systems
+    legal: web_only
+    url: "https://www.distributed-systems.net/index.php/books/ds4/ds4-ebook/"
+  - author: "Jeffrey Dean, Sanjay Ghemawat"
+    title: "MapReduce"
+    section: 09_distributed_systems
+    legal: open_access
+    url: "https://storage.googleapis.com/gweb-research2023-media/pubtools/4449.pdf"
+    filename:
+      - jeffrey_dean__sanjay_ghemawat_mapreduce
+  - author: "Werner Vogels"
+    title: "Eventually Consistent"
+    section: 09_distributed_systems
+    legal: web_only
+    url: "https://www.allthingsdistributed.com/2008/12/eventually_consistent.html"
+  # 10_databases
+  - author: "C. J. Date"
+    title: "An Introduction to Database Systems"
+    section: 10_databases
+    legal: copyrighted
+    url: ""
+  - author: "Ramez Elmasri, Shamkant Navathe"
+    title: "Fundamentals of Database Systems"
+    section: 10_databases
+    legal: copyrighted
+    url: "https://www.mpgcamb.com/wp-content/uploads/2024/12/Ramez-Elmasri-Shamkant-B.-Navathe-Fundamentals-of-Database-Systems-Pearson-2015.pdf"
+  - author: "Raghu Ramakrishnan, Johannes Gehrke"
+    title: "Database Management Systems"
+    section: 10_databases
+    legal: copyrighted
+    url: ""
+  # 11_knowledge_graphs
+  - author: "Ian Horrocks et al."
+    title: "Knowledge Graphs (academic surveys)"
+    section: 11_knowledge_graphs
+    legal: no_link
+    url: ""
+  - author: "Ian Robinson, Jim Webber, Emil Eifrem"
+    title: "Graph Databases"
+    section: 11_knowledge_graphs
+    legal: author_draft
+    url: "https://go.neo4j.com/rs/710-RRC-335/images/Graph_Databases_2e_Neo4j.pdf"
+    filename:
+      - ian_robinson__jim_webber__emil_eifrem_graph_databases
+  # 12_control_systems
+  - author: "Richard Bellman"
+    title: "Dynamic Programming (RAND P-550 paper)"
+    section: 12_control_systems
+    legal: web_only
+    url: "https://www.rand.org/pubs/papers/P550.html"
+  - author: "Karl Astrom, Richard Murray"
+    title: "Feedback Systems"
+    section: 12_control_systems
+    legal: author_draft
+    url: "https://faculty.sites.iastate.edu/tesfatsi/archive/tesfatsi/FeedbackSystems.AstromMurray.pdf"
+    filename:
+      - karl_astrom__richard_murray_feedback_systems
+  - author: "Peter Maybeck"
+    title: "Stochastic Models, Estimation, and Control"
+    section: 12_control_systems
+    legal: copyrighted
+    url: ""
+  - author: "Seborg et al."
+    title: "Process Dynamics and Control"
+    section: 12_control_systems
+    legal: copyrighted
+    url: ""
+
+  # 05_ai / 07_ai — следующий слой (LLM / Transformers / Agents / RAG / Memory)
+  # ранее были строками в next_layer; переведены в структурированные записи
+  # для покрытия реальных PDF на диске (ADR-091 catalog = SSOT корпуса)
+  - author: "Ashish Vaswani et al."
+    title: "Attention Is All You Need"
+    section: 05_ai
+    legal: open_access
+    filename:
+      - vaswani_attention_is_all_you_need_2017
+  - author: "Francois Chollet"
+    title: "Deep Learning with Python (2018)"
+    section: 05_ai
+    legal: author_draft
+    filename:
+      - chollet_deep_learning_with_python_2018
+  - author: "Daniel Jurafsky, James H. Martin"
+    title: "Speech and Language Processing"
+    section: 05_ai
+    legal: author_draft
+    filename:
+      - jurafsky_martin_speech_and_language_processing
+  - author: "Thomas Wolf et al. (Hugging Face)"
+    title: "Natural Language Processing with Transformers"
+    section: 05_ai
+    legal: open_access
+    filename:
+      - natural_language_processing_with_transformers
+  - author: "Victor Dibia"
+    title: "Designing Multi-Agent Systems (2025)"
+    section: 05_ai
+    legal: open_access
+    filename:
+      - dibia_designing_multi_agent_systems_2025
+  - author: "Bratanic, Hane (Manning)"
+    title: "Knowledge Graph Enhanced RAG"
+    section: 05_ai
+    legal: web_only
+    filename:
+      - bratanic_hane_knowledge_graph_enhanced_rag_manning
+  - author: "Jinyuan Hu et al."
+    title: "Advanced NLP: LLMs and Knowledge Graphs"
+    section: 05_ai
+    legal: web_only
+    filename:
+      - hu_advanced_nlp_llms_and_knowledge_graphs
+  - author: "Nathan Lambert et al."
+    title: "Reinforcement Learning from Human Feedback (2026)"
+    section: 05_ai
+    legal: open_access
+    filename:
+      - lambert_reinforcement_learning_from_human_feedback_2026
+  - author: "Yue et al."
+    title: "Deep Learning with Graphs and Knowledge Graphs (2024)"
+    section: 05_ai
+    legal: open_access
+    filename:
+      - you_deep_learning_with_graphs_knowledge_graphs_2024
+  - author: "Richard Szeliski"
+    title: "Computer Vision: Algorithms and Applications"
+    section: 07_computer_science
+    legal: author_draft
+    filename:
+      - szeliski_computer_vision
+  - author: "Various"
+    title: "LLM and RAG Survey (collected)"
+    section: 05_ai
+    legal: web_only
+    filename:
+      - llm_rag

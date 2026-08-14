@@ -28,8 +28,25 @@ summary: "Research Handbook (KEH) — процесс исследований + 
 
 ADR требует min Level III + consensus≥2. Ниже → «proposed-low-confidence».
 
+## Fresh-source acquisition (Firecrawl / managed web tools)
+Перед любым research-шагом (L1) свежие источники тащатся через managed web tools
+(Firecrawl, входящий в Nous-подписку Hermes) — НЕ через устаревшие базлайны ТЗ и НЕ
+через память-в-сообщении. Конкретно:
+1. Для каждого утверждения в ТЗ/ADR ищем ≥2 независимых live-источника (GitHub код,
+   eng-blog Google/DeepMind/Anthropic/Netflix/Uber/Cloudflare/Hashicorp/Temporal/RedHat/
+   Datadog, RFC/ADR, офиц. документация). Cross-domain (ОС/Distributed/Actor/Game/Browser/
+   DB/Infra) обязателен.
+2. `web_extract` по офиц. документации библиотек = замена внешнему context7-MCP
+   (in-process, без отдельного сервера).
+3. Результат каждого источника → `ResearchArtifact` с `evidence_level` (см. ниже);
+   синтез требует `consensus >= 2`.
+4. Питает AKB (`research/`) и Knowledge Loop. LAW K8 соблюдён: сбор — в services/docs,
+   НЕ в runtime/ kernel/.
+
 ## Запрещено
 Утверждение на основе одного блога (Level V) без пометки «hypothesis».
+Использование устаревшего базлайна ТЗ как единственного источника (KROFT OS: базлайны
+ТЗ систематически врут — требуется K5-разведка свежими источниками).
 
 ## Честная оценка
 Evidence-Based SE доказал: hierarchy снижает bias. KROFT применяет к инженерным решениям.

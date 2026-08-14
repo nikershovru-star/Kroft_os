@@ -56,8 +56,30 @@ class KnowledgeSnapshotStore:
              procedural: Optional[ProceduralState] = None,
              episodes: Optional[EpisodicState] = None,
              semantic: Optional[list] = None,
-             normative: Optional[list] = None) -> str:
-        """Write {graph, index, meta, trust, procedural, episodes, semantic, normative}."""
+             normative: Optional[list] = None,
+             semantic_vectors: Optional[Dict[str, list]] = None,
+             destructive: bool = False) -> str:
+        """Write {graph, index, meta, trust, procedural, episodes, semantic, normative, semantic_vectors}.
+
+        SAFETY (ТЗ P0 recovery, Этап 9): a caller that forgets to pass
+        ``semantic_vectors`` (e.g. a broad pytest that re-snapshots an empty
+        kernel) MUST NOT wipe the 16k+ foundation vectors already on disk.
+        When ``semantic_vectors`` is empty/None and the on-disk snapshot
+        already carries vectors, we transparently preserve them UNLESS
+        ``destructive=True`` is explicitly passed. This is a minimal guard on
+        the existing component — no new layer, no signature break for the two
+        real callers (run_kroft._save_knowledge, foundation_ingest.build) which
+        both pass ``semantic_vectors`` explicitly.
+        """
+        sv = semantic_vectors
+        if not sv and not destructive and os.path.isfile(self._path):
+            try:
+                with open(self._path, "r", encoding="utf-8") as _fh:
+                    _existing = json.load(_fh).get("semantic_vectors", {}) or {}
+                if _existing:
+                    sv = _existing
+            except Exception:
+                pass
         payload: Dict[str, Any] = {
             "version": 1,
             "graph": graph_state,
@@ -66,13 +88,14 @@ class KnowledgeSnapshotStore:
             "procedural": procedural or {},
             "episodes": episodes or [],
             "semantic": semantic or [],
+            "semantic_vectors": sv or {},
             "normative": normative or [],
             "meta": meta or {},
         }
         parent = os.path.dirname(self._path)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        # Atomic write (ТЗ-L10.8): never replace the canonical snapshot with a
+        # Atomic write (ТЗ-L10.7): never replace the canonical snapshot with a
         # partially-written file. Write to a sibling .tmp, fsync, then os.replace
         # (atomic rename on POSIX/Windows). On crash mid-write only the .tmp is
         # left behind; the original remains valid.
@@ -162,3 +185,14 @@ class KnowledgeSnapshotStore:
         if not isinstance(raw, list):
             return []
         return [e for e in raw if isinstance(e, dict)]
+
+    def load_semantic_vectors(self, data: Optional[Dict[str, Any]] = None) -> Dict[str, list]:
+        """Extract the id->vector map from a loaded snapshot (graceful empty)."""
+        if data is None:
+            data = self.load()
+        if not data:
+            return {}
+        raw = data.get("semantic_vectors", {})
+        if not isinstance(raw, dict):
+            return {}
+        return {k: list(v) for k, v in raw.items() if isinstance(v, list)}

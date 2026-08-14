@@ -88,6 +88,20 @@ def test_graceful_degradation_without_llm():
     assert result.tool_results and "behaviour" in result.tool_results[-1].lower()
 
 
+def test_gap_detection_on_empty_graph():
+    """Stage 4: a query with zero hits surfaces a knowledge gap (gap_detected=True).
+
+    Uses a freshly seeded engine with content UNRELATED to the query so search
+    returns nothing — proving the agent flags the gap instead of silently
+    returning 'no matches' (ТЗ-AGENT-GAP-01).
+    """
+    agent, _ = _build_research_stack(llm=None)
+    # graph already seeded with 'agent behaviour' text; query something absent
+    result = agent.run("quantum chromodynamics lattice gauge theory")
+    assert result.gap_detected is True, "agent must flag a knowledge gap on 0 hits"
+    assert result.tool_results and result.tool_results[-1].startswith("KNOWLEDGE_GAP:")
+
+
 def test_optional_llm_synthesis():
     """With an LLM, the agent synthesises an answer over the retrieved hits."""
 
