@@ -145,6 +145,10 @@ class KroftConfig:
                                             # When set, the corpus is ingested lazily on the
                                             # first query (boot stays fast; boot-ingest of a 10k+
                                             # corpus would exceed the 60s budget).
+    autonomous_knowledge: bool = False    # Stage 5: enable the autonomous knowledge self-heal
+                                            # loop (research -> gap -> plan -> ingest into TEMP).
+                                            # Default OFF so existing boots/tests are untouched;
+                                            # operator opts in explicitly.
 
 class KroftApp:
     """Bootable KROFT_OS: kernel + optional LLM + evolution + optional federation + dashboard.
@@ -295,6 +299,26 @@ class KroftApp:
         planner_agent = PlannerAgent(search=self.search, llm=self.llm, top_k=5)
         finance_agent = FinanceAgent(search=self.search, llm=self.llm, top_k=5)
         self.research_executor = ResearchAgentExecutor(research_agent)
+        # Stage 5: optional autonomous knowledge self-heal loop (ТЗ-KNOWLEDGE-AUTONOMOUS-LOOP-01).
+        # Composition-root wiring (K5-legal): connects the already-wired ResearchAgent to the
+        # GapPlanner + autonomous_ingest_step so a detected gap can be healed into a TEMP copy.
+        # Default OFF (config.autonomous_knowledge) so existing boots/tests are untouched; the
+        # loop NEVER mutates the live snapshot unless the operator passes an explicit accept path.
+        self.autonomous_knowledge_loop: Any = None
+        if getattr(self.config, "autonomous_knowledge", False):
+            try:
+                from composition.autonomous_knowledge_loop import AutonomousKnowledgeLoop
+                self.autonomous_knowledge_loop = AutonomousKnowledgeLoop(
+                    research_agent=research_agent,
+                    snapshot_path=self.config.knowledge_snapshot or "",
+                    catalog_path=os.path.join(
+                        Path(__file__).resolve().parent.parent,
+                        "docs", "architecture", "AKB", "knowledge_foundation_v1.yaml"),
+                )
+            except Exception as _e:  # O1: loop must never break the boot
+                self.autonomous_knowledge_loop = None
+                if getattr(self.config, "debug", False):
+                    print(f"[run_kroft] autonomous_knowledge_loop disabled: {_e}")
         self.architect_executor = ArchitectAgentExecutor(architect_agent)
         self.programmer_executor = ProgrammerAgentExecutor(programmer_agent)
         self.writer_executor = WriterAgentExecutor(writer_agent)
@@ -1116,12 +1140,16 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
                    help="P1-A: 'none' (keyword fallback) | 'auto' (local Ollama bge-m3 embeddings).")
     p.add_argument("--debug", action="store_true",
                    help="P1-D: print retrieved node IDs / source / chunk text and LLM context.")
+    p.add_argument("--autonomous-knowledge", dest="autonomous_knowledge", action="store_true",
+                   help="Stage 5: enable the autonomous knowledge self-heal loop "
+                        "(research -> gap -> plan -> ingest into TEMP). Default OFF.")
     a = p.parse_args(argv)
     return KroftConfig(
         node_id=a.node_id, llm=a.llm, federation=a.federation,
         ticks=a.ticks, run_demo=not a.no_demo, vault=a.vault, interactive=a.interactive,
         agent_runtime=a.agent_runtime, query=a.query,
         knowledge_snapshot=a.knowledge_snapshot, debug=a.debug, embedding=a.embedding,
+        autonomous_knowledge=a.autonomous_knowledge,
     )
 
 
