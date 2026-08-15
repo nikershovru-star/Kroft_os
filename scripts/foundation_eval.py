@@ -10,6 +10,10 @@ foundation PDF it should retrieve. This is honest retrieval quality.
 Modes:
   - lexical-only: FORCE_LEXICAL=1 -> SemanticIndex empty, hybrid=lexical.
   - full bge-m3: default -> embeds (or loads persisted vectors via KROFT_LOAD=1).
+  - READ-ONLY evaluation (L10.9): KROFT_EVAL_READONLY=1 -> LOAD existing
+    production snapshot via KnowledgeSnapshotStore, restore ContentIndex /
+    SemanticIndex, and run retrieval over it. NO build(), NO store.save(),
+    NO ingest, NO re-embed. Production snapshot is byte-immutable.
 
 Negative abstention: query_with_abstention(semantic_threshold=0.45). abstained OR
 empty result => counted as correct abstention (no hallucination).
@@ -17,6 +21,7 @@ empty result => counted as correct abstention (no hallucination).
 Usage:
   FORCE_LEXICAL=1 PYTHONPATH=. python scripts/foundation_eval.py
   KROFT_LOAD=1 PYTHONPATH=. python scripts/foundation_eval.py   # reuse persisted vectors
+  KROFT_EVAL_READONLY=1 PYTHONPATH=. python scripts/foundation_eval.py  # LOAD-only, no mutation
 """
 from __future__ import annotations
 
@@ -31,8 +36,26 @@ sys.path.insert(0, str(ROOT))
 
 import yaml
 from scripts.foundation_ingest import build, EXTRACTED, SNAP
+from composition.knowledge_persistence import KnowledgeSnapshotStore
+from services.content_index import ContentIndex
+from services.semantic_index import SemanticIndex
+from services.graph_query_engine import GraphQueryEngine
+from adapters.ollama_embedding import OllamaEmbeddingAdapter
+from contracts import IGraphBuilder
 
 GOLDEN = ROOT / "KROFT_KNOWLEDGE_FOUNDATION" / "foundation_queries.yaml"
+
+# L10.9: read-only graph stub. hybrid_search / query_with_abstention do NOT
+# touch the graph, so a null builder is safe and avoids any side-effect.
+# (Plain object, not IGraphBuilder subclass — avoids abstract-method surface;
+# GraphQueryEngine only stores it; retrieval paths use _index/_semantic_index.)
+class _NullBuilder:
+    def get_graph(self): return {"nodes": [], "edges": []}
+    def add_node(self, *a, **k): pass
+    def add_edge(self, *a, **k): pass
+    def name(self): return "null_builder"
+    def initialize(self, c=None): return None
+    def execute(self, c=None): return ""
 
 # query -> expected source PDF stem (the book that should answer it)
 EXPECTED = {
@@ -117,14 +140,39 @@ def main() -> int:
     queries = yaml.safe_load(open(GOLDEN, encoding="utf-8"))
     nmap = _node_source_map()
     t0 = time.time()
-    res = build()
-    engine = res["engine"]
-    mode = "FULL (bge-m3)" if res.get("embedding") else "LEXICAL-ONLY (no Ollama)"
-    print(f"[ingest] mode={mode} nodes={res['node_count']} edges={res['added_edges']}")
+    READ_ONLY = os.environ.get("KROFT_EVAL_READONLY") == "1"
+    if READ_ONLY:
+        # L10.9: LOAD existing production snapshot, restore indexes, NO build/save.
+        store = KnowledgeSnapshotStore(SNAP)
+        data = store.load()
+        if not data:
+            print(f"[eval] FATAL: snapshot missing at {SNAP}")
+            return 1
+        ci = ContentIndex()
+        ci.restore(data.get("index", {}) or {})
+        si = SemanticIndex()
+        si.restore(data.get("semantic_vectors", {}) or {})
+        try:
+            emb = OllamaEmbeddingAdapter(model="bge-m3")
+            mode = "FULL (bge-m3, read-only LOAD)"
+        except Exception:
+            emb = None
+            mode = "LEXICAL-ONLY (no Ollama)"
+        engine = GraphQueryEngine(_NullBuilder(), index=ci,
+                                  semantic_index=si, embedding=emb)
+        node_count = len(data.get("semantic", []))
+        added_edges = 0
+    else:
+        res = build()
+        engine = res["engine"]
+        mode = "FULL (bge-m3)" if res.get("embedding") else "LEXICAL-ONLY (no Ollama)"
+        node_count = res["node_count"]
+        added_edges = res["added_edges"]
+    print(f"[ingest] mode={mode} nodes={node_count} edges={added_edges}")
 
     semantic_only = os.environ.get("SEMANTIC_ONLY") == "1"
-    si = res["semantic_index"]
-    emb = res["embedding"]
+    si = engine._semantic_index
+    emb = engine._embedding
     report = {}
     for kind in ("factual", "conceptual", "cross", "negative"):
         qs = queries.get(kind, [])
@@ -162,7 +210,6 @@ def main() -> int:
     # restore test
     restore_ok = False
     try:
-        from composition.knowledge_persistence import KnowledgeSnapshotStore
         data = KnowledgeSnapshotStore(SNAP).load()
         restore_ok = data is not None and "index" in data and "semantic_vectors" in data
     except Exception as e:
