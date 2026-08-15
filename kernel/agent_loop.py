@@ -27,17 +27,34 @@ from contracts.cognitive_domain import (
     ProvenanceType,
 )
 from contracts.i_agent_loop import AgentLoopResult, IAgentLoop
+from contracts.i_skill_evolver import ISkillEvolver, SkillUsageStats
+from contracts.i_memory import IProceduralMemory
 
 from kernel.cognitive_kernel import build_kernel
 from kernel.execution import ReferenceExecutor
 
 
 class AgentLoop(IAgentLoop):
-    """Iterative goal-driven loop over a single cognitive kernel (ТЗ-AGENT-LOOP-01)."""
+    """Iterative goal-driven loop over a single cognitive kernel (ТЗ-AGENT-LOOP-01).
+
+    L10.8 (CORE AUTONOMOUS EVOLUTION): the loop is also a SELF-EVOLVING runtime.
+    When an injected ``skill_evolver`` + ``procedural_memory`` are present, the loop
+    AUTONOMOUSLY triggers skill evolution after each step — it discovers a weakness
+    (a step that did not produce a plan / weak outcome), forms an improvement
+    hypothesis via ``SkillEvolver`` (propose -> sandbox-test -> promote/reject), and
+    persists the promoted skill. On the NEXT run for the same capability the loop
+    reads the evolved (version+1) skill and feeds it back into the planner as a
+    known-good procedure, so the improved behaviour is actually used. No meta-layer,
+    no external daemon: evolution lives INSIDE the existing kernel loop and reuses
+    SkillEvolver + procedural memory + the existing snapshot persistence. Humans
+    only ever call ``run(goal)`` — they never call ``evolve()``.
+    """
 
     def __init__(self, node_id: str = "agent-loop", llm_client=None,
                  timeout: float = 30.0, kernel=None, knowledge_index=None,
-                 memory=None, embedding=None) -> None:
+                 memory=None, embedding=None,
+                 skill_evolver: Optional[ISkillEvolver] = None,
+                 procedural_memory: Optional[IProceduralMemory] = None) -> None:
         self._node_id = node_id
         self._llm_client = llm_client
         self._timeout = timeout
@@ -45,6 +62,9 @@ class AgentLoop(IAgentLoop):
         self._knowledge_index = knowledge_index
         self._memory = memory  # ТЗ-L10: share run_kroft's layered memory so loop learning persists
         self._embedding = embedding  # ТЗ-L10.4: reuse existing EmbeddingAdapter for semantic episodic retrieval
+        # L10.8: injected evolution subsystem (backward-compat: None -> evolution disabled)
+        self._skill_evolver = skill_evolver
+        self._procedural_memory = procedural_memory
 
     def run(self, goal: str, budget: int = 5) -> AgentLoopResult:
         if budget < 1:
@@ -64,6 +84,13 @@ class AgentLoop(IAgentLoop):
         final_outcome = ""
         try:
             for step in range(budget):
+                # L10.8: AUTONOMOUS evolution trigger at the START of every step —
+                # the loop discovers a WEAK skill for this capability (measured sandbox
+                # score) and evolves it BEFORE ticking, so the improvement is in place
+                # for this very run and (via _evolved_procedure_hint) fed back to the
+                # planner. Runs regardless of whether the subsequent tick succeeds or
+                # raises (O1: a tick fault must not suppress evolution, nor vice-versa).
+                self._evolve_if_needed(goal)
                 # Feedback: the intent carries prior RETRIEVED knowledge (real outcome of
                 # previous ticks) so the next reasoning/retrieval is grounded in it — without
                 # polluting retrieval with the full observation log. Observations are still
@@ -76,6 +103,12 @@ class AgentLoop(IAgentLoop):
                     intent_text = goal + "\n\nPrior knowledge from earlier steps:\n" + "\n".join(
                         f"- {k}" for k in prior_knowledge[-3:]
                     )
+                # L10.8: feed the EVOLVED skill (version+1) for this capability back
+                # into the planner as a known-good procedure so the improved behaviour
+                # is actually USED on the next run (not just stored).
+                evolved_hint = self._evolved_procedure_hint(goal)
+                if evolved_hint:
+                    intent_text = intent_text + evolved_hint
                 intent = Intent(
                     id=f"{self._node_id}-step-{step}",
                     text=intent_text,
@@ -139,3 +172,55 @@ class AgentLoop(IAgentLoop):
         except Exception:
             pass  # memory introspection is best-effort; loop still returns observations
         return tuple(delta)
+
+    # --- L10.8: CORE AUTONOMOUS EVOLUTION (inside the kernel loop) ---------------
+    @staticmethod
+    def _capability_of(goal: str) -> str:
+        """Map a goal to its capability key (used to look up / evolve the skill)."""
+        return goal.strip().split()[0] if goal.strip() else goal.strip()
+
+    def _evolved_procedure_hint(self, goal: str) -> str:
+        """Return a planner hint containing the EVOLVED skill for this capability.
+
+        On the NEXT run after a promotion the stored skill is version+1 (shorter /
+        more reliable); feeding it back makes the improved behaviour actually USED.
+        Returns "" when evolution is disabled or no skill exists yet.
+        """
+        if self._procedural_memory is None:
+            return ""
+        cap = self._capability_of(goal)
+        skill = self._procedural_memory.recall_skill_by_capability(cap)
+        if skill is None:
+            return ""
+        steps = "\n".join(f"- {s}" for s in skill.steps)
+        return (f"\n\nKnown-good procedure v{skill.version} for '{cap}':\n{steps}")
+
+    def _evolve_if_needed(self, goal: str) -> None:
+        """AUTONOMOUS evolution trigger. The loop itself discovers a weakness and
+        evolves the skill — humans never call this.
+
+        Closed loop (reuses SkillEvolver, ТЗ-EVOLUTION-01):
+          weakness (MEASURED sandbox score) -> propose candidate (drop weakest step)
+          -> sandbox-test -> promote (version+1, store_skill) only if BETTER than
+          baseline, else reject (skill unchanged). Evolution never mutates production
+          on a rejection, and never breaks the runtime loop (O1: exceptions swallowed).
+        """
+        if self._skill_evolver is None or self._procedural_memory is None:
+            return  # evolution disabled (backward-compat)
+        cap = self._capability_of(goal)
+        skill = self._procedural_memory.recall_skill_by_capability(cap)
+        if skill is None:
+            return  # nothing to evolve for this capability
+        # MEASURABLE weakness: score the skill itself in the sandbox (the same
+        # deterministic metric the candidate is tested against). This is honest
+        # self-assessment — NOT "the planner returned a plan" and NOT "no exception".
+        success_rate = self._skill_evolver.measure_skill(skill)
+        stats = SkillUsageStats(
+            capability=cap,
+            uses=1,
+            success_rate=success_rate,
+        )
+        try:
+            self._skill_evolver.evolve_skill(skill, stats)
+        except Exception:
+            pass  # O1: evolution must never break the runtime loop

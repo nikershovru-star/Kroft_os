@@ -145,6 +145,16 @@ class SkillEvolver(ISkillEvolver, ISkillEvaluator):
                 pass
         return (passed / float(total)) if total else 0.0
 
+    def measure_skill(self, skill: Procedure) -> float:
+        """Public sandbox score of a skill (reuses ``_score_current``).
+
+        Used by the runtime (AgentLoop, ТЗ-L10.8) to detect a WEAK skill and
+        trigger autonomous evolution with a measurable weakness signal — the same
+        deterministic metric the variant is tested against, so promotion is always
+        a strictly-better sandbox score (no self-deception, ТЗ-L10.8 STEP 5).
+        """
+        return self._score_current(skill)
+
     def history(self, capability: str) -> List[Procedure]:
         """SUPERSEDED old versions kept for traceability (ТЗ-EVOLUTION-01)."""
         return list(self._history.get(capability, []))
