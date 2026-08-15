@@ -78,6 +78,19 @@ from contracts.i_observability import (
     METRIC_MEMORY_CONSOLIDATION_CONFIDENCE,
     METRIC_MEMORY_GROWTH_RATE_PER_TICK,
 )
+# CORE SELF-EVOLUTION WAVE (STEP 3-11): new internal mechanisms, K1-clean ports.
+from contracts.i_self_evolution_cycle import (
+    IKernelObserver,
+    ICausalAnalyzer,
+    ISelfEvaluator,
+    ICapabilityManager,
+    IHypothesisEngine,
+    IExperimentEngine,
+    IKnowledgeBoundary,
+    SelfObservationRecord,
+    CausalEvent,
+)
+from kernel.self_evolution_controller import SelfEvolutionController
 from contracts.i_runtime_reflection import IRuntimeMetrics, RuntimeMetric
 from kernel.self_evolution import (
     MemorySoftPolicySource,
@@ -374,8 +387,16 @@ class CognitiveKernel(ICognitiveKernel):
         self._soft_sync = None   # ТЗ-FSE-01: set by attach_soft_memory_sync
         self._metrics = None     # ТЗ-OBS-01: live collector (ILiveMetricsCollector)
         self._supervisor = None   # ТЗ-OBS-01: RuntimeSupervisor (autonomous loop)
-        self._metrics_interval = 3  # Флаг 3: step every N ticks (anti-thrash)
+        self._metrics_interval = 3  # Флаг 3: step every N ticks (anti-trash)
         self._tick_no = 0
+        # CORE SELF-EVOLUTION WAVE (STEP 3-11): optional injected micro-cores.
+        # All None by default => the new cycle is a NO-OP (backward compatible).
+        # Wired via attach_self_evolution(); they live INSIDE the kernel, not as a
+        # separate runtime (K1: ONE core). Delegates mutation to existing writers.
+        self._self_evo: Optional["SelfEvolutionController"] = None
+        self._knowledge_boundary: Optional["IKnowledgeBoundary"] = None
+        # epistemic gate result for the last tick (introspection / Knowledge Boundary)
+        self._last_knowledge_state: Optional[str] = None
 
     # -- event emission (I-17) -------------------------------------------------
     def _emit(self, etype: CognitiveEventType, ref_id: str,
@@ -507,6 +528,17 @@ class CognitiveKernel(ICognitiveKernel):
         # Idle -> Observe
         if not self._transition(CognitiveState.OBSERVE):
             return self._state
+        # CORE SELF-EVOLUTION WAVE (STEP 11): Knowledge Boundary — classify the
+        # epistemic state of THIS cycle's intent before acting. When UNKNOWN/UNCERTAIN
+        # the kernel must NOT pretend to know (do-not-pretend gate). The decision to
+        # ACT still flows through the normal FSM; this only records the classification
+        # for introspection + downstream abstention (query_with_abstention reuses it).
+        if self._knowledge_boundary is not None:
+            # evidence_strength: 1.0 if a knowledge index returned relevant context,
+            # else 0.0 (no corpus wired => treat as no evidence, not as known).
+            evidence_strength = 1.0 if self._knowledge_index is not None else 0.0
+            self._last_knowledge_state = self._knowledge_boundary.classify(
+                intent.confidence.value, evidence_strength).value
         # Orient (Attention + ResourceManager)
         if not self._transition(CognitiveState.ORIENT):
             return self._state
@@ -657,6 +689,23 @@ class CognitiveKernel(ICognitiveKernel):
             # store the report; Memory Evolution (Learn) is the ONLY writer that commits
             # it. No commit_semantic here — avoids duplicate writes (ФЛАГ 1, ТЗ-NW-01).
             self._last_reflection_report = report
+        # CORE SELF-EVOLUTION WAVE (STEP 3): structured self-observation of THIS cycle.
+        # Extends (does NOT replace) the existing _outcomes logging. No-op if the
+        # self-evolution cycle is not wired (backward compatible).
+        if self._self_evo is not None:
+            self._self_evo.observe(SelfObservationRecord(
+                cycle_id=f"{self._node_id}-tick-{self._tick_no}",
+                episode_id=decision.id,
+                fsm_state=self._state.value,
+                transition="EVALUATE",
+                goal=intent.text,
+                action=decision.selected_plan_id or "",
+                result=("success" if outcome.success else "fail"),
+                confidence=decision.confidence.value,
+                execution_failures=0 if outcome.success else 1,
+                learning_outcome=(self._last_reflection_report.insights[0]
+                                  if self._last_reflection_report and self._last_reflection_report.insights else ""),
+            ))
         # Learn
         if not self._transition(CognitiveState.LEARN):
             return self._state
@@ -869,6 +918,23 @@ class CognitiveKernel(ICognitiveKernel):
         """
         self._executor = executor
 
+    # -- CORE SELF-EVOLUTION WAVE (STEP 9/10/11) -----------------------------
+    def attach_self_evolution(self, controller: "SelfEvolutionController",
+                              knowledge_boundary: "IKnowledgeBoundary" = None) -> None:
+        """Wire the internal self-evolution cycle + optional Knowledge Boundary.
+
+        The controller coordinates the new micro-cores (observer/causal/capability/
+        hypothesis/experiment/evaluator) and delegates actual mutation to the EXISTING
+        writers (SkillEvolver, IMemoryEvolution) — it does NOT create a second evolution
+        path (K9). When None, the kernel behaves EXACTLY as before (no-op).
+        """
+        self._self_evo = controller
+        self._knowledge_boundary = knowledge_boundary
+
+    def knowledge_state(self):
+        """Introspection: last epistemic classification (Knowledge Boundary, STEP 11)."""
+        return self._last_knowledge_state
+
     def _on_federated_world(self, merged: "WorldState") -> None:
         """Receiver hook: fold a causally-merged remote WorldState into the local SSOT."""
         self._world.apply_remote(merged)
@@ -892,7 +958,8 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
                  memory: Optional[object] = None,
                  procedural: Optional[object] = None,
                  embedding: Optional[object] = None,
-                 knowledge_index: Optional[object] = None) -> CognitiveKernel:
+                 knowledge_index: Optional[object] = None,
+                 self_evolution: bool = False) -> CognitiveKernel:
     """Factory: assemble a deterministic, LLM-free reference kernel (I-09).
 
     Backward-compatible thin wrapper. All composition logic now lives in ``KernelBuilder``
@@ -915,6 +982,6 @@ def build_kernel(node_id: str = "local", clock: Optional[NodeLamportClock] = Non
     resolved = base.merged(node_id=node_id, clock=clock,
                            llm_client=llm_client, live_metrics=live_metrics,
                            memory=memory, procedural=procedural, embedding=embedding,
-                           knowledge_index=knowledge_index)
+                           knowledge_index=knowledge_index, self_evolution=self_evolution)
     from kernel.kernel_builder import KernelBuilder
     return KernelBuilder(resolved).build()

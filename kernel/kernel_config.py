@@ -48,11 +48,17 @@ class KernelConfig:
     # returning List[str] of node ids works. None -> no knowledge injection (the
     # reference kernel stays LLM-free + deterministic, backward-compatible).
     knowledge_index: Optional[Any] = None
+    # CORE SELF-EVOLUTION WAVE (STEP 9-10): when True, wire the internal self-
+    # evolution cycle (observer/causal/capability/hypothesis/experiment/evaluator)
+    # INSIDE the kernel. False by default => no-op (backward compatible, K1: ONE core
+    # with the new micro-cores dormant until explicitly enabled).
+    self_evolution: bool = False
 
     def merged(self, *, node_id: Any = None, clock: Any = None,
                llm_client: Any = None, live_metrics: Any = None, bus: Any = None,
                memory: Any = None, procedural: Any = None,
-               embedding: Any = None, knowledge_index: Any = None) -> "KernelConfig":
+               embedding: Any = None, knowledge_index: Any = None,
+               self_evolution: Any = None) -> "KernelConfig":
         """Return a copy with any supplied kwargs overriding this config's fields.
 
         Used by the backward-compatible ``build_kernel(...)`` kwargs path: explicit kwargs
@@ -69,4 +75,5 @@ class KernelConfig:
             procedural=procedural if procedural is not None else self.procedural,
             embedding=embedding if embedding is not None else self.embedding,
             knowledge_index=knowledge_index if knowledge_index is not None else self.knowledge_index,
+            self_evolution=self_evolution if self_evolution is not None else self.self_evolution,
         )

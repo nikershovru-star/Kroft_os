@@ -146,6 +146,37 @@ class KernelBuilder:
             knowledge_index=cfg.knowledge_index,
         )
 
+        # CORE SELF-EVOLUTION WAVE (STEP 9-10): wire the internal self-evolution
+        # cycle INSIDE the kernel when enabled. All sub-components are K1-clean ports
+        # built here (no new runtime). Delegates mutation to the EXISTING writers
+        # (SkillEvolver via services is injected separately by the composition root;
+        # here we wire the kernel-internal coordinator + Knowledge Boundary).
+        if cfg.self_evolution:
+            from kernel.causal_analyzer import ReferenceCausalAnalyzer
+            from kernel.self_evolution_cycle import (
+                InMemoryKernelObserver,
+                ReferenceSelfEvaluator,
+                ReferenceCapabilityManager,
+                ReferenceHypothesisEngine,
+                ReferenceExperimentEngine,
+                ReferenceKnowledgeBoundary,
+            )
+            from kernel.self_evolution_controller import SelfEvolutionController
+            controller = SelfEvolutionController(
+                clock=shared_clock,
+                observer=InMemoryKernelObserver(),
+                causal=ReferenceCausalAnalyzer(shared_clock),
+                capability=ReferenceCapabilityManager(),
+                hypothesis=ReferenceHypothesisEngine(),
+                experiment=ReferenceExperimentEngine(),
+                evaluator=ReferenceSelfEvaluator(),
+                memory_evolution=memory_evolution,
+                memory=memory,
+            )
+            kernel.attach_self_evolution(
+                controller,
+                knowledge_boundary=ReferenceKnowledgeBoundary())
+
         # Post-hoc optional wiring (public attach_* API).
         if cfg.live_metrics is not None:
             kernel.attach_live_metrics(cfg.live_metrics, supervisor)
