@@ -178,6 +178,10 @@ class KroftConfig:
     # query records local/external hit counts, gaps and low-confidence outcomes to an
     # in-RAM sink (adapters.InMemoryTelemetrySink) — observable via retrieval_stats().
     quality_telemetry: bool = True
+    # KROFT-NET-01 (N1): per-node network endpoint for the local TCP event bus.
+    # Two nodes must bind distinct (host, port) so they don't collide.
+    network_host: str = "127.0.0.1"
+    network_port: int = 9101
 
 class KroftApp:
     """Bootable KROFT_OS: kernel + optional LLM + evolution + optional federation + dashboard.

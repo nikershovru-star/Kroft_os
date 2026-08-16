@@ -82,7 +82,15 @@ class TcpEventBus(IDistributedEventBus):
     def _start_server(self) -> None:
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind((self._host, self._port))
+        try:
+            srv.bind((self._host, self._port))
+        except OSError as exc:
+            # Port already in use (or permission denied) — surface a clear error
+            # instead of crashing the node boot with a raw traceback.
+            raise OSError(
+                f"[TcpEventBus] cannot bind {self._host}:{self._port} ({exc}); "
+                f"is another KROFT node already using this port?"
+            ) from exc
         srv.listen(8)
         srv.settimeout(0.5)
         self._server = srv

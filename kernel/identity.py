@@ -13,6 +13,8 @@ I-09: all operations deterministic for a given input sequence.
 
 from __future__ import annotations
 
+import json
+import os
 from typing import Dict, List, Optional
 
 from contracts.i_identity import (
@@ -25,7 +27,11 @@ from contracts.i_identity import (
 
 
 class ReferenceIdentityRegistry(IIdentityRegistry):
-    """In-memory registry of stable agent identities."""
+    """In-memory registry of stable agent identities (ТЗ-IDT-01).
+
+    ADD (KROFT-NET-01): save/load to a JSON file under the node's storage root,
+    so a node's identity survives restart and stays isolated per node.
+    """
 
     def __init__(self) -> None:
         self._agents: Dict[str, AgentIdentity] = {}
@@ -41,6 +47,47 @@ class ReferenceIdentityRegistry(IIdentityRegistry):
 
     def has(self, agent_id: str) -> bool:
         return agent_id in self._agents
+
+    # --- KROFT-NET-01: persistence (deterministic, stdlib JSON) ---
+    def save(self, path: str) -> None:
+        """Persist identities to ``path`` (JSON). Creates parent dirs if needed."""
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        payload = {
+            "agents": [
+                {
+                    "agent_id": a.agent_id,
+                    "specialization": a.specialization,
+                    "trust_level": a.trust_level,
+                    "permissions": list(a.permissions),
+                    "memory_ref": a.memory_ref,
+                }
+                for a in self._agents.values()
+            ]
+        }
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def load(cls, path: str) -> "ReferenceIdentityRegistry":
+        """Load identities from ``path`` (JSON). Missing file -> empty registry."""
+        reg = cls()
+        if not os.path.isfile(path):
+            return reg
+        with open(path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+        for a in payload.get("agents", []):
+            reg.register(
+                AgentIdentity(
+                    agent_id=a["agent_id"],
+                    specialization=a.get("specialization", ""),
+                    trust_level=float(a.get("trust_level", 0.5)),
+                    permissions=tuple(a.get("permissions", ())),
+                    memory_ref=a.get("memory_ref"),
+                )
+            )
+        return reg
 
 
 class ReferenceTrustRegistry(ITrustRegistry):
