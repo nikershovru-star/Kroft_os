@@ -45,6 +45,7 @@ from services.task_store import TaskStore
 from contracts.model_registry import ModelRegistry
 from services.knowledge_graph.engine import NodeType
 from contracts.knowledge_graph import EdgeType
+from services.factcheck import Verdict  # Stage 4: fact-check verdict enum
 
 
 def _builder_relation_to_edge_type(rel: str) -> str:
@@ -160,6 +161,14 @@ class KroftConfig:
     search_stemming: bool = True
     search_transliteration: bool = True
     search_synonyms: bool = True
+    # C.5: answer-quality gate. Fragments whose retrieval score stays below this
+    # threshold mark the answer low-confidence / abstain (ТЗ-C.5 §1/§2).
+    source_relevance_threshold: float = 0.05
+    # C.6: optional external knowledge-base / web search (ТЗ-C.6 draft, from C.4 §11).
+    # "none" = local-only (default, offline-safe); "auto" = fall back to web search
+    # when the local graph has no match. provider selects the adapter backend.
+    external_search: str = "none"        # "none" | "auto"
+    external_search_provider: str = "duckduckgo"  # duckduckgo | none
 
 class KroftApp:
     """Bootable KROFT_OS: kernel + optional LLM + evolution + optional federation + dashboard.
@@ -247,6 +256,18 @@ class KroftApp:
             from adapters.ollama_embedding import OllamaEmbeddingAdapter
             embedding_adapter = OllamaEmbeddingAdapter()
         self.embedding_adapter = embedding_adapter  # P1-A: reuse for semantic retrieval
+        # Stage 4: self-consistency fact-checker (lazy; only when --factcheck + LLM present).
+        # Depends on the ILlm abstraction (K2), never blocks boot (graceful).
+        self._factcheck_enabled = bool(getattr(self.config, "factcheck", False))
+        self._factchecker = None
+        if self._factcheck_enabled and self.llm is not None:
+            try:
+                from services.factcheck import SelfConsistency
+                self._factchecker = SelfConsistency(self.llm, n=3)
+            except Exception as exc:  # never block boot on factcheck misconfig
+                import logging
+                logging.getLogger("run_kroft").warning("factcheck disabled: %s", exc)
+                self._factchecker = None
         # 2b) Knowledge index (ContentIndex) — built early so it can be wired into
         # the cognitive kernel when a live corpus is configured (retrieval-augmented
         # reasoning, ТЗ). The KnowledgeEngine is built later (after the graph).
@@ -367,6 +388,21 @@ class KroftApp:
         else:
             self._semantic_index = None
             self._embedder = None
+        # C.6: optional external knowledge-base / web search (ТЗ-C.6 draft). When
+        # config.external_search == "auto", build a WebSearchAdapter (adapters) so
+        # interactive_query can fall back to the web when the local graph has no
+        # match. Disabled ("none") by default -> fully offline. K1: composition root
+        # owns the adapter; kernel is never touched.
+        self._external_search = None
+        if getattr(self.config, "external_search", "none") == "auto":
+            try:
+                from adapters.web_search_adapter import WebSearchAdapter
+                provider = getattr(self.config, "external_search_provider", "duckduckgo") or "duckduckgo"
+                self._external_search = WebSearchAdapter(provider=provider)
+            except Exception as e:  # wiring-time safety: never crash boot on external layer
+                self.logs.append(f"[C.6] external search unavailable, local-only: {e}")
+                self._external_search = None
+
         # 6b) Agents v0.1 (ADR-102, ТЗ-AGENT-BEHAVIOUR-01): wire specialised agents into the
         # existing Orchestrator dispatch path. Each agent reuses the live search service;
         # LLM is optional (graceful, I-09). No new port/layer — composition-only wiring.
@@ -617,14 +653,20 @@ class KroftApp:
           - hybrid_search -> [(node_id, score), ...]
           - ReferenceSearchService -> [SearchHit, ...] wrapped as [(SearchHit, 0.0), ...]
         C.1: extracts the real node id from a SearchHit and normalizes the layer prefix.
+        C.5: carries the retrieval score through (so callers can rank/assess quality) and
+        returns fragments sorted by score desc — best fragments first (ТЗ-C.5 §1).
         """
         ctx = []
         for item in hits:
             nid = item[0] if isinstance(item, (list, tuple)) else item
+            score = item[1] if isinstance(item, (list, tuple)) and len(item) > 1 else 0.0
             # C.1: SearchHit carries the node id in `.source` (e.g. "graph:<id>");
             # a bare string is already a node id (possibly prefixed).
             if not isinstance(nid, str):
                 nid = getattr(nid, "source", "") or ""
+            if hasattr(nid, "relevance"):  # a SearchHit passed directly
+                score = float(getattr(nid, "relevance", score) or 0.0)
+                nid = getattr(nid, "source", "")
             nid = self._normalize_source(nid)
             node = self.graph.get_node(nid)
             meta = (node.metadata if node else {}) or {}
@@ -635,7 +677,10 @@ class KroftApp:
                 "title": src.get("title", ""),
                 "pages": f"{src.get('page_start', '')}-{src.get('page_end', '')}",
                 "text": (meta.get("answer") or meta.get("question") or "")[:600],
+                "score": float(score),
             })
+        # C.5: best fragments first (stable on equal score via node_id tie-break)
+        ctx.sort(key=lambda c: (-c["score"], c["node_id"]))
         return ctx
 
     def semantic_search(self, question: str, top_k: int = 5):
@@ -1111,6 +1156,54 @@ class KroftApp:
         except Exception as e:
             self.logs.append(f"[C.4] semantic cache build aborted: {e}")
 
+    # ----- C.6: external (web) fallback (ТЗ-C.6 draft) ------------------------
+    def _external_fallback(self, query: str, task_id: str) -> Optional[str]:
+        """When the local graph has no match, try the opt-in external search.
+
+        Returns a formatted answer string (marked ``[external]``) with the top
+        web results, or ``None`` if external search is disabled / yields nothing.
+        Never raises — external lookup is best-effort.
+        """
+        ext = getattr(self, "_external_search", None)
+        if ext is None:
+            # Stage 4: Brave is an opt-in alternative provider (K5 reuse of
+            # IExternalSearch). If BRAVE_API_KEY is set, prefer Brave over the
+            # existing DuckDuckGo adapter (adapters/web_search_adapter.py).
+            brave_key = os.environ.get("BRAVE_API_KEY")
+            if brave_key:
+                try:
+                    from adapters.http_transport import HttpTransport
+                    from adapters.brave_search_adapter import BraveSearchAdapter
+                    ext = BraveSearchAdapter(HttpTransport(), api_key=brave_key)
+                    self._external_search = ext
+                except Exception as exc:  # never block external fallback
+                    import logging
+                    logging.getLogger("run_kroft").warning("brave disabled: %s", exc)
+            if ext is None:
+                return None
+        try:
+            results = ext.search(query, top_k=5)
+        except Exception as e:  # noqa: BLE001 — never let external failure break the answer
+            self.logs.append(f"[C.6] external search error: {e}")
+            return None
+        if not results:
+            return None
+        lines = [f"[external] (web results for: {query})"]
+        sources = []
+        for r in results:
+            lines.append(f"- {r.title}\n  {r.url}\n  {r.snippet[:300]}")
+            sources.append(r.url)
+        answer = "\n".join(lines)
+        # Persist as a K4 artifact so the external finding becomes local experience.
+        self._save_memory_artifact(
+            query, answer, [],
+            external_sources=[(r.url, r.title) for r in results],
+        )
+        self._save_knowledge()
+        return answer
+
+
+
     def interactive_query(self, query: str) -> str:
         """ТЗ-DAILY-01: minimal interactive contour + Agents v0.1 (ADR-102).
 
@@ -1183,13 +1276,21 @@ class KroftApp:
         if not hits:
             hits = [(h, 0.0) for h in self.search.search(query, top_k=5)]
         if not hits:
+            # C.6: local graph empty -> opt-in external (web) fallback before giving up.
+            ext = self._external_fallback(query, task_id)
+            if ext is not None:
+                return ext
             return f"[no hits] query processed (task {task_id}); foundation has no match for: {query}"
         # P1-D: build context from RETRIEVED chunk text (not just the query).
         ctx = self._retrieved_context(hits)
+        # C.5: answer-quality gate. If even the best fragment scores below threshold,
+        # mark the answer low-confidence / abstain from strong claims (ТЗ-C.5 §2).
+        max_score = max((c["score"] for c in ctx), default=0.0)
+        low_conf = max_score < float(getattr(self.config, "source_relevance_threshold", 0.05))
         debug = bool(getattr(self.config, "debug", False)) or os.environ.get("KROFT_DEBUG") == "1"
         if debug:
             _dbg = "\n".join(
-                f"  - {c['node_id']} | {c['source']} p{c['pages']}\n"
+                f"  - {c['node_id']} | {c['source']} p{c['pages']} | score={c['score']:.3f}\n"
                 f"    {c['text'][:200]}" for c in ctx
             )
             print(f"[debug][retrieval] query={query!r}\n{_dbg}")
@@ -1211,11 +1312,32 @@ class KroftApp:
             answer = getattr(resp, "text", "") or ""
             if debug:
                 print(f"[debug][llm-answer] {answer[:200]}")
-            self._save_memory_artifact(query, answer, [c["node_id"] for c in ctx])
+            # Stage 4: self-consistency fact-check (opt-in). If the answer is flagged
+            # as conflict / low-agreement, prepend a marker and KEEP the local answer
+            # (no truth claim, no crash; external verification is a separate stage).
+            if self._factchecker is not None and answer.strip():
+                try:
+                    fc = self._factchecker.check(answer)
+                    if fc.verdict in (Verdict.CONFLICT, Verdict.LOW_AGREEMENT):
+                        answer = f"[FACTCHECK: {fc.verdict.value}] {answer}"
+                        if debug:
+                            print(f"[debug][factcheck] {fc.verdict.value} "
+                                  f"agreement={fc.agreement:.2f}")
+                except Exception as exc:  # never let factcheck break the answer
+                    import logging
+                    logging.getLogger("run_kroft").warning("factcheck skipped: %s", exc)
+            # C.5: prepend a low-confidence marker when retrieval was weak (honest degradation)
+            if low_conf and not answer.lower().startswith("[low-confidence]"):
+                answer = f"[low-confidence] {answer}"
+            self._save_memory_artifact(
+                query, answer, [c["node_id"] for c in ctx],
+                source_scores=[(c["node_id"], round(c["score"], 3)) for c in ctx],
+            )
             self._save_knowledge()  # ТЗ-KNOWLEDGE-PERSIST-01: persist after each query
             return answer
         # --llm none (non-generative mode): return retrieved citations (backward compatible)
-        lines = [f"[answer] {c['source']} (p{c['pages']}) {c['node_id']}" for c in ctx]
+        prefix = "[low-confidence] " if low_conf else ""
+        lines = [f"{prefix}[answer] {c['source']} (p{c['pages']}) {c['node_id']}" for c in ctx]
         self._save_knowledge()
         return "\n".join(lines)
 
@@ -1225,7 +1347,9 @@ class KroftApp:
     # + [[wiki-links]] back to the retrieved foundation nodes. This turns the passive
     # vault into a live chronicle: future boots can re-ingest these notes as experience.
     def _save_memory_artifact(self, query: str, answer: str,
-                               citations: List[str]) -> Optional[str]:
+                               citations: List[str],
+                               source_scores: Optional[List[tuple]] = None,
+                               external_sources: Optional[List[tuple]] = None) -> Optional[str]:
         if not answer or not answer.strip():
             return None  # ТЗ §24: empty answer -> no artifact
         import datetime as _dt
@@ -1269,16 +1393,40 @@ class KroftApp:
         model = os.environ.get("KROFT_LLM_MODEL") or self.config.llm
         links = "\n".join(f"- [[{c}]]" for c in seen) or "- (no retrieved sources)"
         source_yaml = "".join(f"  - {c}\n" for c in seen) or "  []\n"
+        # C.5: per-source retrieval score (ТЗ-C.5 §1) — transparent ranking, no format break.
+        score_yaml = ""
+        score_md = ""
+        if source_scores:
+            score_yaml = "source_scores:\n" + "".join(
+                f"  - {{node: {nid}, score: {score}}}\n" for nid, score in source_scores
+            )
+            score_md = "\n## Source ranking (retrieval score)\n" + "\n".join(
+                f"- `{nid}` — {score}" for nid, score in source_scores
+            )
+        # C.6: external (web) provenance (ТЗ-C.6 draft) — transparent, no format break.
+        ext_yaml = ""
+        ext_md = ""
+        if external_sources:
+            ext_yaml = "external_sources:\n" + "".join(
+                f"  - {{url: {url}, title: {title}}}\\n" for url, title in external_sources
+            )
+            ext_md = "\n## External sources (web)\n" + "\n".join(
+                f"- [{title}]({url})" for url, title in external_sources
+            )
         body = (
             f"---\n"
             f"date: {ts.isoformat()}\n"
             f"model: {model}\n"
             f"source_notes:\n{source_yaml}"
+            f"{score_yaml}"
+            f"{ext_yaml}"
             f"---\n\n"
             f"# KROFT memory artifact\n\n"
             f"**Query:** {query}\n\n"
             f"**Answer:**\n{answer}\n\n"
             f"## Retrieved sources\n{links}\n"
+            f"{score_md}\n"
+            f"{ext_md}\n"
         )
         try:
             with open(fpath, "w", encoding="utf-8") as fh:
@@ -1370,6 +1518,9 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
                         "(no stdin). Используется Hermes-desktop для вызова KROFT_OS как инструмента.")
     p.add_argument("--embedding", choices=["none", "auto"], default="none",
                    help="P1-A: 'none' (keyword fallback) | 'auto' (local Ollama bge-m3 embeddings).")
+    p.add_argument("--factcheck", dest="factcheck", action="store_true", default=False,
+                   help="Stage 4: run self-consistency fact-check over the generated answer "
+                        "(N sampled LLM calls; flags conflicts / low agreement). Default OFF.")
     p.add_argument("--debug", action="store_true",
                    help="P1-D: print retrieved node IDs / source / chunk text and LLM context.")
     p.add_argument("--autonomous-knowledge", dest="autonomous_knowledge", action="store_true",
