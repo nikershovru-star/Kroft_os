@@ -32,11 +32,17 @@ import uuid
 from typing import Dict, List, Optional
 
 from contracts.cognitive_domain import ConfidenceScore, NodeLamportClock, ProvenanceType
+from contracts import (
+    IGraphBuilder,
+    ITrustRegistry,
+    KnowledgeOrigin,
+)
 from contracts.i_self_evolution_cycle import (
     CapabilityGap,
     EvaluationResult,
     EvolutionHypothesis,
     Experiment,
+    GraphFragment,
     ICapabilityManager,
     IExperimentEngine,
     IHypothesisEngine,
@@ -220,7 +226,19 @@ class ReferenceKnowledgeBoundary(IKnowledgeBoundary):
 
     Distinct from a raw ConfidenceScore: a high-confidence guess with NO evidence is
     still UNCERTAIN. The kernel must ABSTAIN (not act / not invent) when UNKNOWN.
+
+    ADR-028 Stage 4 extends it with an OWNERSHIP axis (origin_of / can_accept):
+    what is MINE vs external, and trust-gated acceptance of incoming fragments.
     """
+
+    def __init__(self,
+                 graph: Optional[IGraphBuilder] = None,
+                 trust_registry: Optional[ITrustRegistry] = None) -> None:
+        # Optional seams: origin_of uses `graph` (local-node check);
+        # can_accept uses `trust_registry` when the fragment carries an author to
+        # verify. Both default to None for the standalone epistemic use case.
+        self._graph = graph
+        self._trust = trust_registry
 
     def classify(self, confidence: float, evidence_strength: float) -> KnowledgeState:
         if confidence < 0.3 or evidence_strength < 0.2:
@@ -233,3 +251,35 @@ class ReferenceKnowledgeBoundary(IKnowledgeBoundary):
 
     def should_abstain(self, state: KnowledgeState) -> bool:
         return state in (KnowledgeState.UNKNOWN, KnowledgeState.UNCERTAIN)
+
+    def origin_of(self, node_id: str) -> KnowledgeOrigin:
+        """ADR-028 Stage 4: ownership axis (LOCAL / FEDERATED / INGESTED).
+
+        LOCAL when the node exists in the injected local graph; FEDERATED when a
+        trust registry knows the author but the node is not local; INGESTED as the
+        default external bucket. Deterministic (I-09).
+        """
+        if self._graph is not None:
+            try:
+                nodes = self._graph.get_graph().get("nodes", [])
+                if any(n.get("id") == node_id for n in nodes):
+                    return KnowledgeOrigin.LOCAL
+            except Exception:
+                pass
+        if self._trust is not None and self._trust.current_trust(node_id) > 0.0:
+            return KnowledgeOrigin.FEDERATED
+        return KnowledgeOrigin.INGESTED
+
+    def can_accept(self, fragment: GraphFragment, trust_threshold: float = 0.5) -> bool:
+        """ADR-028 Stage 4: trust-gated acceptance of an incoming fragment.
+
+        A fragment whose effective trust is below `trust_threshold` is REJECTED
+        (never silently enters the graph). Trust resolves, in order:
+          1. explicit `fragment.trust_score` (caller-supplied, already resolved), or
+          2. the trust registry's current_trust(fragment.author_id) when a registry
+             is injected. Deterministic (I-09).
+        """
+        score = fragment.trust_score
+        if self._trust is not None and score <= 0.0:
+            score = self._trust.current_trust(fragment.author_id)
+        return score >= trust_threshold

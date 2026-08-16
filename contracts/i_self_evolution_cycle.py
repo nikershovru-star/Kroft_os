@@ -55,6 +55,34 @@ class KnowledgeState(str, Enum):
     UNKNOWN = "unknown"
 
 
+class KnowledgeOrigin(str, Enum):
+    """ADR-028 Stage 4 — ownership boundary (what is MINE vs external).
+
+    Distinct from the epistemic boundary (KnowledgeState): this axis is about
+    PROVENANCE OF OWNERSHIP, not confidence. Needed for honest merging — an
+    instance must know which nodes arrived from outside (and via which trust
+    tier) before building abstractions on top of them (ADR-028 Stage 2 rule:
+    aggregation must not silently collapse nodes of different origin into one
+    concept without flagging it).
+    """
+    LOCAL = "local"          # produced by this instance
+    FEDERATED = "federated"  # arrived from another KROFT_OS node
+    INGESTED = "ingested"    # arrived from external corpus / file ingest
+
+
+@dataclass(frozen=True)
+class GraphFragment:
+    """ADR-028 Stage 4 — a unit of incoming knowledge offered for acceptance.
+
+    Used by `IKnowledgeBoundary.can_accept` to gate external/federated input.
+    `author_id` + `trust_score` drive the trust gate; `node_ids` is the set of
+    nodes the fragment would add to the graph.
+    """
+    author_id: str
+    node_ids: "Tuple[str, ...]" = ()
+    trust_score: float = 0.0
+
+
 @dataclass(frozen=True)
 class CausalEvent:
     """Attribution record: a specific CHANGE and the OUTCOME it produced.
@@ -237,3 +265,20 @@ class IKnowledgeBoundary(ABC):
     @abstractmethod
     def should_abstain(self, state: KnowledgeState) -> bool:
         """True when the kernel must abstain instead of acting on insufficient evidence."""
+
+    @abstractmethod
+    def origin_of(self, node_id: str) -> "KnowledgeOrigin":
+        """ADR-028 Stage 4: ownership axis. Where did `node_id` come from?
+
+        LOCAL = produced by this instance; FEDERATED = from another KROFT_OS node;
+        INGESTED = from external corpus. Honest merging requires knowing this before
+        an abstraction is built across nodes of mixed origin.
+        """
+
+    @abstractmethod
+    def can_accept(self, fragment: "GraphFragment", trust_threshold: float = 0.5) -> bool:
+        """ADR-028 Stage 4: gate an incoming fragment by trust tier.
+
+        Returns False when the fragment's trust_score is below `trust_threshold`
+        (external/low-trust knowledge must not silently enter the graph). Deterministic.
+        """
