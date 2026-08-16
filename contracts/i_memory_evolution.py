@@ -44,3 +44,15 @@ class IMemoryEvolution(ABC):
     @abstractmethod
     def supersede(self, old_policy_id: str, new_policy_id: str) -> None:
         """Record that `new_policy_id` supersedes `old_policy_id` (lifecycle update)."""
+
+    @abstractmethod
+    def consolidation_sidecar(self, episodes: List[Episode]) -> Dict[str, List[str]]:
+        """ADR-028 Stage 2: abstraction sidecar.
+
+        Returns a mapping ``fact_id -> [source episode ids]`` for the SAME
+        consolidation that `consolidate` would produce, WITHOUT mutating any
+        state. The returned mapping is persisted as a SEPARATE snapshot layer
+        (abstraction_sidecar) so a fact can always be traced back to the exact
+        episodes it was formed from — compression without loss (proof-over-existence).
+        Deterministic (I-09): identical input -> identical mapping.
+        """

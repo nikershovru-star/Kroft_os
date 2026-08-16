@@ -58,6 +58,7 @@ class KnowledgeSnapshotStore:
              semantic: Optional[list] = None,
              normative: Optional[list] = None,
              semantic_vectors: Optional[Dict[str, list]] = None,
+             abstraction_sidecar: Optional[Dict[str, List[str]]] = None,
              destructive: bool = False) -> str:
         """Write {graph, index, meta, trust, procedural, episodes, semantic, normative, semantic_vectors}.
 
@@ -90,6 +91,7 @@ class KnowledgeSnapshotStore:
             "semantic": semantic or [],
             "semantic_vectors": sv or {},
             "normative": normative or [],
+            "abstraction_sidecar": abstraction_sidecar or {},
             "meta": meta or {},
         }
         parent = os.path.dirname(self._path)
@@ -193,6 +195,21 @@ class KnowledgeSnapshotStore:
         if not data:
             return {}
         raw = data.get("semantic_vectors", {})
+        if not isinstance(raw, dict):
+            return {}
+        return {k: list(v) for k, v in raw.items() if isinstance(v, list)}
+
+    def load_abstraction_sidecar(self, data: Optional[Dict[str, Any]] = None) -> Dict[str, List[str]]:
+        """ADR-028 Stage 2: extract the fact_id -> [episode ids] sidecar (graceful empty).
+
+        This is the SEPARATE layer that keeps a consolidated fact traceable to its
+        exact source episodes. Stored apart from the fact node so the node stays light.
+        """
+        if data is None:
+            data = self.load()
+        if not data:
+            return {}
+        raw = data.get("abstraction_sidecar", {})
         if not isinstance(raw, dict):
             return {}
         return {k: list(v) for k, v in raw.items() if isinstance(v, list)}

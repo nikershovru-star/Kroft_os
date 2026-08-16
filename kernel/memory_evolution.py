@@ -84,6 +84,27 @@ class ReferenceMemoryEvolution(IMemoryEvolution):
     def supersede(self, old_policy_id: str, new_policy_id: str) -> None:
         self._superseded[old_policy_id] = new_policy_id
 
+    def consolidation_sidecar(self, episodes: List[Episode]) -> Dict[str, List[str]]:
+        """ADR-028 Stage 2: fact_id -> [source episode ids], no mutation.
+
+        Mirrors the grouping done in `consolidate` so the returned mapping is
+        exactly the provenance of the facts that `consolidate` would emit.
+        Deterministic (I-09).
+        """
+        groups: Dict[str, List[Episode]] = defaultdict(list)
+        for ep in episodes:
+            if ep.confidence.value >= self._thr:
+                groups[ep.summary].append(ep)
+        sidecar: Dict[str, List[str]] = {}
+        for key, eps in groups.items():
+            if len(eps) < self._min_rep:
+                continue
+            # Stable fact id (deterministic) so the sidecar key matches the
+            # SemanticFact.id that `consolidate` would produce for this group.
+            fact_id = f"sf-{abs(hash((key, self._thr, self._min_rep))) & 0xFFFFFFFF:08x}"
+            sidecar[fact_id] = [e.id for e in eps]
+        return sidecar
+
     def lifecycle_of(self, policy: Policy) -> PolicyLifecycle:
         if policy.id in self._superseded:
             return PolicyLifecycle.SUPERSEDED
