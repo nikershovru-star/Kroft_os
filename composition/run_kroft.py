@@ -140,6 +140,11 @@ class KroftConfig:
     knowledge_snapshot: Optional[str] = str(
         Path(__file__).resolve().parent.parent / "KROFT_KNOWLEDGE_FOUNDATION" / "_snapshot.json"
     )
+    # KROFT-NET-01 (ТЗ §6/§30/§31): optional per-instance state root. When set, the
+    # node's snapshot + runtime state are isolated under <state_root>/<node_id>/ so two
+    # KROFT instances never share mutable graph/index/trust/memory/identity state.
+    # When None, legacy behaviour (single shared knowledge_snapshot) is preserved.
+    state_root: Optional[str] = None
     desktop_opt_in: bool = False    # P.6: explicit opt-in for desktop (click/type/open_app); default-deny
     embedding: str = "none"         # Slice: "none" (keyword fallback) | "auto" (local Ollama /v1/embeddings if reachable)
     embedding_model: str = "bge-m3"  # C.4: local Ollama embedding model (ТЗ §6.4). Fallback nomic-embed-text via OllamaEmbeddingAdapter.
@@ -169,6 +174,10 @@ class KroftConfig:
     # when the local graph has no match. provider selects the adapter backend.
     external_search: str = "none"        # "none" | "auto"
     external_search_provider: str = "duckduckgo"  # duckduckgo | none
+    # C.7: retrieval-quality telemetry (ТЗ-C.7 draft). When True, every interactive
+    # query records local/external hit counts, gaps and low-confidence outcomes to an
+    # in-RAM sink (adapters.InMemoryTelemetrySink) — observable via retrieval_stats().
+    quality_telemetry: bool = True
 
 class KroftApp:
     """Bootable KROFT_OS: kernel + optional LLM + evolution + optional federation + dashboard.
@@ -316,7 +325,18 @@ class KroftApp:
         # ТЗ-PHASE-M.6: external configs (e.g. SimpleNamespace in agent tests) may omit
         # knowledge_snapshot; use getattr so run_kroft stays compatible without changing
         # the KroftConfig contract (K5/K6: no new field/adapter).
-        _knowledge_snapshot = getattr(self.config, "knowledge_snapshot", None)
+        # KROFT-NET-01 (ТЗ §6/§30/§31): per-instance state isolation. When state_root is
+        # set, derive an isolated snapshot path <state_root>/<node_id>/_snapshot.json so two
+        # KROFT instances never share graph/index/runtime state. The runtime store (below)
+        # lives in the same node dir via dirname(), so trust/procedural/episodes/semantic
+        # are also isolated. Legacy behaviour is preserved when state_root is None.
+        _state_root = getattr(self.config, "state_root", None)
+        if _state_root:
+            _node_dir = os.path.join(_state_root, self.config.node_id)
+            os.makedirs(_node_dir, exist_ok=True)
+            _knowledge_snapshot = os.path.join(_node_dir, "_snapshot.json")
+        else:
+            _knowledge_snapshot = getattr(self.config, "knowledge_snapshot", None)
         if _knowledge_snapshot:
             from composition.knowledge_persistence import KnowledgeSnapshotStore
             self._snapshot_store = KnowledgeSnapshotStore(_knowledge_snapshot)
@@ -402,6 +422,17 @@ class KroftApp:
             except Exception as e:  # wiring-time safety: never crash boot on external layer
                 self.logs.append(f"[C.6] external search unavailable, local-only: {e}")
                 self._external_search = None
+        # C.7: retrieval-quality telemetry sink (ТЗ-C.7 draft). Reuses the existing
+        # adapters.InMemoryTelemetrySink (TZ-OBS-001 / ADR-040) — no new subsystem.
+        # K1: composition -> adapters (adapters -> contracts + stdlib) is allowed.
+        self._telemetry = None
+        if getattr(self.config, "quality_telemetry", True):
+            try:
+                from adapters.in_memory_telemetry import InMemoryTelemetrySink
+                self._telemetry = InMemoryTelemetrySink()
+            except Exception as e:  # wiring-time safety: never crash boot on telemetry
+                self.logs.append(f"[C.7] telemetry unavailable, stats disabled: {e}")
+                self._telemetry = None
 
         # 6b) Agents v0.1 (ADR-102, ТЗ-AGENT-BEHAVIOUR-01): wire specialised agents into the
         # existing Orchestrator dispatch path. Each agent reuses the live search service;
@@ -1200,7 +1231,41 @@ class KroftApp:
             external_sources=[(r.url, r.title) for r in results],
         )
         self._save_knowledge()
+        self._record_retrieval(local_hits=0, external_hits=len(results),
+                                gap=False, low_conf=False)
         return answer
+
+
+    # ----- C.7: retrieval-quality telemetry helpers (ТЗ-C.7 draft) -----------
+    def _record_retrieval(self, *, local_hits: int, external_hits: int,
+                          gap: bool, low_conf: bool) -> None:
+        """Emit one set of retrieval-quality metrics (best-effort, no-op if disabled)."""
+        tel = getattr(self, "_telemetry", None)
+        if tel is None:
+            return
+        try:
+            tel.record("retrieval.query", 1.0)
+            tel.record("retrieval.local_hits", float(local_hits))
+            tel.record("retrieval.external_hits", float(external_hits))
+            tel.record("retrieval.gap", 1.0 if gap else 0.0)
+            tel.record("retrieval.low_conf", 1.0 if low_conf else 0.0)
+        except Exception as e:  # never let telemetry break the answer path
+            self.logs.append(f"[C.7] metric record failed: {e}")
+
+    def retrieval_stats(self, window_sec: float = 1e9) -> dict:
+        """Aggregated retrieval-quality summary (ТЗ-C.7 §observability).
+
+        Returns count/sum/avg/max/min for each metric over ``window_sec`` via the
+        existing InMemoryTelemetrySink.aggregate(). Empty sink -> all-zero summary.
+        """
+        tel = getattr(self, "_telemetry", None)
+        if tel is None:
+            return {"telemetry": "disabled"}
+        out = {}
+        for m in ("retrieval.query", "retrieval.local_hits",
+                  "retrieval.external_hits", "retrieval.gap", "retrieval.low_conf"):
+            out[m] = tel.aggregate(m, window_sec)
+        return out
 
 
 
@@ -1280,6 +1345,7 @@ class KroftApp:
             ext = self._external_fallback(query, task_id)
             if ext is not None:
                 return ext
+            self._record_retrieval(local_hits=0, external_hits=0, gap=True, low_conf=False)
             return f"[no hits] query processed (task {task_id}); foundation has no match for: {query}"
         # P1-D: build context from RETRIEVED chunk text (not just the query).
         ctx = self._retrieved_context(hits)
@@ -1287,6 +1353,9 @@ class KroftApp:
         # mark the answer low-confidence / abstain from strong claims (ТЗ-C.5 §2).
         max_score = max((c["score"] for c in ctx), default=0.0)
         low_conf = max_score < float(getattr(self.config, "source_relevance_threshold", 0.05))
+        # C.7: record local retrieval quality (ТЗ-C.7 §observability)
+        self._record_retrieval(local_hits=len(ctx), external_hits=0,
+                                gap=False, low_conf=low_conf)
         debug = bool(getattr(self.config, "debug", False)) or os.environ.get("KROFT_DEBUG") == "1"
         if debug:
             _dbg = "\n".join(
@@ -1529,6 +1598,10 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
     p.add_argument("--router", dest="router", action="store_true", default=False,
                    help="ТЗ-ECHO (E1): enable cost-aware model router + ensemble over an "
                         "IModelRouter (OmniRouter). Requires --llm auto (providers). Default OFF.")
+    p.add_argument("--state-root", dest="state_root", default=None,
+                   help="KROFT-NET-01: per-instance state root dir. When set, the node's "
+                        "snapshot + runtime state are isolated under <state_root>/<node_id>/ "
+                        "(ТЗ §6). Each KROFT instance must use a distinct state_root.")
     a = p.parse_args(argv)
     return KroftConfig(
         node_id=a.node_id, llm=a.llm, federation=a.federation,
@@ -1536,6 +1609,7 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
         agent_runtime=a.agent_runtime, query=a.query,
         knowledge_snapshot=a.knowledge_snapshot, debug=a.debug, embedding=a.embedding,
         autonomous_knowledge=a.autonomous_knowledge, router=a.router,
+        state_root=a.state_root,
     )
 
 

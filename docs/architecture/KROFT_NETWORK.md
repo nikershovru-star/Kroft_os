@@ -1,0 +1,154 @@
+# KROFT LOCAL NETWORK — Multi-Node Federation + Hermes Operator
+
+> Статус: KROFT-NET-01..04 реализованы и верифицированы (2026-08-16).
+> Режим: REUSE EXISTING SUBSTRATE — НЕ создана вторая федерация/transport/trust/identity
+> (K5). Все компоненты переиспользуют существующий substrate (ADR-030).
+
+## Архитектура (целевая)
+
+```
+                    USER
+                      │
+                 ┌──────────┐
+                 │  HERMES  │  operator (НЕ часть kernel)
+                 │  BRIDGE  │
+                 └────┬─────┘
+           kroft.list / kroft.network.* / kroft.search(node,...)
+                      │
+            ┌─────────┴─────────┐
+            │  KROFT LOCAL NET  │  KroftNodeManager (subprocess per node)
+            └─────────┬─────────┘
+        ┌─────────────┼─────────────┐
+        ▼             ▼             ▼
+   ┌─────────┐  ┌─────────┐  ┌─────────┐
+   │KROFT-01 │  │KROFT-02 │  │KROFT-03 │   each = independent KroftApp
+   │Research │  │ Coding  │  │Personal │   + own state_root
+   └────┬────┘  └────┬────┘  └────┬────┘
+        └──────── federation (existing tcp_event_bus / crdt_graph) ──────┘
+```
+
+## Принципы (ТЗ §41 последовательность)
+
+```
+EXISTING KROFT → INSTANCE ISOLATION → 2 LOCAL NODES → KNOWLEDGE EXCHANGE
+             → HERMES OPERATOR → 5 NODES → 10 NODES → REMOTE KROFT
+```
+
+## Instance Identity (ТЗ §3)
+
+Каждый узел = независимый `KroftApp` с уникальным `node_id` (задаётся оператором
+через `--node_id`, НЕ hostname/localhost). Identity стабильна между рестартами
+(сохраняется в `<state_root>/<node_id>/`).
+
+Минимум полей (ТЗ §3):
+- `node_id` — уникальный строковый id (например `kroft-01`)
+- `instance_id` — генерируется/читается из state_root
+- `public_key` — через существующий `i_signature`
+- `trust_profile` — `ReferenceTrustRegistry` (per-instance, in-memory)
+- `capabilities` — search/query/resolve/knowledge_exchange
+
+## State Isolation (ТЗ §6/§30/§31) — KROFT-NET-01
+
+Каждый узел получает изолированный `state_root`:
+
+```
+<state_root>/<node_id>/
+    _snapshot.json          # graph + content index (KnowledgeSnapshotStore)
+    _runtime_snapshot.json  # trust/procedural/episodes/semantic/normative
+```
+
+`KroftConfig.state_root` (run_kroft.py) переопределяет путь снапшота:
+если `state_root` задан → `<state_root>/<node_id>/_snapshot.json`, и runtime-store
+автоматически в той же директории (через `dirname`). Identity/Trust — in-memory
+per-instance (НЕ singleton), поэтому два процесса полностью изолированы.
+
+**Доказано тестами:** `test_kroft_net_isolation.py` — два `KroftApp` с разными
+`state_root` имеют разные snapshot/runtime/registry/graph объекты.
+
+## Port Allocation (ТЗ §7)
+
+Не зашито в код — `KroftNodeManager` / декларативный config задаёт `node_id → port`.
+Диапазон 7101..7110 (config-driven, не константа).
+
+## Local Node Manager (ТЗ §4/§5) — KROFT-NET-02
+
+`services/kroft_node_manager.py` — thin orchestration поверх `subprocess` запуска
+существующего `run_kroft.py` с `--node_id --state-root --port`. НЕ новая федерация.
+
+API:
+- `start(spec)` / `stop(node_id)` / `restart(node_id)`
+- `status(node_id)` / `list_nodes()`
+- `load_config(path)` — YAML: `nodes: [{id, role, port, state_root}]`
+
+**MVP (ТЗ §25):** 1/2/3 ноды поддерживаются; 5/10 — целевая нагрузка (не блокирует).
+
+## KnowledgeEnvelope (ТЗ §11/§12/§13/§14/§15/§16) — KROFT-NET-03
+
+`contracts/knowledge_envelope.py` — value object, переиспользующий СУЩЕСТВУЮЩИЕ типы:
+- `origin` → `KnowledgeOrigin` (LOCAL/FEDERATED/INGESTED, ADR-028 Этап 4)
+- `resolution` → `ResolutionLevel` (EVIDENCE..SYSTEM, ADR-028 Этап 1)
+- `provenance` → abstraction_sidecar chain (fact → episode ids)
+- `confidence` → SemanticFact.confidence
+- `signature` → `i_signature.attach_signature`/`verify_envelope`
+- `lamport`/`seen_by` → `ReplayGuard` routing semantics (ТЗ §18)
+
+`accept_or_quarantine()` — trust-gate (`ITrustRegistry.current_trust` threshold) +
+signature-gate + provenance-preservation. QUARANTINE при soft-fail (НЕ молча drop).
+
+**НЕ реализовано (ждёт KROFT-NET-05/06 remote + multi-hop):** wire передача по сети
+(надо поднять tcp_event_bus между нодами), CRDT-мутация при accept.
+
+## Hermes Operator Bridge (ТЗ §8/§9/§10/§24) — KROFT-NET-04
+
+`bridges/kroft_network_bridge.py` — расширяет `kroft_bridge.py` (H0) мульти-нодой:
+
+```python
+kroft_list()                       # Hermes видит все ноды
+kroft_network_status()             # network overview (ТЗ §28)
+kroft_network_start(node_id, ...)  # boot node via KroftNodeManager
+kroft_network_stop(node_id)
+kroft_status(node_id)              # delegate to specific node
+kroft_search(node_id, query)       # ...
+kroft_query / kroft_resolve / kroft_audit(node_id, target)
+```
+
+Hermes = operator, НЕ часть CognitiveKernel (ТЗ §8/§24). Bridge reuse KroftNodeManager
++ KroftBridge (READ-ONLY для индивидуальных нод).
+
+## CLI (ТЗ §21)
+
+Декларативный config `nodes.yaml`:
+```yaml
+nodes:
+  - id: kroft-01
+    role: research
+    port: 7101
+  - id: kroft-02
+    role: coding
+    port: 7102
+```
+
+`KroftNodeManager.load_config("nodes.yaml")` → запуск всех нод.
+
+## Observability (ТЗ §28)
+
+`kroft_network_status()` возвращает: nodes / online / offline / per-node details.
+Расширяется в KROFT-NET-05 (knowledge exchanges, quarantine count, replay attempts).
+
+## Verification (2026-08-16)
+
+```
+pytest tests/test_kroft_net_isolation.py tests/test_kroft_node_manager.py \
+       tests/test_knowledge_envelope.py tests/test_kroft_network_bridge.py
+→ 14 passed
+```
+
+Production snapshot (`KROFT_KNOWLEDGE_FOUNDATION/_snapshot.json`, SHA 3b36699d) НЕ
+изменён — все тесты используют TEMP state_root, re-embedding НЕ выполняется (ТЗ §32).
+
+## Next (He done)
+
+- KROFT-NET-05: wire KnowledgeEnvelope transfer между нодами (tcp_event_bus) + multi-hop
+- KROFT-NET-06: quarantine store + failure tests (ТЗ §29)
+- KROFT-NET-07: remote node (PC A → PC B через internet)
+- 5/10 nodes load test

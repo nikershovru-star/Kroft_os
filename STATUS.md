@@ -165,3 +165,33 @@
 
 🟢 **Этап 3 DONE.** Следующий шаг — Этап 4 (Fact-check) или Этап 5 (Web-интерфейс) по решению заказчика. Stage 4.9 (OCR для Shannon #2) — отдельная задача, вне этого этапа.
 
+---
+
+## KROFT LOCAL NETWORK — MULTI-NODE FEDERATION + HERMES OPERATOR (ТЗ 2026-08-16)
+
+**Режим:** FORENSIC → DESIGN → IMPLEMENT → VERIFY. Главный принцип: **REUSE EXISTING SUBSTRATE / DO NOT BUILD A SECOND FEDERATION** (K5).
+
+**Forensic (KROFT-NET-01 prep):** ADR-030 уже содержит полный audit federation (8 capabilities ✅). Substrate ПОЛНОСТЬЮ есть: `tcp_event_bus.py`, `federated_orchestrator.py`, `crdt_graph.py`, `i_signature.py` (attach_signature/verify_envelope), `ReplayGuard`, `RoutingHeader`, `IIdentityRegistry`/`ITrustRegistry`, `IKnowledgeResolution` (ResolutionLevel/KnowledgeOrigin), `abstraction_sidecar`, `bridges/kroft_bridge.py` (H0 Hermes bridge УЖЕ есть). GAP: KnowledgeEnvelope VO, LOD/origin/provenance не ездят по сети, нет TRUST-level policy, нет quarantine, нет node manager, нет CLI.
+
+**KROFT-NET-01 (instance isolation):** `composition/run_kroft.py` — `KroftConfig.state_root` + derivation `<state_root>/<node_id>/_snapshot.json` (+ runtime там же). CLI `--state-root`. Legacy (state_root=None) сохранён. Тесты: `tests/test_kroft_net_isolation.py` (3) — derivation + 2-instance isolation + legacy.
+**KROFT-NET-02 (2 local nodes MVP):** `services/kroft_node_manager.py` — `KroftNodeManager` (start/stop/restart/status/list + load_config YAML), subprocess per node via `run_kroft.py --state-root`. Тесты: `tests/test_kroft_node_manager.py` (3) — 2 nodes boot+listed, state isolated, restart recovery.
+**KROFT-NET-03 (KnowledgeEnvelope):** `contracts/knowledge_envelope.py` — `KnowledgeEnvelope` (reuse KnowledgeOrigin/ResolutionLevel/provenance) + wire encode/decode + `accept_or_quarantine` (trust-gate/signature/provenance → ACCEPT/QUARANTINE/REJECT). Тесты: `tests/test_knowledge_envelope.py` (5).
+**KROFT-NET-04 (Hermes multi-node bridge):** `bridges/kroft_network_bridge.py` — `KroftNetworkBridge` + module-level `kroft_list()/kroft_network_status()/kroft_network_start|stop()/kroft_status|search|query|resolve|audit(node_id,...)`. Расширяет `kroft_bridge.py` (добавлен `node_id` параметр). Тесты: `tests/test_kroft_network_bridge.py` (3) — Hermes sees 2 nodes, start/stop, delegates to specific node.
+
+**Verification (comprehensive):** `pytest tests/test_kroft_net_*.py tests/test_knowledge_envelope.py` → **14 passed**. Production snapshot SHA `3b36699d` НЕ изменён (все тесты TEMP state_root, re-embedding НЕ выполняется — ТЗ §32).
+
+**Definition of Done (ТЗ §39) — LOCAL NETWORK partial:**
+- ✅ 2 независимых KROFT работают одновременно
+- ✅ state изолирован (state_root)
+- ✅ identity изолирована (per-instance node_id + in-memory registries)
+- ✅ snapshots изолированы
+- ✅ Hermes видит оба (`kroft.list()`)
+- ✅ Hermes обращается к конкретному node (`kroft.search(node_id, ...)`)
+- 🟡 A → B knowledge exchange (KnowledgeEnvelope VO готов, wire-transfer НЕ реализован — ждёт KROFT-NET-05)
+- 🟡 signature verification / trust gate / provenance / LOD — ТИПЫ готовы, accept/quarantine policy готов, но end-to-end transfer НЕ проверен (ждёт KROFT-NET-05/06)
+- ⏭ 5/10 nodes, remote node (KROFT-NET-07) — следующие этапы
+
+**Критические ограничения соблюдены:** kernel/ НЕ тронут; federation/crypto/CRDT reuse; OmniRouter — транспорт; production snapshot НЕ изменён; broad pytest НЕ запускался (только KROFT-NET тесты).
+
+🟢 **KROFT-NET-01..04 DONE.** Следующий шаг (по ТЗ §41): KROFT-NET-05 (wire KnowledgeEnvelope transfer + multi-hop) → KROFT-NET-06 (quarantine + failure tests) → KROFT-NET-07 (remote node). Awaiting GO.
+
