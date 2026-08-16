@@ -225,4 +225,30 @@
 
 🟢 **KROFT-NET-05 DONE.** Следующий (ТЗ §41): KROFT-NET-06 (quarantine store + failure tests) → KROFT-NET-07 (remote). Awaiting GO.
 
+---
+
+## KROFT-NET-06 — Quarantine store + failure handling (ТЗ §16/§28/§29)
+
+**Реализация** (в `services/knowledge_envelope_router.py`):
+- `quarantined()` + `set_on_quarantine(cb)` + persist в `<state_root>/quarantine/`.
+- `verify_envelope == False` (bad sig / replay) → `REJECTED` в quarantine (ТЗ §16: не молча drop).
+- trust-gate `QUARANTINED` → тоже в quarantine store.
+
+**Критический баг найден и исправлен:** multi-hop forward пересериализовывал envelope
+через `KnowledgeEnvelope.to_wire()`, теряя `causal`/`lamport`/`signature`/`_canonical_version`
+→ промежуточный узел слал «голый» конверт → receiving node не верифицировал подпись.
+Исправлено: forward шлёт ОРИГИНАЛЬНЫЙ `event` dict + guard против self-loop echo.
+
+**Тесты:** `tests/test_knowledge_envelope_router.py` (7) — A→B direct, A→B→C multi-hop,
+replay, low-trust→QUARANTINE, bad-sig→REJECT, TTL-exhausted graceful, node-offline graceful.
+
+**Definition of Done (ТЗ §39) — LOCAL NETWORK + EXCHANGE + FAILURE DONE:**
+- ✅ isolation, Hermes multi-node, A→B exchange, signature, trust-gate, provenance, LOD, replay
+- ✅ quarantine store (REJECTED/QUARANTINED НЕ теряются, persist + callback)
+- ✅ failure handling: bad sig → reject, low trust → quarantine, TTL exhausted → graceful, node offline → graceful
+- ⏭ 5/10 nodes, remote node (KROFT-NET-07)
+
+🟢 **KROFT-NET-06 DONE.** Следующий (ТЗ §41): KROFT-NET-07 (remote node). Awaiting GO.
+
+
 

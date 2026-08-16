@@ -112,3 +112,61 @@ def test_replay_rejected(net):
     time.sleep(0.5)
     # replay guard keys on (origin, lamport); second send reuses seq -> rejected
     assert len(received) == first  # no duplicate accepted
+
+
+def test_low_trust_quarantined(net):
+    """TZ §29: TRUST < threshold -> envelope goes to QUARANTINE (not silently dropped)."""
+    quarantined = []
+    net["B"].set_on_quarantine(lambda s, e, r: quarantined.append((s, e)))
+    # lower B's trust view of sender A below threshold (0.3) so effective trust fails
+    net["B"]._trust.seed("A", 0.1)
+    low = _env("A", "B", kid="k-lowtrust", lamport=11)
+    object.__setattr__(low, "trust", 0.05)
+    net["A"].send(low)
+    for _ in range(40):
+        if quarantined:
+            break
+        time.sleep(0.1)
+    assert len(quarantined) >= 1
+    assert quarantined[0][0].name == "QUARANTINED"
+
+
+def test_bad_signature_quarantined(net):
+    """TZ §29: corrupted/missing signature -> REJECTED into quarantine store."""
+    quarantined = []
+    net["B"].set_on_quarantine(lambda s, e, r: quarantined.append((s, e, r)))
+    # manually publish an envelope with a wrong signature (bypass router.sign send path)
+    import json
+    d = json.loads(_env("A", "B", kid="k-badsig").to_wire().decode("utf-8"))
+    d["causal"] = {"lamport": 5, "node_origin": "A"}
+    d["lamport"] = 5
+    d["signature"] = "forged-signature"
+    net["A"]._bus.publish("kroft.knowledge", d)
+    for _ in range(40):
+        if quarantined:
+            break
+        time.sleep(0.1)
+    assert len(quarantined) >= 1
+    assert quarantined[0][0].name == "REJECTED"
+
+
+def test_ttl_exhausted_graceful_noop(net):
+    """TZ §29: A -> nonexistent node with ttl=1 -> no node accepts, no crash."""
+    received = []
+    net["B"].set_on_accept(lambda e: received.append(e))
+    net["C"].set_on_accept(lambda e: received.append(e))
+    # recipient X not in network; ttl=1 means intermediates cannot forward further
+    net["A"].send(_env("A", "X", kid="k-ttl", lamport=7))
+    time.sleep(0.5)
+    assert len(received) == 0  # nobody accepted; graceful (no exception)
+
+
+def test_node_offline_graceful(net):
+    """TZ §29: sending to an offline peer -> sender does not crash (graceful failure)."""
+    # B leaves the mesh; A still tries to send to B
+    net["B"]._bus.leave()
+    time.sleep(0.3)
+    # should not raise
+    net["A"].send(_env("A", "B", kid="k-offline", lamport=9))
+    time.sleep(0.3)
+    assert True  # reached here == no exception propagated

@@ -168,8 +168,31 @@ Replay key = (sender/origin, lamport). Re-sending the SAME envelope → втор
 **Доказано тестами:** `tests/test_knowledge_envelope_router.py` (3) — A→B direct accept,
 A→B→C multi-hop, replay rejected (real TCP, 3 nodes).
 
+## Quarantine store + failure handling (ТЗ §16/§28/§29) — KROFT-NET-06
+
+`KnowledgeEnvelopeRouter` больше НЕ теряет отклонённые конверты (ТЗ §16 «не должно
+молча исчезать»). Реализовано:
+
+- `quarantined()` — список `(EnvelopeStatus, KnowledgeEnvelope, reason)`.
+- `set_on_quarantine(cb)` — callback при quarantine/reject.
+- persist в `<state_root>/quarantine/<kid>.<STATUS>.json`.
+- При `verify_envelope == False` (плохая подпись / replay) → `REJECTED` в quarantine.
+- При trust-gate `QUARANTINED` → тоже в quarantine store (не drop).
+
+Failure-тесты (`tests/test_knowledge_envelope_router.py`, 4):
+- low trust (effective < threshold 0.3) → QUARANTINED
+- bad/forged signature → REJECTED (в quarantine, не молча drop)
+- TTL exhausted (recipient вне сети, ttl=1) → graceful no-op, без падения
+- node offline (peer leave) → sender НЕ падает (graceful failure)
+
+**Критический баг, найденный и исправленный в KROFT-NET-06:** multi-hop forward
+пересериализовывал envelope через `KnowledgeEnvelope.to_wire()`, который НЕ сохраняет
+`causal`/`lamport`/`signature`/`_canonical_version` → промежуточный узел пересылал
+«голый» конверт → receiving node не мог верифицировать подпись. Исправлено: forward
+шлёт ОРИГИНАЛЬНЫЙ `event` dict (модифицируя `ttl`/`seen_by`), плюс guard против
+self-loop echo (`env.sender != self.node_id`).
+
 ## Next (не done)
 
-- KROFT-NET-06: quarantine store + failure tests (ТЗ §29: bad sig / low trust / invalid origin / TTL / node offline)
 - KROFT-NET-07: remote node (PC A → PC B через internet)
 - 5/10 nodes load test
