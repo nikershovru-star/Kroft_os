@@ -124,6 +124,30 @@ class _Handler(BaseHTTPRequestHandler):
             except ValueError:
                 top_k = 10
             self._json_response(engine.hybrid_search(q, top_k=top_k))
+        elif path == "/api/status":
+            # Thin delegation to the universal agent interface (ТЗ PHASE 3).
+            # Does NOT implement health/status logic here — pure transport.
+            agent = self._agent_interface()
+            if agent is None:
+                self._json_error(503, "runtime_unavailable",
+                                 "agent interface not wired into runtime")
+                return
+            self._json_response(agent.status())
+        elif path == "/api/audit":
+            agent = self._agent_interface()
+            if agent is None:
+                self._json_error(503, "runtime_unavailable",
+                                 "agent interface not wired into runtime")
+                return
+            try:
+                limit = int(qs.get("limit", ["50"])[0])
+            except ValueError:
+                limit = 50
+            if limit <= 0 or limit > 1000:
+                self._json_error(400, "invalid_request",
+                                 "limit must be a positive integer <= 1000")
+                return
+            self._json_response(agent.audit(limit=limit))
         elif path == "/api/desktop/click":
             body = self._read_body()
             data = json.loads(body.decode("utf-8"))
@@ -194,6 +218,48 @@ class _Handler(BaseHTTPRequestHandler):
             # Stage 27 integration hook: trigger crawl via WatchService. The
             # actual crawl pipeline is wired elsewhere; here we simply signal.
             self._json_response({"status": "triggered"})
+        elif path == "/api/query":
+            # Thin delegation to the universal agent interface (ТЗ PHASE 3).
+            agent = self._agent_interface()
+            if agent is None:
+                self._json_error(503, "runtime_unavailable",
+                                 "agent interface not wired into runtime")
+                return
+            try:
+                body = json.loads(self._read_body().decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self._json_error(400, "invalid_request", "malformed JSON body")
+                return
+            query = body.get("query")
+            if not isinstance(query, str) or not query.strip():
+                self._json_error(400, "invalid_request", "query is required")
+                return
+            try:
+                top_k = int(body.get("top_k", 10))
+            except (TypeError, ValueError):
+                top_k = 10
+            if top_k <= 0 or top_k > 100:
+                self._json_error(400, "invalid_request",
+                                 "top_k must be a positive integer <= 100")
+                return
+            self._json_response(agent.query(query=query, top_k=top_k))
+        elif path == "/api/resolve":
+            agent = self._agent_interface()
+            if agent is None:
+                self._json_error(503, "runtime_unavailable",
+                                 "agent interface not wired into runtime")
+                return
+            try:
+                body = json.loads(self._read_body().decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self._json_error(400, "invalid_request", "malformed JSON body")
+                return
+            query = body.get("query")
+            if not isinstance(query, str) or not query.strip():
+                self._json_error(400, "invalid_request", "query is required")
+                return
+            level = str(body.get("level", "SYSTEM")).upper()
+            self._json_response(agent.resolve(query=query, level=level))
         elif path == "/api/desktop/click":
             body = self._read_body()
             data = json.loads(body.decode("utf-8"))
@@ -301,6 +367,29 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _json_error(self, code: int, err: str, message: str):
+        """Machine-readable error contract (ТЗ PHASE 3 §16). No stack trace."""
+        body = json.dumps(
+            {"error": err, "message": message}, ensure_ascii=False
+        ).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _agent_interface(self):
+        """Resolve the universal agent interface from the DI container (ТЗ §9).
+
+        THIN transport adapter: HTTP layer never imports or instantiates concrete
+        services (GraphQueryEngine / ReferenceKnowledgeResolution / memory) — it
+        only delegates to the injected IKroftAgentInterface.
+        """
+        if not self._container.has("IKroftAgentInterface"):
+            return None
+        return self._container.resolve("IKroftAgentInterface")
 
     def _read_body(self) -> bytes:
         """Read the raw request body using Content-Length (Stage 31)."""

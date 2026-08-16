@@ -22,6 +22,10 @@
 
 from __future__ import annotations
 
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -292,3 +296,124 @@ def kroft_resolve(query: str, resolution: str = "CONCEPT") -> KroftToolResult:
 
 def kroft_audit(target: str) -> KroftToolResult:
     return KroftBridge().audit(target)
+
+
+# =============================================================================
+# PHASE 4 — KroftHttpBridge: Hermes (external agent) as HTTP CLIENT to KROFT.
+#
+# Architectural invariant (ТЗ PHASE 4 §19/§20): Hermes does NOT import KROFT
+# internals (GraphQueryEngine / CrdtGraph / ReferenceKnowledgeResolution /
+# InMemoryProceduralMemory). It talks ONLY to the universal HTTP contract
+# exposed by KroftRuntime (PHASE 3): /api/status | /api/search | /api/query |
+# /api/resolve | /api/audit. KROFT remains agent-agnostic; the bridge is the
+# single external boundary.
+#
+# K1 axis-clean: this class imports ONLY contracts + stdlib (urllib). It never
+# instantiates or imports a concrete KROFT service.
+# =============================================================================
+
+class KroftHttpBridge:
+    """Hermes-side HTTP client to a running KroftRuntime (external agent).
+
+    Reuses the PHASE 3 universal HTTP API — no KROFT business logic here.
+    One bridge instance targets ONE KROFT node (one Runtime HTTP endpoint).
+    A Local KROFT Network = several KroftHttpBridge instances, one per node.
+    """
+
+    def __init__(self, base_url: str, timeout: float = 10.0,
+                 node_id: Optional[str] = None) -> None:
+        self._base = base_url.rstrip("/")
+        self._timeout = timeout
+        self._node_id = node_id
+
+    # --- transport (thin) ------------------------------------------------
+    def _get(self, path: str, params: Optional[Dict[str, Any]] = None):
+        url = self._base + path
+        if params:
+            url += "?" + urllib.parse.urlencode(params)
+        try:
+            with urllib.request.urlopen(url, timeout=self._timeout) as r:
+                return r.status, json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            try:
+                body = json.loads(e.read().decode("utf-8") or b"{}")
+            except Exception:
+                body = {}
+            return e.code, body
+        except Exception as exc:  # network down / refused
+            return 503, {"error": "transport", "message": str(exc)}
+
+    def _post(self, path: str, payload: Dict[str, Any]):
+        url = self._base + path
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=data, method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self._timeout) as r:
+                return r.status, json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            try:
+                body = json.loads(e.read().decode("utf-8") or b"{}")
+            except Exception:
+                body = {}
+            return e.code, body
+        except Exception as exc:
+            return 503, {"error": "transport", "message": str(exc)}
+
+    # --- universal tool surface (mirrors IKroftAgentInterface) ----------
+    def status(self) -> KroftToolResult:
+        code, body = self._get("/api/status")
+        if code != 200:
+            return KroftToolResult(ok=False, operation="status",
+                                   errors=[body.get("message", "status failed")])
+        return KroftToolResult(ok=True, operation="status", result=body,
+                               metadata=body)
+
+    def search(self, query: str, top_k: int = 10) -> KroftToolResult:
+        # Reuse the EXISTING /api/search (lexical) — no new search engine.
+        code, body = self._get("/api/search", {"q": query, "top_k": top_k})
+        if code != 200:
+            return KroftToolResult(ok=False, operation="search",
+                                   errors=[body.get("message", "search failed")])
+        items = [{"id": n, "score": 1.0} for n in (body if isinstance(body, list) else [])]
+        return KroftToolResult(
+            ok=True, operation="search", result={"query": query, "items": items},
+            metadata={"count": len(items), "mode": "lexical", "node": self._node_id},
+        )
+
+    def query(self, query: str, top_k: int = 10) -> KroftToolResult:
+        code, body = self._post("/api/query", {"query": query, "top_k": top_k})
+        if code != 200:
+            return KroftToolResult(ok=False, operation="query",
+                                   errors=[body.get("message", "query failed")])
+        return KroftToolResult(
+            ok=True, operation="query", result=body,
+            metadata={"mode": body.get("mode", "hybrid"), "node": self._node_id},
+        )
+
+    def resolve(self, query: str, resolution: str = "SYSTEM") -> KroftToolResult:
+        code, body = self._post("/api/resolve",
+                                {"query": query, "level": resolution.upper()})
+        if code != 200:
+            return KroftToolResult(ok=False, operation="resolve",
+                                   errors=[body.get("message", "resolve failed")])
+        return KroftToolResult(
+            ok=True, operation="resolve", result=body,
+            metadata={"level": resolution.upper(), "node": self._node_id},
+        )
+
+    def audit(self, limit: int = 50) -> KroftToolResult:
+        code, body = self._get("/api/audit", {"limit": limit})
+        if code != 200:
+            return KroftToolResult(ok=False, operation="audit",
+                                   errors=[body.get("message", "audit failed")])
+        return KroftToolResult(ok=True, operation="audit", result=body,
+                               metadata={"node": self._node_id})
+
+
+def kroft_http_bridge(base_url: str, timeout: float = 10.0,
+                      node_id: Optional[str] = None) -> KroftHttpBridge:
+    """Module-level factory (Hermes tool surface for PHASE 4)."""
+    return KroftHttpBridge(base_url, timeout=timeout, node_id=node_id)
