@@ -1732,6 +1732,51 @@ class GraphQueryEngine(IGraphQuery):
         result = sorted(scores.items(), key=lambda x: (-x[1], x[0]))
         return result[:top_k]
 
+    def nodes_by_type(self, node_type: str) -> List[str]:
+        """Multi-Resolution: all node ids whose type == node_type.
+
+        Reads node["type"] (production/foundation shape) OR
+        node["meta"]["type"] (runtime builder shape) -- robust to both.
+        """
+        g = self._snapshot()
+        result: List[str] = []
+        for n in g["nodes"]:
+            if not isinstance(n, dict):
+                continue
+            if n.get("type") == node_type:
+                nid = n.get("id")
+                if nid:
+                    result.append(nid)
+                continue
+            meta = n.get("meta") or n.get("metadata") or {}
+            if isinstance(meta, dict) and meta.get("type") == node_type:
+                nid = n.get("id")
+                if nid:
+                    result.append(nid)
+        return result
+
+    def nodes_by_metadata(self, key: str, value: Optional[Any] = None) -> List[str]:
+        """Multi-Resolution: all node ids carrying `key` in metadata.
+
+        Reads node["meta"] / node["metadata"] (both shapes). If `value` is given,
+        only nodes whose metadata[key] == value match; otherwise any presence.
+        """
+        g = self._snapshot()
+        result: List[str] = []
+        for n in g["nodes"]:
+            if not isinstance(n, dict):
+                continue
+            meta = n.get("meta") or n.get("metadata") or {}
+            if not isinstance(meta, dict):
+                continue
+            if key not in meta:
+                continue
+            if value is None or meta[key] == value:
+                nid = n.get("id")
+                if nid:
+                    result.append(nid)
+        return result
+
     def query_with_abstention(
         self,
         query: str,
