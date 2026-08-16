@@ -13,10 +13,13 @@ from __future__ import annotations
 import hashlib
 import re
 import time
+import logging
 from collections import deque
 from typing import Any, Dict, List, Optional
 
 from contracts import IService, IGraphBuilder, IGraphQuery
+
+logger = logging.getLogger(__name__)
 
 
 # Stage 21: local tokenizer (mirror of ContentIndex._tokenize). Sibling-import
@@ -1677,23 +1680,51 @@ class GraphQueryEngine(IGraphQuery):
             result.append(nid)
         return result
 
-    def semantic_search(self, query: str, top_k: int = 10) -> List[Tuple[str, float]]:
+    def semantic_search(
+        self,
+        query: str,
+        top_k: int = 10,
+        abstain_threshold: Optional[float] = None,
+    ) -> List[Tuple[str, float]]:
         """Vector similarity search over the SemanticIndex (Stage 29).
 
         Returns [(node_id, cosine_score), ...] best-first. Without a wired
         semantic_index+embedding pair -> [] (zero regression).
+
+        When ``abstain_threshold`` is set, the engine abstains (returns [])
+        if the best score is below the threshold.
         """
         if self._semantic_index is None or self._embedding is None:
             return []
         q_emb = self._embedding.embed(query)
-        return self._semantic_index.search(q_emb, top_k=top_k)
+        results = self._semantic_index.search(q_emb, top_k=top_k)
 
-    def hybrid_search(self, query: str, top_k: int = 10) -> List[Tuple[str, float]]:
+        if abstain_threshold is not None and results:
+            best = results[0][1]
+            if best < abstain_threshold:
+                logger.warning(
+                    "ABSTAIN [semantic_search] query=%r best=%.4f threshold=%.4f",
+                    query[:80], best, abstain_threshold,
+                )
+                return []
+        return results
+
+    def hybrid_search(
+        self,
+        query: str,
+        top_k: int = 10,
+        abstain_threshold: Optional[float] = None,
+    ) -> List[Tuple[str, float]]:
         """RRF fusion of lexical (ContentIndex) and semantic (SemanticIndex).
 
         Reciprocal Rank Fusion (k=60) combines both rank lists into one
         scored result. Zero regression: if either engine is unwired, the
         fusion simply degrades to the other (missing ranks contribute 0).
+
+        When ``abstain_threshold`` is set, the engine abstains (returns [])
+        if the best semantic score is below the threshold AND there are
+        no lexical results. This prevents low-confidence hallucinations
+        when neither engine produces meaningful results.
         """
         if not query or not query.strip():
             return []
@@ -1717,6 +1748,17 @@ class GraphQueryEngine(IGraphQuery):
             semantic = self._semantic_index.search(
                 q_emb, top_k=max(top_k * 3, 50)
             )
+
+        # --- Abstention logic ---
+        # If no lexical results AND best semantic score < threshold -> abstain
+        if abstain_threshold is not None and not lexical and semantic:
+            best_semantic = semantic[0][1] if semantic else 0.0
+            if best_semantic < abstain_threshold:
+                logger.warning(
+                    "ABSTAIN [hybrid_search] query=%r best=%.4f threshold=%.4f lexical=%d",
+                    query[:80], best_semantic, abstain_threshold, len(lexical),
+                )
+                return []
 
         # RRF fusion, k=60
         k = 60
@@ -1896,7 +1938,7 @@ def _wrap_rebuild_semantic_index(self, *args, **kwargs):
     return {"ok": True, "documents": len(docs)}
 
 
-def _wrap_semantic_search(self, query, top_k=10):
+def _wrap_semantic_search(self, query, top_k=10, abstain_threshold=None):
     docs = [
         {"id": n.get("id"), "tokens": set(_tokenize(_doc_text(n)))}
         for n in self._snapshot().get("nodes", [])
@@ -1914,6 +1956,17 @@ def _wrap_semantic_search(self, query, top_k=10):
             score = min(1.0, score + 0.2)
         scored.append((doc["id"], round(score, 4)))
     scored.sort(key=lambda x: (x[1], x[0]), reverse=True)
+
+    # --- Abstention logic ---
+    if abstain_threshold is not None and scored:
+        best = scored[0][1]
+        if best < abstain_threshold:
+            logger.warning(
+                "ABSTAIN [_wrap_semantic_search] query=%r best=%.4f threshold=%.4f",
+                query[:80], best, abstain_threshold,
+            )
+            return []
+
     return scored[:top_k]
 
 

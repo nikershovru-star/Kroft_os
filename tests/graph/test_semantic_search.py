@@ -198,3 +198,84 @@ def test_snapshot_roundtrip():
     res1 = si.search(emb.embed("alpha"), top_k=2)
     res2 = si2.search(emb.embed("alpha"), top_k=2)
     assert res1 == res2
+
+
+# ----------------------------------------------------------------------
+# P0-A: abstention threshold tests
+# ----------------------------------------------------------------------
+
+def test_semantic_search_respects_abstain_threshold():
+    """When best score < threshold, semantic_search returns [] (abstain)."""
+    g = InMemoryGraphBuilder()
+    g.add_node("A.md", "alpha beta", {})
+    emb = MockEmbeddingAdapter()
+    si = SemanticIndex()
+    si.add("A.md", emb.embed("alpha beta"))
+    engine = GraphQueryEngine(g, semantic_index=si, embedding=emb)
+
+    # Query "zeta" won't match "alpha beta" well — Jaccard score will be 0.
+    results = engine.semantic_search("zeta", top_k=5, abstain_threshold=0.01)
+    assert results == []
+
+
+def test_semantic_search_returns_results_when_above_threshold():
+    """When best score >= threshold, semantic_search returns filtered results."""
+    g = InMemoryGraphBuilder()
+    g.add_node("A.md", "alpha beta", {})
+    emb = MockEmbeddingAdapter()
+    si = SemanticIndex()
+    si.add("A.md", emb.embed("alpha beta"))
+    engine = GraphQueryEngine(g, semantic_index=si, embedding=emb)
+
+    # "alpha beta" should match "alpha beta" with highest Jaccard score (1.0).
+    results = engine.semantic_search("alpha beta", top_k=5, abstain_threshold=0.5)
+    assert len(results) > 0
+    assert all(score >= 0.5 for _, score in results)
+
+
+def test_semantic_search_zero_regression_no_threshold():
+    """Without abstain_threshold, semantic_search behaves as before."""
+    g = InMemoryGraphBuilder()
+    g.add_node("A.md", "alpha beta", {})
+    emb = MockEmbeddingAdapter()
+    si = SemanticIndex()
+    si.add("A.md", emb.embed("alpha beta"))
+    engine = GraphQueryEngine(g, semantic_index=si, embedding=emb)
+
+    # No threshold — should return results even if low confidence.
+    results = engine.semantic_search("zeta", top_k=5)
+    # Results may or may not be empty, but the method should not raise.
+    assert isinstance(results, list)
+
+
+def test_hybrid_search_respects_abstain_threshold():
+    """When both semantic and lexical scores are low, hybrid_search abstains."""
+    g = InMemoryGraphBuilder()
+    g.add_node("A.md", "alpha beta", {})
+    emb = MockEmbeddingAdapter()
+    si = SemanticIndex()
+    si.add("A.md", emb.embed("alpha beta"))
+    ci = ContentIndex()
+    engine = GraphQueryEngine(g, index=ci, semantic_index=si, embedding=emb)
+
+    # Query "zeta" — no lexical match, low semantic score.
+    # With abstain_threshold=0.5, should abstain (return []).
+    results = engine.hybrid_search("zeta", top_k=5, abstain_threshold=0.5)
+    assert results == []
+
+
+def test_hybrid_search_zero_regression_no_threshold():
+    """Without abstain_threshold, hybrid_search returns RRF results."""
+    g = InMemoryGraphBuilder()
+    g.add_node("A.md", "alpha beta", {})
+    emb = MockEmbeddingAdapter()
+    si = SemanticIndex()
+    si.add("A.md", emb.embed("alpha beta"))
+    ci = ContentIndex()
+    ci.index_file("A.md", "alpha beta")
+    engine = GraphQueryEngine(g, index=ci, semantic_index=si, embedding=emb)
+
+    results = engine.hybrid_search("alpha", top_k=5)
+    assert isinstance(results, list)
+    # Should return at least the matching node.
+    assert len(results) > 0

@@ -1,5 +1,5 @@
 # KROFT_OS pre-commit (pre-commit framework, optional).
-# Fast subset: lint (if ruff) + arch-gate + akb-lint.
+# Fast subset: lint (if ruff) + arch-gate + akb-lint + forensic-gate.
 # Install: pip install pre-commit && pre-commit install
 # Fallback without framework: python scripts/precommit.py
 repos:
@@ -11,3 +11,10 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: kroft-forensic-gate
+        name: KROFT_OS forensic gate (duplicate artifact detection)
+        entry: python scripts/pre_commit_forensic.py --staged-files
+        language: system
+        pass_filenames: true
+        always_run: false
+        stages: [commit]

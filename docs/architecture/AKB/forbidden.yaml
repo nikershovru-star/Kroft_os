@@ -1,0 +1,62 @@
+# KROFT OS — Forbidden Imports Registry (AKB data)
+# Синхронизируется с kernel/arch_gate.py и tests/fixtures_violations/.
+# Этот файл является "источником истины" для того, что ЯВНО запрещено.
+# Тесты test_architecture_negative.py проверяют, что эти паттерны
+# действительно обнаруживаются detectors.
+#
+# Version: 1
+version: 1
+
+# Явно запрещённые паттерны импортов (проверяются arch-gate)
+forbidden_imports:
+  # K1: kernel/ может импортировать только contracts/ + runtime/
+  k1_kernel:
+    packages: [kernel]
+    imports: [infrastructure, services, adapters, policies, plugins, composition, cli]
+    description: "K1 violation: kernel must not import application layers"
+
+  # K3: kernel/runtime/services не должны инстанциировать DependencyContainer
+  # (только composition/ может собирать зависимости)
+  k3_instantiation:
+    packages: [kernel, runtime, services]
+    patterns: ["DependencyContainer(", "Container("]
+    description: "K3 violation: container instantiation outside composition/"
+
+  # K6: adapters/services/policies/plugins не должны импортировать policies
+  # (policies — это доменная логика, адаптеры должны только реализовывать порты)
+  k6_adapters_policies:
+    packages: [adapters, services, policies, plugins]
+    imports: [policies.budget_policy, policies.rate_limit, policies.cost_control]
+    description: "K6 violation: adapters/services/policies importing domain policies"
+
+  # K8: kernel/runtime не должны импортировать llm/ai/akb/research
+  k8_kernel_ai:
+    packages: [kernel, runtime]
+    imports: [akb, llm, ai, research, genai]
+    description: "K8 violation: kernel/runtime importing AI/knowledge layers"
+
+# Zero-regression: стандартные библиотеки разрешены всегда
+stdlib_allowed:
+  - os, sys, pathlib, typing, abc, enum, functools, dataclasses
+  - collections, json, time, re, contextlib, threading, asyncio
+  - hashlib, secrets, itertools, copy, math, uuid, datetime, warnings, logging
+  - subprocess, tempfile, shutil, io, csv, urllib, http, socket
+  - ast, importlib, argparse, copyreg, struct, queue, signal
+
+# F1: Запрещён time.sleep в recovery + supervisor
+f1_sleep_forbidden:
+  patterns: ["time.sleep(", "asyncio.sleep("]
+  directories: ["services/recovery", "services/supervisor", "runtime/recovery"]
+  description: "F1 violation: blocking sleep in async/recovery paths"
+
+# F5: AgentResult должен быть frozen dataclass
+f5_frozen_dataclass:
+  class_name: "AgentResult"
+  requires: "frozen=True"
+  description: "F5 violation: AgentResult must be a frozen dataclass"
+
+# F6: ADRs должны содержать evidence_level
+f6_adr_evidence:
+  required_field: "evidence_level"
+  locations: ["docs/architecture/ADR-*.md"]
+  description: "F6 violation: ADR missing evidence_level field"

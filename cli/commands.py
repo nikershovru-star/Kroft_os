@@ -151,7 +151,8 @@ def cmd_semantic(args, container) -> None:
     atexit.register(lambda: k.stop())
     engine = container.resolve("GraphQueryEngine")
     query = " ".join(args.query) if isinstance(args.query, list) else args.query
-    _dump(engine.semantic_search(query, top_k=args.top_k))
+    _dump(engine.semantic_search(query, top_k=args.top_k,
+                                 abstain_threshold=getattr(args, 'abstain_threshold', None)))
 
 
 def cmd_hybrid(args, container) -> None:
@@ -167,7 +168,8 @@ def cmd_hybrid(args, container) -> None:
     atexit.register(lambda: k.stop())
     engine = container.resolve("GraphQueryEngine")
     query = " ".join(args.query) if isinstance(args.query, list) else args.query
-    _dump(engine.hybrid_search(query, top_k=args.top_k))
+    _dump(engine.hybrid_search(query, top_k=args.top_k,
+                               abstain_threshold=getattr(args, 'abstain_threshold', None)))
 
 
 def cmd_desktop(args, container) -> None:

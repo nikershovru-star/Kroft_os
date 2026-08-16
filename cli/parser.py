@@ -103,6 +103,10 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     psm.add_argument("query", nargs="+", help="Query text")
     psm.add_argument("--top-k", type=int, default=10,
                      help="Number of nearest results (default 10)")
+    psm.add_argument("--abstain-threshold", type=float, default=None,
+                     help="Minimum cosine similarity score (0.0-1.0). "
+                          "If best score < threshold, return empty (abstain). "
+                          "Default: None (no abstention).")
     psm.add_argument("--vault", default=None,
                      help="Path to the vault directory (or read from kroft_os.yaml)")
 
@@ -110,6 +114,10 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     ph.add_argument("query", nargs="+", help="Query text")
     ph.add_argument("--top-k", type=int, default=10,
                     help="Number of results (default 10)")
+    ph.add_argument("--abstain-threshold", type=float, default=None,
+                    help="Minimum semantic score (0.0-1.0). "
+                         "If both lexical and semantic scores are below this, "
+                         "return empty (abstain). Default: None (no abstention).")
     ph.add_argument("--vault", default=None,
                     help="Path to the vault directory (or read from kroft_os.yaml)")
 

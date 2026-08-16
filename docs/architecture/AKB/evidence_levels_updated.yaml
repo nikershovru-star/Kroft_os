@@ -1,0 +1,84 @@
+# KROFT OS — Architecture Evidence Levels (AKB data)
+# Классификация доказательств для ADR и архитектурных решений.
+# Используется gates/ для оценки cal-а архитектурных изменений.
+version: 1
+
+levels:
+  # Максимальный уровень: доказательство на основе реального выполнения
+  level_1_execution:
+    name: "Execution Proof"
+    description: "Verified via real subprocess boot + pytest + ad-hoc script"
+    validation_required: ["real_execution", "pytest_green", "observable_effect"]
+    gate: "PROOF-OVER-EXISTENCE"
+    example: "Ran `python main.py query ...` and confirmed output matches expected"
+
+  # Высокий уровень: анализ существующего кода
+  level_2_code_analysis:
+    name: "Code Analysis"
+    description: "Verified via static analysis (AST, grep, read_file) of real files"
+    validation_required: ["code_evidence", "file_paths", "line_numbers"]
+    gate: "VERIFY-BEFORE-CLAIM"
+    example: "Confirmed class exists via grep + read_file with line numbers"
+
+  # Средний уровень: поиск во внешних источниках
+  level_3_external_research:
+    name: "External Research"
+    description: "Verified via search of external sources (GitHub, RFC, docs)"
+    validation_required: ["external_source", "source_url", "verification"]
+    gate: "RESEARCH-FIRST"
+    example: "Found 3+ independent sources confirming the pattern"
+
+  # С низким уровнем: архитектурные гипотезы
+  level_4_hypothesis:
+    name: "Hypothesis"
+    description: "Plausible but not yet proven — requires future verification"
+    validation_required: ["design_reasoning", "assumptions_listed"]
+    gate: "PROVISIONAL"
+    example: "Proposed change based on similar pattern in other OSS projects"
+
+  # Минимальный уровень: spec-уровень описания
+  level_5_speculative:
+    name: "Speculative"
+    description: "Speculative claim — not yet validated, may be incorrect"
+    validation_required: ["clearly_marked_speculative"]
+    gate: "SPECULATION-WARNING"
+    example: "Based on architectural memory, needs re-verification"
+
+# Mapping of detector names to required evidence level
+detectors:
+  K1:
+    description: "kernel/ imports only contracts + runtime"
+    required_evidence: level_2_code_analysis
+    test: "tests/test_architecture_negative.py::test_violation_k1_kernel_infra_detected"
+
+  K3:
+    description: "No container instantiation outside composition/"
+    required_evidence: level_2_code_analysis
+    test: "tests/test_architecture_negative.py::test_violation_k3_kernel_instantiate_detected"
+
+  K6:
+    description: "Adapters/services/policies import contracts only"
+    required_evidence: level_2_code_analysis
+    test: "tests/test_architecture_negative.py::test_violation_k6_adapters_policies_detected"
+
+  K8:
+    description: "kernel/runtime don't import AI/knowledge layers"
+    required_evidence: level_2_code_analysis
+    test: "tests/test_architecture_negative.py::test_violation_k8_kernel_ai_detected"
+
+  F1:
+    description: "No time.sleep in recovery/supervisor"
+    required_evidence: level_2_code_analysis
+
+  F5:
+    description: "AgentResult is frozen dataclass"
+    required_evidence: level_2_code_analysis
+
+  F6:
+    description: "ADRs have evidence_level"
+    required_evidence: level_2_code_analysis
+
+# Non-blocking warnings (don't block commits)
+non_blocking:
+  - evidence_level: level_4_hypothesis
+  - evidence_level: level_5_speculative

@@ -313,14 +313,31 @@ class KROFT_OSRepl:
             print("semantic: missing QUERY", file=sys.stderr)
             return
         top_k = 10
-        if len(args) >= 3 and args[-2] == "--top-k":
-            try:
-                top_k = int(args[-1])
-                args = args[:-2]
-            except ValueError:
-                pass
+        abstain_threshold = None
+        # Parse --top-k and --abstain-threshold flags
+        remaining = []
+        i = 0
+        while i < len(args):
+            if args[i] == "--top-k" and i + 1 < len(args):
+                try:
+                    top_k = int(args[i + 1])
+                    i += 2
+                    continue
+                except ValueError:
+                    pass
+            if args[i] == "--abstain-threshold" and i + 1 < len(args):
+                try:
+                    abstain_threshold = float(args[i + 1])
+                    i += 2
+                    continue
+                except ValueError:
+                    print("semantic: invalid --abstain-threshold value", file=sys.stderr)
+                    return
+            remaining.append(args[i])
+            i += 1
         engine = self._container.resolve("GraphQueryEngine")
-        print(json.dumps(engine.semantic_search(" ".join(args), top_k=top_k), ensure_ascii=False))
+        print(json.dumps(engine.semantic_search(" ".join(remaining), top_k=top_k,
+                                               abstain_threshold=abstain_threshold), ensure_ascii=False))
 
     def _do_hybrid(self, args: List[str]) -> None:
         """Hybrid lexical+semantic RRF search (Stage 30) via hybrid_search."""
@@ -328,14 +345,30 @@ class KROFT_OSRepl:
             print("hybrid: missing QUERY", file=sys.stderr)
             return
         top_k = 10
-        if len(args) >= 3 and args[-2] == "--top-k":
-            try:
-                top_k = int(args[-1])
-                args = args[:-2]
-            except ValueError:
-                pass
+        abstain_threshold = None
+        remaining = []
+        i = 0
+        while i < len(args):
+            if args[i] == "--top-k" and i + 1 < len(args):
+                try:
+                    top_k = int(args[i + 1])
+                    i += 2
+                    continue
+                except ValueError:
+                    pass
+            if args[i] == "--abstain-threshold" and i + 1 < len(args):
+                try:
+                    abstain_threshold = float(args[i + 1])
+                    i += 2
+                    continue
+                except ValueError:
+                    print("hybrid: invalid --abstain-threshold value", file=sys.stderr)
+                    return
+            remaining.append(args[i])
+            i += 1
         engine = self._container.resolve("GraphQueryEngine")
-        print(json.dumps(engine.hybrid_search(" ".join(args), top_k=top_k), ensure_ascii=False))
+        print(json.dumps(engine.hybrid_search(" ".join(remaining), top_k=top_k,
+                                             abstain_threshold=abstain_threshold), ensure_ascii=False))
 
     def _do_desktop(self, args: List[str]) -> None:
         """Desktop automation (Stage 31)."""

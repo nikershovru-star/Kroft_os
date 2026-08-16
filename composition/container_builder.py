@@ -202,6 +202,7 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
     )
     c.register_instance("SchedulerService", sched)
     _wire_scheduler(c)
+    _wire_self_evolution(c)
     # STAGE 3 STEP 1 (wiring only): load the KROFT Knowledge Foundation snapshot so
     # the stock main.py boot sees the 49 foundation PDFs (nodes/edges/vectors/index)
     # instead of starting blind on empty in-memory stores. Reuses the existing
@@ -522,3 +523,34 @@ def _wire_scheduler(container: DependencyContainer) -> None:
     sched: SchedulerService = container.resolve("SchedulerService")
     agent = container.resolve("IAgent")
     sched.set_executor(lambda cmd: agent.execute(cmd))
+
+
+def _wire_self_evolution(container: DependencyContainer) -> None:
+    """Register new self-evolution components in the DI container."""
+    from kernel.hypothesis_engine import ReferenceHypothesisEngine
+    from kernel.execution_tape import ExecutionTape
+    from adapters.llm_hardening import RetryableLlmClient
+    from services.patch_runner import FileApplyPatch, InMemoryTestRunner
+    container.register_instance("IHypothesisEngine", ReferenceHypothesisEngine())
+    container.register_instance("IExecutionTape", ExecutionTape())
+    container.register_instance("IApplyPatch", FileApplyPatch())
+    container.register_instance("ITestRunner", InMemoryTestRunner())
+    # LLM hardening: wrap an existing ILlm in RetryableLlmClient (circuit-breaker
+    # + retry + health-check). If ILlm is already wired (by a prior agent or config),
+    # wrap it; otherwise register a production OpenAiCompatibleClient wrapped in the
+    # hardening layer (stdlib HttpTransport, K6-clean per ADR-065).
+    try:
+        llm = container.resolve("ILlm")
+        container.register_instance("ILlm", RetryableLlmClient(llm))
+    except Exception:
+        from adapters.openai_compatible import OpenAiCompatibleClient
+        from adapters.http_transport import HttpTransport
+        import os as _os
+        _transport = HttpTransport(default_timeout=30.0)
+        _inner = OpenAiCompatibleClient(
+            base_url=_os.environ.get("KROFT_BASE_URL", "http://localhost:11434/v1"),
+            api_key=_os.environ.get("KROFT_API_KEY", "ollama"),
+            model=_os.environ.get("KROFT_MODEL", "gemma3"),
+            transport=_transport,
+        )
+        container.register_instance("ILlm", RetryableLlmClient(_inner))

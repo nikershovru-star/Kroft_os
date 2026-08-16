@@ -9,7 +9,7 @@ a direct dependency on each other.
 """
 from __future__ import annotations
 from abc import abstractmethod
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .i_service import IService
 
@@ -28,6 +28,23 @@ class IGraphQuery(IService):
     @abstractmethod
     def nodes_by_tag(self, tag: str) -> List[str]:
         """Return ids of all nodes carrying the given tag."""
+
+    @abstractmethod
+    def nodes_by_type(self, node_type: str) -> List[str]:
+        """Multi-Resolution (B.5/B.9): all node ids whose type == node_type.
+
+        Reads node["type"] (production/foundation shape) OR node["meta"]["type"]
+        (runtime builder shape) — robust to both serialization forms.
+        """
+
+    @abstractmethod
+    def nodes_by_metadata(self, key: str, value: Optional[Any] = None) -> List[str]:
+        """Multi-Resolution (B.5/B.9): all node ids carrying `key` in metadata.
+
+        Reads node["meta"] / node["metadata"] (both shapes). If `value` is given,
+        only nodes whose metadata[key] == value match; otherwise any presence.
+        Example: nodes_by_metadata("level", "concept") or nodes_by_metadata("evidence_refs").
+        """
 
     @abstractmethod
     def orphan_nodes(self) -> List[str]:

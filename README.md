@@ -1276,3 +1276,43 @@ classifier:
 `tests/model_router/test_echo_router.py`.
 
 ## Test gates
+
+- `tests/test_architecture.py` + `tests/test_architecture_negative.py` — architecture gate / import axis / forbidden patterns.
+- `tests/common/test_architecture.py` — additional dependency-axis checks.
+- New self-evolution modules are covered by targeted tests under `tests/` and negative tests in `tests/test_new_modules_negative.py`.
+
+## Architecture Control (AKB Gate)
+
+Runtime verification is provided by `kernel/arch_gate.py`. It reads `docs/architecture/AKB/import_matrix.yaml` and checks that project packages respect the allowed import matrix and K1/K6/K8 rules. `tests/` are excluded from enforcement. Use it in CI or locally before committing to catch dependency-axis regressions early.
+
+## Self-Evolution Additions
+
+- `kernel/hypothesis_engine.py` — deterministic `EvolutionHypothesis` generation from `CapabilityGap`.
+- `kernel/execution_tape.py` — append-only execution trace with JSONL persistence and replay.
+- `adapters/llm_hardening.py` — bounded retry, circuit breaker, and fallback LLM wrapper.
+- `contracts/patch_runner.py` + `services/patch_runner.py` — controlled patch/apply/test-runner boundary for H2.
+
+## P0-A: Abstention Threshold
+
+`GraphQueryEngine` supports an optional `abstain_threshold` parameter on `semantic_search()`, `hybrid_search()`, and the `_wrap_semantic_search` fallback (Jaccard-based). When set, the engine returns `[]` if the best score is below the threshold. This prevents low-confidence hallucinations.
+
+CLI: `--abstain-threshold` flag on `semantic` and `hybrid` subcommands.
+REPL: `semantic <query> --abstain-threshold <float>` and `hybrid <query> --abstain-threshold <float>`.
+
+Tests: `tests/graph/test_semantic_search.py` (6 abstention tests) + `tests/graph/test_abstention.py` (6 boundary tests).
+
+## P0-coord: Forensic Gate
+
+Pre-commit forensic gate prevents duplicate artifact definitions before commit:
+
+- `scripts/pre_commit_forensic.py` — scans staged files for class/ADR/function names already existing elsewhere in repo.
+- `.pre-commit-config.yaml` — hook `kroft-forensic-gate`.
+- AKB: `docs/architecture/akb/forbidden.yaml` — registry of forbidden cross-layer imports (K1/K3/K6/K8, F1/F5/F6).
+- Tests: `tests/test_precommit_forensic.py` (5 tests).
+
+## CI Integration
+
+`scripts/ci.py` runs:
+- Architecture negative tests (`tests/architecture/test_architecture_negative.py` + `tests/test_architecture_negative.py`)
+- P0-A abstention tests
+- Pre-commit forensic gate

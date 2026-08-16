@@ -1,7 +1,19 @@
-"""OpenAI-compatible Model Platform client (MVP, candidate ADR-033).
+"""OpenAI-compatible Model Platform client (MVP, candidate ADR-033) — DEPRECATED.
 
 Stdlib urllib only — zero external deps, mirrors OpenAIEmbeddingAdapter.
-Points at any OpenAI-compatible endpoint (OmniRoute, LiteLLM, LM Studio, ...).
+
+DEPRECATED (P2-E): This module is legacy. New code MUST use
+adapters.openai_compatible.OpenAiCompatibleClient (ILlm, K6-compliant) +
+composition.llm_client_factory.build_llm_client(...) as the canonical
+factory path.
+
+Existing consumers migrated:
+- adapters/ollama_adapter.py  → adapters.openai_compatible
+- adapters/omni_route_adapter.py  → adapters.openai_compatible
+
+Keep this module for now to avoid breaking archive/KnowledgeOS-v5 references,
+but treat it as frozen — no new features, no bug fixes beyond security issues.
+
 Domain layer never imports this directly; it depends on contracts.ILlm.
 """
 from __future__ import annotations
