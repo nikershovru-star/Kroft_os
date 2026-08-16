@@ -17,11 +17,32 @@
 
 default: analytical
 
+# classifier (E3): optional LLM-based request typer. When enabled, the router calls a
+# lightweight local model (default phi3:mini via Ollama) to classify the request into one
+# of the four categories BEFORE falling back to the keyword rules below. If the model is
+# unavailable or returns an unparsable answer, routing degrades gracefully to rule-based.
+# `timeout` is per-call seconds for the classifier model. `fallback` is currently only
+# "rule_based" (the keyword policy).
+classifier:
+  enabled: true
+  model: "phi3:mini"
+  timeout: 5
+  fallback: "rule_based"
+
 priority:
   - code
   - analytical
   - factual
   - creative
+
+# manual_overrides (E3): explicit substring -> category. Checked BEFORE keywords and BEFORE
+# the LLM classifier, so an operator can pin a request type by a phrase. Each entry maps a
+# substring (case-insensitive) to one of the four categories. Empty/unset = no override.
+manual_overrides:
+  - match: "debug this crash"
+    category: code
+  - match: "translate to"
+    category: creative
 
 categories:
   code:

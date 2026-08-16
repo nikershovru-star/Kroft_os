@@ -62,6 +62,30 @@ class YamlRouterPolicy(IRouterPolicy):
         # categories sort last so a known category always wins a tie.
         prio = self._cfg.get("priority") or []
         self._priority = list(prio) + [c for c in categories if c not in prio]
+        # manual_overrides (E3): explicit substring -> category, checked before keywords.
+        overrides = self._cfg.get("manual_overrides") or []
+        self._overrides: list[tuple[str, str]] = []
+        for o in overrides:
+            if not isinstance(o, dict):
+                raise ValueError(f"router policy: manual_overrides entries must be mappings")
+            m = str(o.get("match") or "").lower()
+            c = str(o.get("category") or "")
+            if not m or c not in categories:
+                raise ValueError(
+                    f"router policy: manual_override {o!r} needs valid 'match' + 'category'"
+                )
+            self._overrides.append((m, c))
+
+    # --- E3 config access ---
+    def classifier_config(self) -> dict:
+        """Return the ``classifier:`` section of the YAML (E3 LLM typer config).
+
+        Callers (run_kroft) read ``enabled`` / ``model`` / ``timeout`` / ``fallback``
+        from here so the classifier wiring is driven by config, not hardcoded env.
+        Returns ``{}`` when the section is absent (classifier disabled by default).
+        """
+        cfg = self._cfg.get("classifier")
+        return cfg if isinstance(cfg, dict) else {}
 
     @classmethod
     def load_default(cls, base_dir: str = "") -> "YamlRouterPolicy":
@@ -80,6 +104,10 @@ class YamlRouterPolicy(IRouterPolicy):
     # --- IRouterPolicy ---
     def classify(self, query: ModelQuery) -> str:
         text = (query.prompt or "").lower()
+        # manual_overrides (E3): explicit substring -> category, before keyword rules.
+        for sub, cat in self._overrides:
+            if sub in text:
+                return cat
         tokens = set(_TOKEN_RE.findall(text))
         # Deterministic priority order (G6): iterate self._priority, first category whose
         # ANY keyword matches wins. Multi-match resolves by declared priority, not YAML order.

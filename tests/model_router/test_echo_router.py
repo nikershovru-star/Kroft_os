@@ -29,6 +29,7 @@ from services.model_router.ensemble_orchestrator import SimpleEnsembleOrchestrat
 from services.model_router.yaml_policy import YamlRouterPolicy
 from services.model_router.rule_based_router import RuleBasedRouter
 from services.model_router.router_llm_adapter import RouterAsLlm
+from services.model_router.classifier import LLMClassifier
 
 POLICY = "config/router_policy.yaml"
 
@@ -261,3 +262,35 @@ def test_run_kroft_router_flag_parses():
     from composition.run_kroft import _parse_args
     cfg = _parse_args(["--router"])
     assert cfg.router is True
+
+
+# -------------------------------------------------------------------------
+# E3 classifier config (ТЗ 2.4): router_policy.yaml `classifier:` section
+# -------------------------------------------------------------------------
+def test_yaml_policy_exposes_classifier_config():
+    p = YamlRouterPolicy.load_default()
+    cls = p.classifier_config()
+    assert cls.get("enabled") is True
+    assert cls.get("model") == "phi3:mini"
+    assert cls.get("timeout") == 5
+    assert cls.get("fallback") == "rule_based"
+
+
+def test_yaml_policy_classifier_config_absent_returns_empty():
+    import tempfile, os
+    from services.model_router.yaml_policy import YamlRouterPolicy
+    raw = "default: factual\npriority: [factual]\ncategories:\n  factual:\n    keywords: [what]\n    providers: [local-ollama]\n"
+    fd, path = tempfile.mkstemp(suffix=".yaml")
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(raw)
+    try:
+        p = YamlRouterPolicy(path)
+        assert p.classifier_config() == {}
+    finally:
+        os.remove(path)
+
+
+def test_llmclassifier_accepts_config_timeout():
+    c = LLMClassifier(FakeLLM("phi3", answer="factual"), model="phi3:mini", timeout=5.0)
+    assert c._timeout == 5.0
+    assert c.classify(ModelQuery(prompt="")) is None

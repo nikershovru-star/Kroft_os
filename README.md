@@ -1248,4 +1248,31 @@ Post-MVP (после реальной эксплуатации): Enterprise Secu
 federation, GUI, daily-use pipeline (Obsidian→Knowledge Engine→Hermes→Agent Loop), собственные
 агенты (Sales/Research/Architect/Programmer/Writer/Finance).
 
+---
+
+## Echo-pattern router + LLM classifier (Этап 3)
+
+Динамическая классификация запроса для выбора модели. Заменяет чисто keyword-роутинг
+на LLM-подсказку (лёгкая локальная модель, по умолчанию `phi3:mini` через Ollama), с
+graceful-degradation на rule-based при недоступности модели.
+
+**Включение:** флаг `--router` в `run_kroft` (по умолчанию OFF → stock-path нетронут).
+**Конфиг:** `config/router_policy.yaml` (секции `classifier:`, `categories:`, `manual_overrides:`).
+
+```yaml
+classifier:
+  enabled: true          # false -> чисто keyword-роутинг
+  model: "phi3:mini"     # лёгкая модель в Ollama (env-оверрайд: KROFT_CLASSIFIER_MODEL)
+  timeout: 5             # секунд на вызов классификатора
+  fallback: "rule_based"
+```
+
+Поток: `req.category` (если задан) → `IClassifier.classify` (LLM) → `IRouterPolicy.classify`
+(keyword/manual_overrides/default). Категория `analytical` маршрутизируется в ensemble
+(параллельно N моделей, BEST_CONFIDENCE). Подробнее: `ARCHITECTURE.md`.
+
+**Ограничения (KROFT LAW):** не трогает `kernel/`, не меняет адаптеры LLM, OmniRouter —
+только транспорт. Тесты: `tests/model_router/test_echo_classifier.py`,
+`tests/model_router/test_echo_router.py`.
+
 ## Test gates

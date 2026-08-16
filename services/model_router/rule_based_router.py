@@ -23,6 +23,7 @@ from contracts.i_ensemble_orchestrator import (
 from contracts.i_llm import ILlm, LlmResponse, ModelQuery
 from contracts.i_model_router import IModelRouter, ProviderSpec
 from contracts.i_router_policy import IRouterPolicy
+from contracts.i_classifier import IClassifier
 
 from services.model_router.dtos import RouterRequest, RouterResult
 from services.model_router.ensemble_orchestrator import SimpleEnsembleOrchestrator
@@ -38,7 +39,8 @@ class RuleBasedRouter(IRouterPolicy):
     ``policy`` supplies classify() + providers_for(); ``router`` (an IModelRouter, e.g.
     OmniRouter) supplies the actual provider clients + priority fallback. ``ensemble``
     (default SimpleEnsembleOrchestrator) is used when a category maps to >1 provider or
-    when ``force_ensemble=True``.
+    when ``force_ensemble=True``. ``classifier`` (optional, E3) is an LLM-based typer tried
+    BEFORE the rule policy; on None it falls back to rule-based routing.
     """
 
     def __init__(
@@ -47,14 +49,21 @@ class RuleBasedRouter(IRouterPolicy):
         router: IModelRouter,
         ensemble: Optional[IEnsembleOrchestrator] = None,
         ensemble_categories: Optional[frozenset] = None,
+        classifier: Optional[IClassifier] = None,
     ) -> None:
         self._policy = policy
         self._router = router
         self._ensemble = ensemble or SimpleEnsembleOrchestrator()
         self._ensemble_categories = ensemble_categories or ENSEMBLE_CATEGORIES
+        self._classifier = classifier
 
     # --- IRouterPolicy delegation (this object IS the policy surface) ---
     def classify(self, query: ModelQuery) -> str:
+        # E3: LLM classifier first, rule policy as fallback (graceful).
+        if self._classifier is not None:
+            label = self._classifier.classify(query)
+            if label in IRouterPolicy.CATEGORIES:
+                return label
         return self._policy.classify(query)
 
     def providers_for(self, category: str) -> List[ProviderSpec]:
@@ -67,7 +76,11 @@ class RuleBasedRouter(IRouterPolicy):
     def route(self, req: RouterRequest, force_ensemble: bool = False) -> RouterResult:
         """Classify (if needed), pick providers, execute single or ensemble."""
         t0 = time.perf_counter()
-        category = req.category or self._policy.classify(req.query)
+        category = (
+            req.category
+            or (self._classifier.classify(req.query) if self._classifier else None)
+            or self._policy.classify(req.query)
+        )
         specs = self._policy.providers_for(category)
 
         # Map specs -> live ILlm clients from the underlying IModelRouter.

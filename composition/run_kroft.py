@@ -30,6 +30,7 @@ from typing import Any, List, Optional
 from contracts.cognitive_domain import ConfidenceScore, Intent, Provenance
 from contracts.i_identity import AgentIdentity
 from contracts.i_llm import ILlm, ModelInfo
+from contracts.i_model_router import IModelRouter
 from composition.desktop_dashboard_factory import build_default_dashboard
 from composition.kernel_factory import build_event_bus
 from kernel.cognitive_kernel import build_kernel as build_cognitive_kernel
@@ -140,6 +141,8 @@ class KroftConfig:
     )
     desktop_opt_in: bool = False    # P.6: explicit opt-in for desktop (click/type/open_app); default-deny
     embedding: str = "none"         # Slice: "none" (keyword fallback) | "auto" (local Ollama /v1/embeddings if reachable)
+    embedding_model: str = "bge-m3"  # C.4: local Ollama embedding model (ТЗ §6.4). Fallback nomic-embed-text via OllamaEmbeddingAdapter.
+    hybrid_alpha: float = 0.5       # C.4: lexical weight in hybrid score (final = alpha*lexical + (1-alpha)*semantic), ТЗ §6.3/§6.4
     debug: bool = False               # P1-D: print retrieved node/source/chunk + LLM context
     knowledge_corpus: Optional[str] = None  # Live KROFT_KNOWLEDGE corpus dir; default off.
                                             # When set, the corpus is ingested lazily on the
@@ -149,6 +152,14 @@ class KroftConfig:
                                             # loop (research -> gap -> plan -> ingest into TEMP).
                                             # Default OFF so existing boots/tests are untouched;
                                             # operator opts in explicitly.
+    router: bool = False               # ТЗ-ECHO (E1): enable cost-aware model router + ensemble
+                                        # layer over an IModelRouter (OmniRouter). Default OFF so
+                                        # the stock path is untouched.
+    # C.2: multilingual retrieval toggles (ТЗ §7.2). All ON by default; flip any to
+    # False to revert to exact-token behaviour for that transform.
+    search_stemming: bool = True
+    search_transliteration: bool = True
+    search_synonyms: bool = True
 
 class KroftApp:
     """Bootable KROFT_OS: kernel + optional LLM + evolution + optional federation + dashboard.
@@ -172,6 +183,52 @@ class KroftApp:
         self.evolver = SkillEvolver(self._sandbox, self.procedural, min_uses=2, success_threshold=0.8)
         # 2) optional LLM advisor (graceful degradation: None = LLM-free deterministic)
         self.llm: Optional[ILlm] = self._build_llm(self.config.llm)
+        # ТЗ-ECHO (E1): optional cost-aware router+ensemble layer. Default OFF (config.router).
+        # Wraps an IModelRouter (OmniRouter) as an ILlm via RouterAsLlm so the kernel advisor
+        # calls it unchanged. Without --router this branch is skipped and the stock path is
+        # byte-for-byte identical. Requires an actual IModelRouter (--llm auto with providers);
+        # if llm is None or a plain client, router is not engaged (graceful no-op).
+        self.router = None
+        if self.config.router:
+            # G2/G4 fix: router must activate on `--router --llm auto` even when _build_llm
+            # returned a plain single client (no IModelRouter). If we don't already have an
+            # IModelRouter, build a canonical OmniRouter (local-ollama if reachable + optional
+            # cloud via KROFT_LLM_BASE_URL) so the Echo layer has real, named clients to route.
+            try:
+                from composition.omni_router import build_omni_router
+                if not isinstance(self.llm, IModelRouter):
+                    self.llm = build_omni_router(
+                        [], include_local_ollama=True,
+                        timeout=float(os.environ.get("KROFT_LLM_TIMEOUT", "120")),
+                    )
+                from services.model_router.yaml_policy import YamlRouterPolicy
+                from services.model_router.rule_based_router import RuleBasedRouter
+                from services.model_router.router_llm_adapter import RouterAsLlm
+                from services.model_router.classifier import LLMClassifier
+                policy = YamlRouterPolicy.load_default()
+                # E3: optional LLM classifier (default phi3:mini via the same IModelRouter).
+                # Wiring is driven by the `classifier:` section in config/router_policy.yaml
+                # (enabled / model / timeout), with KROFT_CLASSIFIER_MODEL as an env override.
+                # If disabled, or the model is unavailable at call time, the classifier
+                # returns None and the router falls back to rule-based routing (graceful).
+                classifier = None
+                cls_cfg = policy.classifier_config()
+                cls_enabled = bool(cls_cfg.get("enabled", True))
+                if cls_enabled:
+                    cls_model = os.environ.get(
+                        "KROFT_CLASSIFIER_MODEL", str(cls_cfg.get("model", "phi3:mini"))
+                    )
+                    try:
+                        cls_timeout = float(cls_cfg.get("timeout", 30.0))
+                    except (TypeError, ValueError):
+                        cls_timeout = 30.0
+                    classifier = LLMClassifier(self.llm, model=cls_model, timeout=cls_timeout)
+                self.router = RuleBasedRouter(policy, self.llm, classifier=classifier)
+                self.llm = RouterAsLlm(self.router)
+            except Exception as exc:  # never block boot on router misconfig
+                import logging
+                logging.getLogger("run_kroft").warning("router disabled: %s", exc)
+                self.router = None
         # ТЗ-PHASE-M (Task 2): wire the live metrics collector so the kernel's existing
         # RuntimeSupervisor hook (collect->reflect->apply, SOFT-only, O1-guarded) activates.
         # LiveMetricsCollector implements ILiveMetricsCollector; kernel_builder
@@ -274,7 +331,42 @@ class KroftApp:
         self.task_store = TaskStore()  # real component (ТЗ-DAILY-01), empty until agent loop enqueues
         # search over the live knowledge graph (ТЗ-SEARCH-01) — reused for the interactive contour
         from kernel.search import ReferenceSearchService
-        self.search = ReferenceSearchService(self.memory, self.graph)
+        from contracts.text_processing import TokenizeOptions
+        # C.2: build tokenization options from config toggles (stem/translit/synonym)
+        _search_opts = TokenizeOptions(
+            stemming=self.config.search_stemming,
+            transliteration=self.config.search_transliteration,
+            synonyms=self.config.search_synonyms,
+        )
+        self.search = ReferenceSearchService(self.memory, self.graph, opts=_search_opts)
+        # C.4: optional semantic layer (ТЗ §2.2/§6). When config.embedding == "auto",
+        # build an in-memory SemanticIndex (services) + OllamaEmbeddingAdapter (adapters,
+        # local /v1/embeddings) and wire it into the search service. The graph node
+        # embeddings are lazily populated on first semantic query (cache per node_id),
+        # so a missing local model is non-fatal (search degrades to lexical). K1: kernel
+        # never imports services/adapters — composition root owns the wiring.
+        _semantic_index = None
+        _embedder = None
+        if getattr(self.config, "embedding", "none") == "auto":
+            try:
+                from services.semantic_index import SemanticIndex
+                from adapters.ollama_embedding import OllamaEmbeddingAdapter
+                _semantic_index = SemanticIndex()
+                _embedder = OllamaEmbeddingAdapter(model=self.config.embedding_model)
+                self.search = ReferenceSearchService(
+                    self.memory, self.graph, opts=_search_opts,
+                    semantic_index=_semantic_index, embedder=_embedder,
+                    hybrid_alpha=self.config.hybrid_alpha,
+                )
+                self._semantic_index = _semantic_index
+                self._embedder = _embedder
+            except Exception as e:  # wiring-time safety: never crash boot on embedding layer
+                self.logs.append(f"[C.4] semantic layer unavailable, lexical-only: {e}")
+                self._semantic_index = None
+                self._embedder = None
+        else:
+            self._semantic_index = None
+            self._embedder = None
         # 6b) Agents v0.1 (ADR-102, ТЗ-AGENT-BEHAVIOUR-01): wire specialised agents into the
         # existing Orchestrator dispatch path. Each agent reuses the live search service;
         # LLM is optional (graceful, I-09). No new port/layer — composition-only wiring.
@@ -506,15 +598,34 @@ class KroftApp:
         }
 
     # ---- P1-A / P1-B: semantic + hybrid retrieval over restored Foundation ----
+    @staticmethod
+    def _normalize_source(src: str) -> str:
+        """C.1: strip the ReferenceSearchService layer prefix (graph:/semantic:/episodic:/
+        normative:) so provenance stores the REAL node id, not the transport prefix.
+        Deterministic; unknown prefixes pass through unchanged."""
+        if not src:
+            return src
+        for prefix in ("graph:", "semantic:", "episodic:", "normative:"):
+            if src.startswith(prefix):
+                return src[len(prefix):]
+        return src
+
     def _retrieved_context(self, hits):
         """P1-D: build (node_id, source, chunk_text) list from hybrid/semantic hits.
 
-        Reads chunk text straight from the graph node meta (the restored
-        Foundation), so the LLM sees RETRIEVED knowledge, not just the query.
+        Accepts BOTH shapes legacy code produces:
+          - hybrid_search -> [(node_id, score), ...]
+          - ReferenceSearchService -> [SearchHit, ...] wrapped as [(SearchHit, 0.0), ...]
+        C.1: extracts the real node id from a SearchHit and normalizes the layer prefix.
         """
         ctx = []
         for item in hits:
             nid = item[0] if isinstance(item, (list, tuple)) else item
+            # C.1: SearchHit carries the node id in `.source` (e.g. "graph:<id>");
+            # a bare string is already a node id (possibly prefixed).
+            if not isinstance(nid, str):
+                nid = getattr(nid, "source", "") or ""
+            nid = self._normalize_source(nid)
             node = self.graph.get_node(nid)
             meta = (node.metadata if node else {}) or {}
             src = meta.get("source", {}) or {}
@@ -970,6 +1081,36 @@ class KroftApp:
               f"skills in memory={self.dashboard.render_json(snaps[-1]) is not None}")
         return snaps
 
+    # ----- C.4: semantic cache (lazy, one-shot) -----------------------------
+    def _ensure_semantic_cache(self) -> None:
+        """Populate ``self._semantic_index`` from the live graph ONCE (ТЗ §2.3).
+
+        Node text = label + meta (stemmed/synonym-expanded via normalize_tokens is NOT
+        needed here — the embedder sees raw text). Skips nodes already cached. On any
+        embedding failure the cache stays partial and search degrades to lexical (ТЗ §6.3).
+        """
+        if self._semantic_index is None or self._embedder is None:
+            return
+        if getattr(self, "_semantic_filled", False):
+            return
+        self._semantic_filled = True  # set before loop: a single failed query must not retry forever
+        if self.graph is None:
+            return
+        try:
+            for n in self.graph.nodes():
+                nid = n.id
+                if nid in self._semantic_index:
+                    continue
+                text = " ".join([str(n.label or ""), str(n.meta or "")]).strip()
+                if not text:
+                    continue
+                try:
+                    self._semantic_index.add(nid, self._embedder.embed(text))
+                except Exception as e:  # per-node failure -> skip, keep lexical for this node
+                    self.logs.append(f"[C.4] embed failed for {nid}: {e}")
+        except Exception as e:
+            self.logs.append(f"[C.4] semantic cache build aborted: {e}")
+
     def interactive_query(self, query: str) -> str:
         """ТЗ-DAILY-01: minimal interactive contour + Agents v0.1 (ADR-102).
 
@@ -983,6 +1124,8 @@ class KroftApp:
         from contracts.i_orchestrator import OrchestrationGoal
         task_id = f"task-{len(self.task_store.list()) + 1}"
         self.task_store.add(task_id, "running")
+        # C.4: lazily populate the semantic node-cache once (ТЗ §2.3 — never per-query).
+        self._ensure_semantic_cache()
         # Agents v0.1: route recognised agent intents.
         capability = self._route_capability(query)
         # Phase C (Wave C6): routed-capability делегируется через AgentRuntime.delegate_step
@@ -992,12 +1135,16 @@ class KroftApp:
             goal = OrchestrationGoal(goal_id=task_id, capability=capability, payload=query)
             outcome = self.agent_runtime.delegate_step(task_id, goal)
             self.task_store.update(task_id, "done" if outcome.success else "failed")
+            if outcome.detail:
+                self._save_memory_artifact(query, outcome.detail, list(outcome.sources))
             return outcome.detail if outcome.success else f"[no answer] {outcome.detail}"
         if capability is not None and getattr(self, "agent_executor", None) is not None \
                 and capability in self.agent_executor._by_capability:
             goal = OrchestrationGoal(goal_id=task_id, capability=capability, payload=query)
             outcome = self.orchestrator.dispatch(goal)
             self.task_store.update(task_id, "done" if outcome.success else "failed")
+            if outcome.detail:
+                self._save_memory_artifact(query, outcome.detail, list(outcome.sources))
             if outcome.success:
                 return outcome.detail
             return f"[no answer] {outcome.detail}"
@@ -1008,8 +1155,22 @@ class KroftApp:
             wf = self.workflow_coordinator.run(wf)
             self.task_store.update(task_id, "done" if wf.status == "done" else "failed")
             if wf.status == "done" and wf.plan:
-                return wf.plan[0].output
-            return f"[no answer] workflow {wf.status}: {wf.plan[0].error if wf.plan else 'empty'}"
+                detail = wf.plan[0].output
+                if detail:
+                    # C.3: aggregate REAL provenance from every step's sources
+                    # (deterministic dedup, preserve first-seen order). Step.sources
+                    # is now populated by WorkflowCoordinator.run from TaskOutcome.sources.
+                    _seen = []
+                    for _s in wf.plan:
+                        for _src in (getattr(_s, "sources", ()) or ()):
+                            _n = self._normalize_source(str(_src).strip())
+                            if _n and _n not in _seen:
+                                _seen.append(_n)
+                    self._save_memory_artifact(query, detail, _seen)
+                return detail
+            detail = f"[no answer] workflow {wf.status}: {wf.plan[0].error if wf.plan else 'empty'}"
+            self._save_memory_artifact(query, detail, [])
+            return detail
         # Backward-compatible path for non-agent intents.
         self.kernel.tick(Intent(id=task_id, text=query, confidence=ConfidenceScore(0.8),
                                 provenance=Provenance(source="interactive", actor="user")))
@@ -1050,12 +1211,83 @@ class KroftApp:
             answer = getattr(resp, "text", "") or ""
             if debug:
                 print(f"[debug][llm-answer] {answer[:200]}")
+            self._save_memory_artifact(query, answer, [c["node_id"] for c in ctx])
             self._save_knowledge()  # ТЗ-KNOWLEDGE-PERSIST-01: persist after each query
             return answer
         # --llm none (non-generative mode): return retrieved citations (backward compatible)
         lines = [f"[answer] {c['source']} (p{c['pages']}) {c['node_id']}" for c in ctx]
         self._save_knowledge()
         return "\n".join(lines)
+
+    # ── C: K4 frozen-artifact auto-save (ТЗ-KNOWLEDGE-PERSIST / user request) ──
+    # Every generated answer is persisted as a markdown note in <vault>/_KROFT_MEMORIES/
+    # (or <repo>/_KROFT_MEMORIES when no --vault) with YAML meta (date/model/source_notes)
+    # + [[wiki-links]] back to the retrieved foundation nodes. This turns the passive
+    # vault into a live chronicle: future boots can re-ingest these notes as experience.
+    def _save_memory_artifact(self, query: str, answer: str,
+                               citations: List[str]) -> Optional[str]:
+        if not answer or not answer.strip():
+            return None  # ТЗ §24: empty answer -> no artifact
+        import datetime as _dt
+        import re as _re
+        vault = self.config.vault or os.path.dirname(os.path.abspath(__file__))
+        out_dir = os.path.join(vault, "_KROFT_MEMORIES")
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+        except Exception as exc:  # noqa: BLE001
+            self.logs.append(f"K4 artifact save failed (makedirs): {exc}")
+            return None
+        # C.1 provenance normalization (ТЗ §8/§16): strip transport prefix + DETERMINISTIC dedup
+        # (preserve first-seen order). Never invent sources — only real retrieved node ids here.
+        seen = []
+        for c in citations or []:
+            nid = self._normalize_source(str(c).strip())
+            if nid and nid not in seen:
+                seen.append(nid)
+        import itertools as _it
+        if not hasattr(self, "_artifact_seq"):
+            self._artifact_seq = _it.count(1)  # monotonic per-instance -> unique filenames
+        ts = _dt.datetime.now(_dt.timezone.utc)
+        slug = _re.sub(r"[^0-9a-zA-Z]+", "-", (query or "query")[:40]).strip("-").lower() or "note"
+        # C.1 unique filename: timestamp(us) + per-instance seq so two writes in the same
+        # microsecond never collide (ТЗ §15/§34). Loop on collision for absolute safety.
+        fpath = None
+        for _ in range(5):
+            seq = next(self._artifact_seq)
+            fname = f"{ts.strftime('%Y%m%d-%H%M%S-%f')}-{seq}-{slug}.md"
+            fname = os.path.basename(fname)  # path-traversal guard (ТЗ §38/§39)
+            cand = os.path.join(out_dir, fname)
+            if not os.path.abspath(cand).startswith(os.path.abspath(out_dir) + os.sep):
+                self.logs.append(f"K4 artifact save blocked (path traversal): {fname}")
+                return None
+            if not os.path.exists(cand):
+                fpath = cand
+                break
+        if fpath is None:
+            self.logs.append("K4 artifact save failed (filename collision)")
+            return None
+        model = os.environ.get("KROFT_LLM_MODEL") or self.config.llm
+        links = "\n".join(f"- [[{c}]]" for c in seen) or "- (no retrieved sources)"
+        source_yaml = "".join(f"  - {c}\n" for c in seen) or "  []\n"
+        body = (
+            f"---\n"
+            f"date: {ts.isoformat()}\n"
+            f"model: {model}\n"
+            f"source_notes:\n{source_yaml}"
+            f"---\n\n"
+            f"# KROFT memory artifact\n\n"
+            f"**Query:** {query}\n\n"
+            f"**Answer:**\n{answer}\n\n"
+            f"## Retrieved sources\n{links}\n"
+        )
+        try:
+            with open(fpath, "w", encoding="utf-8") as fh:
+                fh.write(body)
+            self.logs.append(f"K4 artifact saved: {fname} sources={len(seen)}")
+            return fpath
+        except Exception as exc:  # noqa: BLE001 — ТЗ §36: log, never swallow silently
+            self.logs.append(f"K4 artifact save failed: {exc}")
+            return None
 
     @staticmethod
     def _route_capability(query: str) -> Optional[str]:
@@ -1143,13 +1375,16 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
     p.add_argument("--autonomous-knowledge", dest="autonomous_knowledge", action="store_true",
                    help="Stage 5: enable the autonomous knowledge self-heal loop "
                         "(research -> gap -> plan -> ingest into TEMP). Default OFF.")
+    p.add_argument("--router", dest="router", action="store_true", default=False,
+                   help="ТЗ-ECHO (E1): enable cost-aware model router + ensemble over an "
+                        "IModelRouter (OmniRouter). Requires --llm auto (providers). Default OFF.")
     a = p.parse_args(argv)
     return KroftConfig(
         node_id=a.node_id, llm=a.llm, federation=a.federation,
         ticks=a.ticks, run_demo=not a.no_demo, vault=a.vault, interactive=a.interactive,
         agent_runtime=a.agent_runtime, query=a.query,
         knowledge_snapshot=a.knowledge_snapshot, debug=a.debug, embedding=a.embedding,
-        autonomous_knowledge=a.autonomous_knowledge,
+        autonomous_knowledge=a.autonomous_knowledge, router=a.router,
     )
 
 
@@ -1159,7 +1394,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     if config.interactive:
         app.run_interactive()
     elif config.query:
-        print(app.interactive_query(config.query))
+        answer = app.interactive_query(config.query)
+        # NOTE: interactive_query already persists the K4 artifact with REAL provenance
+        # (source_notes from retrieval). A second save here with [] would clobber that
+        # provenance — do NOT re-save (C.1: provenance must survive the Agent->Outcome hop).
+        print(answer)
     elif config.run_demo:
         app.run_demo()
     else:
