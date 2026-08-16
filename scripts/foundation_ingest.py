@@ -472,7 +472,20 @@ class GapPlanner:
             if stem in present:
                 continue  # already in graph
             sidecar = self._extracted / f"{stem}.json"
-            has_sidecar = sidecar.is_file()
+            # Stage 4.7: a sidecar counts as actionable ONLY if it is a valid,
+            # fully-extracted work (status==OK AND chunks>0). EXTRACTION_TIMEOUT /
+            # EXTRACTION_FAILED sidecars (0 chunks) must NOT be advertised as
+            # actionable gaps — build_incremental would safely skip them anyway,
+            # but the planner should not report false-positive gaps.
+            # Identity semantics are UNCHANGED: still exact catalog/source stem.
+            has_sidecar = False
+            if sidecar.is_file():
+                try:
+                    sd = json.loads(sidecar.read_text(encoding="utf-8"))
+                    sm = sd.get("meta") or {}
+                    has_sidecar = sm.get("status") == "OK" and len(sd.get("chunks", [])) > 0
+                except Exception:
+                    has_sidecar = False
             # goal relevance: overlap of catalog title/author tokens with goal tokens
             hay = _tokenize((entry.get("title", "") + " " + entry.get("author", "")).lower())
             overlap = len(goal_toks & set(hay)) if goal_toks else 0

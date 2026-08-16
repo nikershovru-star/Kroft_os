@@ -39,18 +39,71 @@ def _pdf_pages(path: Path) -> int:
         return -1
 
 
-def extract_text(path: Path) -> tuple[str, int, list[str]]:
-    """Return (joined_text, page_count, per_page_text). Empty text => scanned."""
+# --- Stage 4.8 extraction hardening (ТЗ-KNOWLEDGE-EXTRACT-HARDEN-01) ---
+# OLD behaviour: a single 45s GLOBAL timeout on the whole document killed
+# extraction for any large-but-valid text PDF (e.g. 710-page Kant took 136s
+# and was marked EXTRACTION_TIMEOUT). NEW behaviour: each PDF is extracted by
+# ONE pooled worker that opens the PDF once and extracts all pages (fast, like
+# the pre-4.8 bulk path) — but with (a) per-page try/except so a CRASHING page
+# is reported as a diagnostic failure (failed_pages) instead of killing the doc,
+# and (b) a DOCUMENT_TIMEOUT watchdog (1800s, not 45s) so a genuinely hung doc
+# is aborted without falsely failing valid large books. No 45s global timeout.
+import multiprocessing as _mp
+
+PAGE_TIMEOUT = 20          # seconds; a single page slower than this is pathological
+DOCUMENT_TIMEOUT = 1800    # seconds; whole-document watchdog (30 min), replaces old 45s
+_NWORKERS = max(1, min(4, (_mp.cpu_count() or 1)))
+
+
+def _extract_all_pages(path: str) -> tuple[list[str], list[int], "object"]:
+    """Pool worker: open PDF ONCE, extract every page, return (texts, failed, err).
+
+    Per-page try/except makes a CRASHING page a diagnostic failure (appended to
+    ``failed``) while the rest of the document still extracts. A hanging page is
+    caught by the caller's DOCUMENT_TIMEOUT watchdog.
+    """
+    try:
+        reader = pypdf.PdfReader(path)
+        texts: list[str] = []
+        failed: list[int] = []
+        for i, pg in enumerate(reader.pages):
+            try:
+                texts.append(pg.extract_text() or "")
+            except Exception:
+                texts.append("")
+                failed.append(i)
+        return (texts, failed, None)
+    except Exception as e:  # noqa: BLE001 - document-level failure is diagnostic
+        return ([], [], str(e)[:200])
+
+
+def extract_text(path: Path) -> tuple[str, int, list[str], list[int]]:
+    """Return (joined_text, page_count, per_page_text, failed_pages).
+
+    Page-safe: opened once, extracted per page with crash isolation. A crashing
+    page is reported in ``failed_pages`` (diagnostic). The 45s global document
+    timeout is GONE — replaced by DOCUMENT_TIMEOUT (1800s) so valid large PDFs
+    complete. Empty text => scanned (handled by caller).
+    """
     if pypdf is None:
-        return "", _pdf_pages(path), []
-    reader = pypdf.PdfReader(str(path))
-    pages_text = []
-    for pg in reader.pages:
-        try:
-            pages_text.append(pg.extract_text() or "")
-        except Exception:
-            pages_text.append("")
-    return "\n".join(pages_text), len(pages_text), pages_text
+        return "", _pdf_pages(path), [], []
+    try:
+        n = len(pypdf.PdfReader(str(path)).pages)
+    except Exception:
+        return "", 0, [], []
+    ctx = _mp.get_context("spawn")
+    try:
+        with ctx.Pool(processes=_NWORKERS) as pool:
+            res = pool.apply_async(_extract_all_pages, (str(path),))
+            try:
+                per_page, failed, err = res.get(timeout=DOCUMENT_TIMEOUT)
+            except Exception:  # watchdog: doc hung past DOCUMENT_TIMEOUT
+                return "", n, ["" ] * n, list(range(n))
+    except Exception:
+        return "", n, ["" ] * n, list(range(n))
+    if err:
+        return "", n, ["" ] * n, list(range(n))
+    return "\n".join(per_page), n, per_page, failed
 
 
 def chunk_text(text: str, pages_text: list[str], max_chars: int = 2600) -> list[dict]:
@@ -84,13 +137,22 @@ def process_file(path: Path) -> dict:
     }
     pages = _pdf_pages(path)
     meta["pages"] = pages
-    text, page_count, pages_text = extract_text(path)
+    # Stage 4.8: extract_text now returns failed_pages (page-level diagnostics)
+    text, page_count, pages_text, failed_pages = extract_text(path)
     meta["text_length"] = len(text)
+    meta["failed_pages"] = failed_pages
     if len(text.strip()) < 200:
         meta["status"] = "EXTRACTION_FAILED"   # scanned / no OCR layer
         meta["ocr_required"] = True
         meta["full_text"] = False
         chunks = []
+    elif failed_pages:
+        # valid text recovered for most pages, but some pages failed ->
+        # explicit PARTIAL status (never OK with missing pages; ТЗ STEP3 contract)
+        meta["status"] = "PARTIAL"
+        meta["ocr_required"] = False
+        meta["full_text"] = False
+        chunks = chunk_text(text, pages_text)
     else:
         meta["status"] = "OK"
         meta["ocr_required"] = False
@@ -104,8 +166,6 @@ def process_file(path: Path) -> dict:
 
 
 def main() -> int:
-    import multiprocessing as mp
-
     pdfs = sorted(FOUNDATION.glob("**/*.pdf"))
     force = "--force" in sys.argv
     results = []
@@ -113,51 +173,38 @@ def main() -> int:
         side = OUT_DIR / (p.stem + ".json")
         if side.exists() and not force:
             continue
-        # per-file timeout: a hung pypdf on a big/scanned PDF must not block the run
-        q = mp.Queue()
-        proc = mp.Process(target=_worker, args=(p, q))
-        proc.start()
-        proc.join(timeout=45)
-        if proc.is_alive():
-            proc.kill()
-            proc.join()
-            meta = {
+        # Stage 4.8: NO global 45s document timeout. extract_text() now isolates
+        # each page in its own subprocess with PAGE_TIMEOUT, so a large-but-valid
+        # PDF completes and only a pathological page is reported as failed.
+        # (DOCUMENT_TIMEOUT is a last-resort watchdog constant, not an auto-kill.)
+        try:
+            meta = process_file(p)
+            results.append(meta)
+        except Exception as e:
+            results.append({
                 "path": str(p.relative_to(FOUNDATION)),
                 "filename": p.name,
                 "size": p.stat().st_size,
                 "checksum": _checksum(p),
                 "pages": _pdf_pages(p),
                 "text_length": 0,
-                "status": "EXTRACTION_TIMEOUT",
+                "status": "EXTRACTION_FAILED",
+                "error": str(e)[:200],
                 "ocr_required": True,
                 "full_text": False,
                 "chunk_count": 0,
-            }
-            out = OUT_DIR / (p.stem + ".json")
-            out.write_text(json.dumps({"meta": meta, "chunks": []}, ensure_ascii=False, indent=1), encoding="utf-8")
-            results.append(meta)
-            print(f"  TIMEOUT: {p.name}")
-            continue
-        meta = q.get() if not q.empty() else None
-        if meta:
-            results.append(meta)
+                "failed_pages": [],
+            })
 
     ok = [r for r in results if r["status"] == "OK"]
-    fail = [r for r in results if r["status"] != "OK"]
-    print(f"Discovery+Extraction: {len(pdfs)} pdfs | OK={len(ok)} FAILED={len(fail)}")
+    partial = [r for r in results if r["status"] == "PARTIAL"]
+    fail = [r for r in results if r["status"] not in ("OK", "PARTIAL")]
+    print(f"Discovery+Extraction: {len(pdfs)} pdfs | OK={len(ok)} PARTIAL={len(partial)} FAILED={len(fail)}")
     for r in fail:
         print(f"  {r['status']}: {r['filename']} ({r['pages']}p)")
-    total_chunks = sum(r.get("chunk_count", 0) for r in ok)
+    total_chunks = sum(r.get("chunk_count", 0) for r in ok + partial)
     print(f"Total extractable chunks: {total_chunks}")
     return 0
-
-
-def _worker(path: Path, q: "mp.Queue") -> None:
-    try:
-        q.put(process_file(path))
-    except Exception as e:
-        q.put({"path": str(path), "filename": path.name, "status": "EXTRACTION_FAILED",
-                "error": str(e), "chunk_count": 0})
 
 
 if __name__ == "__main__":
