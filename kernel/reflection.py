@@ -26,6 +26,7 @@ from contracts.cognitive_domain import (
     ProvenanceType,
     ReflectionReport,
     SemanticFact,
+    SelfObservationRecord,
 )
 from contracts.i_reflection import IReflectionEngine
 
@@ -122,3 +123,37 @@ class ReferenceReflectionEngine(IReflectionEngine):
             if ep.id == episode_id:
                 return ep.summary
         return episode_id
+
+    def observe_scale(self,
+                      total_nodes: int,
+                      touched_node_ids: List[str],
+                      activity_distribution: Optional[Dict[str, float]] = None,
+                      resolution_level: str = "NODE") -> "SelfObservationRecord":
+        """ADR-028 Stage 3 — cosmic perspective (operational self-awareness).
+
+        Computes where the current task sits relative to the WHOLE knowledge base
+        and total system activity. Deterministic (I-09). Ratios keep full precision
+        so a small task (e.g. 3 of 15000 nodes) reports ~0.0002, never 0.
+
+        Args:
+            total_nodes: total node count in the graph (from graph query engine).
+            touched_node_ids: node ids the current task touched.
+            activity_distribution: optional {subsystem: share}; shares are normalised
+                to sum to 1.0 (missing -> empty distribution, reported as-is).
+            resolution_level: the ADR-028 Stage 1 level the agent operates at.
+        """
+        touched = len(set(touched_node_ids)) if touched_node_ids else 0
+        ratio = (touched / float(total_nodes)) if total_nodes > 0 else 0.0
+        activity: List[tuple] = []
+        if activity_distribution:
+            total = float(sum(activity_distribution.values())) or 1.0
+            activity = sorted(
+                (k, round(v / total, 6)) for k, v in activity_distribution.items()
+            )
+        return SelfObservationRecord(
+            total_nodes=total_nodes,
+            touched_nodes=touched,
+            touched_node_ratio=round(ratio, 9),
+            activity_by_subsystem=tuple(activity),
+            resolution_level=resolution_level,
+        )

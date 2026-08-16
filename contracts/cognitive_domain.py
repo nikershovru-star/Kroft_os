@@ -401,6 +401,31 @@ class ReflectionReport:
 
 
 @dataclass(frozen=True)
+class SelfObservationRecord:
+    """ADR-028 Stage 3 — Cosmic perspective for the Self-Observer.
+
+    Operational self-awareness: where the current task sits relative to the WHOLE
+    knowledge base and total system activity. Enables the system to report, e.g.,
+    "AgentLoop — part of Autonomous Runtime inside Cognitive Runtime. 72% of activity
+    is retrieval/execution; self-improvement is practically inactive."
+
+    Deterministic (I-09): identical inputs -> identical record. Ratios are computed
+    with full precision (never silently rounded to 0 for small tasks).
+    """
+
+    total_nodes: int = 0
+    touched_nodes: int = 0
+    # share of the graph touched by the current task = touched_nodes / total_nodes
+    touched_node_ratio: float = 0.0
+    # (subsystem, share) distribution of activity, e.g.
+    # (("retrieval", 0.45), ("execution", 0.27), ("self_improvement", 0.01))
+    activity_by_subsystem: "Tuple[Tuple[str, float], ...]" = ()
+    # the resolution level the agent is currently operating at (ADR-028 Stage 1)
+    resolution_level: str = "NODE"
+
+
+
+@dataclass(frozen=True)
 class Action:
     """An executable action routed to an agent/model (I-10 Contract Boundary)."""
     id: str
