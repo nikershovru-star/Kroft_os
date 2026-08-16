@@ -19,9 +19,35 @@ from typing import Optional
 from composition.container_builder import build_container
 from composition.kernel_factory import build_kernel
 from adapters.http_server import KROFT_OSServer
+from adapters.tcp_event_bus import TcpEventBus  # PHASE 5: reuse existing distributed bus (ADR-030)
 from services.kroft_agent_interface import KroftAgentInterface
 
 from runtime.kroft_runtime import KroftRuntime, RuntimeConfig
+
+
+def _fed_bus_factory(container, config: RuntimeConfig):
+    """PHASE 5 — build + join the distributed event bus for a Local KROFT Network.
+
+    REUSE-FIRST (K5): uses the EXISTING ``TcpEventBus`` (adapters/tcp_event_bus.py,
+    ADR-030) — no second transport/federation system. The bus implements
+    IEventBus, so CognitiveKernel (build_kernel) and KroftRuntime see it as the
+    normal event bus; only now events propagate across nodes.
+
+    K1 note: this factory lives in the ``composition`` layer (permitted to import
+    adapters), so ``runtime`` stays axis-clean.
+    """
+    port = config.network_port or (config.api_port + 1)
+    bus = TcpEventBus(config.node_id, port, host=config.host)
+    # TcpEventBus starts its listener inside join() (call even with an empty
+    # peer list so the server socket is open and other nodes can connect to us).
+    bus.join(list(config.peers))
+    # Register as IEventBus so container.resolve("IEventBus") returns the mesh bus
+    # for any later consumers (and KroftRuntime.stop() tears it down via the iface).
+    try:
+        container.register_instance("IEventBus", bus)
+    except Exception:
+        pass
+    return bus
 
 
 def build_runtime(
@@ -32,6 +58,8 @@ def build_runtime(
     host: str = "127.0.0.1",
     api_port: int = 8080,
     federation: bool = False,
+    network_port: int = 0,
+    peers: Optional[tuple] = None,
     llm: str = "none",
     embedding: str = "none",
 ) -> KroftRuntime:
@@ -40,6 +68,10 @@ def build_runtime(
     REUSE-FIRST: delegates to the existing composition root (build_container)
     and CognitiveKernel factory (build_kernel) plus the existing KROFT_OSServer.
     No second boot sequence, no duplicated wiring.
+
+    PHASE 5 federation: when ``federation=True``, a distributed TcpEventBus (the
+    existing ADR-030 substrate) is injected as the event bus and joined to
+    ``peers`` — turning this Runtime into a node of a Local KROFT Network.
     """
     cfg = config or RuntimeConfig(
         node_id=node_id,
@@ -47,6 +79,8 @@ def build_runtime(
         host=host,
         api_port=api_port,
         federation=federation,
+        network_port=network_port,
+        peers=peers or (),
         llm=llm,
         embedding=embedding,
     )
@@ -56,4 +90,5 @@ def build_runtime(
         build_kernel=build_kernel,
         server_factory=KROFT_OSServer,
         agent_interface_factory=KroftAgentInterface,
+        event_bus_factory=_fed_bus_factory if federation else None,
     )

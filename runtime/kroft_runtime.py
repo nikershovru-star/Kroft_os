@@ -42,9 +42,13 @@ class RuntimeConfig:
     vault: str = "./nodes/kroft-local"
     host: str = "127.0.0.1"
     api_port: int = 8080
-    # Federation is wired in a later phase; PHASE 1 leaves it off by default
-    # (ТЗ PHASE 1 scope: single independent runtime + HTTP API, no federation yet).
+    # Federation (PHASE 5): when enabled, this Runtime joins a Local KROFT
+    # Network via the existing distributed event bus (TcpEventBus, ADR-030).
+    # network_port = 0 means "use api_port + 1" so a single node_id maps to one
+    # HTTP port + one federation port without manual juggling.
     federation: bool = False
+    network_port: int = 0
+    peers: tuple = ()
     # Optional LLM/embedding wiring is deferred to later phases; PHASE 1 boots
     # read-only-capable runtime (graph + semantic index from foundation snapshot).
     llm: str = "none"
@@ -57,6 +61,7 @@ ContainerBuilder = Callable[[str], Any]
 KernelBuilder = Callable[[Any, Any], Any]
 ServerFactory = Callable[..., Any]
 AgentInterfaceFactory = Callable[..., Any]
+EventBusFactory = Callable[[Any, Any], Any]
 
 
 class KroftRuntime:
@@ -79,12 +84,14 @@ class KroftRuntime:
         build_kernel: Optional[KernelBuilder] = None,
         server_factory: Optional[ServerFactory] = None,
         agent_interface_factory: Optional[AgentInterfaceFactory] = None,
+        event_bus_factory: Optional[EventBusFactory] = None,
     ) -> None:
         self.config = config or RuntimeConfig()
         self._build_container = build_container
         self._build_kernel = build_kernel
         self._server_factory = server_factory
         self._agent_interface_factory = agent_interface_factory
+        self._event_bus_factory = event_bus_factory
         self._container: Optional[Any] = None
         self._kernel: Optional[Any] = None
         self._server: Optional[Any] = None
@@ -108,8 +115,15 @@ class KroftRuntime:
         #    build_container already loads the foundation snapshot (graph +
         #    index + semantic vectors) when KROFT_KNOWLEDGE_FOUNDATION exists.
         self._container = self._build_container(self.config.vault)
-        # 2) Shared event bus (resolved from container, single instance).
-        bus = self._container.resolve("IEventBus")
+        # 2) Shared event bus (single instance). PHASE 5: when a federation bus
+        #    factory is injected, it builds the distributed TcpEventBus (joined
+        #    to peers); otherwise fall back to the in-memory IEventBus resolved
+        #    from the container (composition root default). K1-clean: runtime
+        #    never imports adapters — the factory comes from the composition layer.
+        if self._event_bus_factory is not None:
+            bus = self._event_bus_factory(self._container, self.config)
+        else:
+            bus = self._container.resolve("IEventBus")
         # 3) CognitiveKernel (composition/kernel_factory.build_kernel).
         self._kernel = self._build_kernel(bus, self._container)
         # 4) Universal Agent Interface (PHASE 2) — delegate facade over the
@@ -144,6 +158,14 @@ class KroftRuntime:
             except Exception:
                 pass
             self._server = None
+        # PHASE 5: if a distributed event bus (TcpEventBus) was wired by the
+        # composition layer for federation, stop it to release the socket and
+        # leave the mesh. K1-clean: only resolve + call the IEventBus interface.
+        if self._container is not None and self._container.has("IEventBus"):
+            try:
+                self._container.resolve("IEventBus").stop()
+            except Exception:
+                pass
         # No kernel.shutdown exists in the current API; the kernel holds no
         # background threads of its own in this boot path, so dropping refs is
         # sufficient (ТЗ STEP 7: no orphan threads). Event bus is in-memory.

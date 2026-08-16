@@ -107,6 +107,16 @@ class TcpEventBus(IDistributedEventBus):
                 break
             except Exception:
                 continue
+            # Register the INCOMING peer so this node's fan-out (publish_sync ->
+            # self._peers) reaches it, and peers() reports a full mesh. Without
+            # this, only the side that initiated connect() saw the peer (ТЗ PHASE 5
+            # blocker: one-directional mesh). Keyed by the peer's socket address.
+            try:
+                peer_addr = "%s:%d" % conn.getpeername()
+                with self._peers_lock:
+                    self._peers[peer_addr] = conn
+            except OSError:
+                pass
             self._spawn_reader(conn)
 
     def _connect_peer(self, seed: str, retries: int = 5, delay: float = 0.1) -> None:
