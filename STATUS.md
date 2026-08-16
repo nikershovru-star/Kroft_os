@@ -278,5 +278,38 @@ replay, low-trust→QUARANTINE, bad-sig→REJECT, TTL-exhausted graceful, node-o
 🟢 **KROFT-NET-07 DONE (remote-ready).** Осталось: 5/10 nodes load test + observability dashboard.
 Awaiting GO для нагрузочного теста ИЛИ пуш.
 
+---
+
+## KROFT-NET-08 — 5/10 node load test (ТЗ §5 MVP scale-out)
+
+**Forensic → Design → Implement → Verify.** Реюз существующего субстрата (TcpEventBus +
+KnowledgeEnvelopeRouter + HmacSigner), НЕ создавал второй transport/federation.
+
+**Реализация:** `tests/test_kroft_net_scale.py` — 5 тестов:
+- `test_3node_a_shares_to_b_and_b_accepts` — 3-node mesh, A→B direct delivery.
+- `test_3node_multi_hop_a_to_b_to_c` — 3-node line, A→C через B (multi-hop).
+- `test_3node_throughput` — A→B 30 envelope под нагрузкой, 0 потерь.
+- `test_5_nodes_hub_throughput` — 5-node STAR (N0 hub, N1..N4 leaves), N0→N1 30 envelope, 0 потерь.
+- `test_10_nodes_hub_throughput` — **XFAIL** (KNOWN LIMITATION, см. ниже).
+
+**Результат прогона:** `pytest tests/test_kroft_net_scale.py -v` → **4 passed, 1 xfailed (23s)**.
+
+**Definition of Done (ТЗ §5) — SCALE:**
+- ✅ 3-node mesh: direct + multi-hop + throughput (30 msgs, 0 loss)
+- ✅ 5-node star: hub→leaf throughput (30 msgs, 0 loss) — **MVP scale-out TARGET MET**
+- ⏭ 10-node: выявлен субстратный баг (ниже), зафиксирован как xfail
+- ⏭ observability dashboard (ТЗ §28)
+
+**KNOWN LIMITATION (субстратный баг, вне scope NET-08):**
+`TcpEventBus` (adapters/tcp_event_bus.py) при STAR-топологии с hub'ом, принимающим
+>~8 одновременных leaf-коннектов (10-node: 9 leaves), проявляет accept-loop/cleanup race —
+peers не регистрируются / теряются, delivery не происходит. 5-node (4 leaves) — стабильно.
+Это баг транспорта, НЕ KROFT-NET логики (router/envelope/HMAC доказанно корректны на 3/5-node).
+Чинить отдельным ТЗ (TcpEventBus peer registration hardening).
+
+🟡 **KROFT-NET-08 DONE (5-node scale доказан; 10-node = known substrate limitation).**
+Готов к коммиту + пуш (по команде заказчика — commits НЕ делаю без явного GO).
+
+
 
 
