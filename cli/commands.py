@@ -2,7 +2,11 @@
 
 Each command owns its Kernel lifecycle: build (or receive) a DI container,
 drive Kernel init -> start -> stop, print a JSON result to stdout. There is NO
-long-running daemon -- every invocation spins the Kernel up and tears it down.
+long-running daemon for single-Kernel commands -- they spin the Kernel up and
+tear it down. The ONE exception is `network start`, which (by default) enters
+daemon-mode: it boots N independent KROFT nodes and keeps the process alive
+(nodes LIVE) until Ctrl+C, so agents / SkillEvolver can run against them.
+Pass `network start --no-block` for the smoke-test (boot proof + exit).
 
 Stage 15: every command first loads ``kroft_os.yaml`` (or .json) from the
 vault via the ``IFileSystem`` port and merges it with CLI args, so the config
@@ -14,7 +18,9 @@ import atexit
 import asyncio
 import json
 import os
+import signal
 import sys
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -568,6 +574,24 @@ def _net_start(args) -> None:
 
     print(f"\nKROFT Local Network — {len(_NETWORK)} node(s) ONLINE")
     print("  (Hermes can now observe via the bridge; each node is independent.)")
+
+    # Daemon-mode (default): keep the process alive so the nodes stay live
+    # (agents can be driven against them, SkillEvolver can evolve, etc.).
+    # Pass --no-block for the old smoke-test behaviour (boot proof + exit).
+    if getattr(args, "no_block", False):
+        return
+    _stop_evt = threading.Event()
+
+    def _on_sigint(signum, frame):  # noqa: ARG001
+        print("\n[network] SIGINT received — stopping nodes...", file=sys.stderr)
+        _stop_evt.set()
+
+    signal.signal(signal.SIGINT, _on_sigint)
+    print("  (daemon-mode: nodes are LIVE. Ctrl+C to stop the network.)")
+    try:
+        _stop_evt.wait()
+    finally:
+        _net_stop()
 
 
 def _net_stop() -> None:

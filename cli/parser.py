@@ -187,6 +187,9 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     pn_start.add_argument("--snapshot", default=None,
                           help="Knowledge snapshot shared read-only by all nodes "
                                "(default: KROFT_KNOWLEDGE_FOUNDATION/_snapshot.json)")
+    pn_start.add_argument("--no-block", action="store_true",
+                          help="Smoke-test mode: boot nodes, print status, exit "
+                               "(default is daemon-mode: keep nodes LIVE until Ctrl+C)")
     pn_stop = pn_subs.add_parser("stop", help="Stop all running nodes")
     pn_stop.add_argument("--vault", default=None,
                          help="Path to the vault directory (or read from kroft_os.yaml)")
