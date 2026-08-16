@@ -156,6 +156,39 @@ def build_parser(loader=None) -> argparse.ArgumentParser:
     psch.add_argument("--vault", default=None,
                       help="Path to the vault directory (or read from kroft_os.yaml)")
 
+    # KROFT-NET-02 (N2): local multi-node network control plane.
+    # Manages a set of independent KROFT nodes in THIS process (each with its
+    # own identity / storage / network endpoint). Reuses KroftApp + the N1
+    # network_host/network_port/state_root config — no new federation layer.
+    pn = sub.add_parser(
+        "network",
+        help="Manage a local multi-node KROFT network (N2): start/stop/status/nodes",
+    )
+    pn_subs = pn.add_subparsers(dest="net_action")
+    pn_start = pn_subs.add_parser("start", help="Boot N local KROFT nodes")
+    pn_start.add_argument("--vault", default=None,
+                          help="Path to the vault directory (or read from kroft_os.yaml)")
+    pn_start.add_argument("--nodes", type=int, default=2,
+                          help="Number of nodes to boot (default 2)")
+    pn_start.add_argument("--state-root", default="data/nodes",
+                          help="Root dir for per-node storage (default data/nodes)")
+    pn_start.add_argument("--base-port", type=int, default=9101,
+                          help="First node's TCP port; node i uses base_port+i (default 9101)")
+    pn_start.add_argument("--host", default="127.0.0.1",
+                          help="Bind host for all nodes (default 127.0.0.1)")
+    pn_start.add_argument("--snapshot", default=None,
+                          help="Knowledge snapshot shared read-only by all nodes "
+                               "(default: KROFT_KNOWLEDGE_FOUNDATION/_snapshot.json)")
+    pn_stop = pn_subs.add_parser("stop", help="Stop all running nodes")
+    pn_stop.add_argument("--vault", default=None,
+                         help="Path to the vault directory (or read from kroft_os.yaml)")
+    pn_status = pn_subs.add_parser("status", help="Show node statuses")
+    pn_status.add_argument("--vault", default=None,
+                           help="Path to the vault directory (or read from kroft_os.yaml)")
+    pn_nodes = pn_subs.add_parser("nodes", help="Alias for status")
+    pn_nodes.add_argument("--vault", default=None,
+                          help="Path to the vault directory (or read from kroft_os.yaml)")
+
     # Stage 25: plugins add their own subcommands LAST (they can never
     # displace a built-in: argparse raises on duplicate names and the loader
     # records the error, skipping only the offender).

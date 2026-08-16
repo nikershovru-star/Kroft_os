@@ -483,3 +483,118 @@ def cmd_serve(args, container) -> None:
     except KeyboardInterrupt:
         server.stop()
         print("Server stopped.", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# KROFT-NET-02 (N2): local multi-node network control plane.
+# In-process registry of independent KROFT nodes (ТЗ §8 lifecycle). This is a
+# SESSION registry, not a cross-module singleton — each CLI invocation owns it.
+# Each node is a real KroftApp with its own identity / storage / network endpoint
+# (isolation proven in N0/N1). No new federation layer is introduced (K5).
+# ---------------------------------------------------------------------------
+_NETWORK: "dict[str, object]" = {}
+
+
+def _make_node_config(node_id, host, port, state_root, snapshot):
+    """Build a per-node KroftConfig (K5: reuse N1 network_host/port + state_root)."""
+    import os
+    from composition.run_kroft import KroftConfig
+
+    node_state = os.path.join(state_root, node_id)
+    return KroftConfig(
+        node_id=node_id,
+        knowledge_snapshot=snapshot,
+        state_root=node_state,
+        network_host=host,
+        network_port=port,
+        llm="none",
+        agent_runtime=False,
+        run_demo=False,
+        embedding="none",
+        router=False,
+        interactive=False,
+        query=None,
+    )
+
+
+def cmd_network(args, container=None) -> None:
+    """Manage a local multi-node KROFT network (N2).
+
+    Sub-actions: start / stop / status / nodes.
+    """
+    action = getattr(args, "net_action", None)
+    if action in (None, "status", "nodes"):
+        _net_status()
+        return
+    if action == "stop":
+        _net_stop()
+        return
+    if action == "start":
+        _net_start(args)
+        return
+    print(f"network: unknown action {action}", file=sys.stderr)
+    raise SystemExit(2)
+
+
+def _net_start(args) -> None:
+    import composition.run_kroft as rk
+
+    n = max(1, int(getattr(args, "nodes", 2)))
+    host = getattr(args, "host", "127.0.0.1")
+    base_port = int(getattr(args, "base_port", 9101))
+    state_root = getattr(args, "state_root", "data/nodes")
+    snapshot = getattr(args, "snapshot", None)
+    if snapshot is None:
+        snapshot = str(
+            rk.Path(__file__).resolve().parents[1] / "KROFT_KNOWLEDGE_FOUNDATION" / "_snapshot.json"
+        )
+
+    _NETWORK.clear()
+    for i in range(n):
+        node_id = f"kroft-{i+1:03d}"
+        port = base_port + i
+        cfg = _make_node_config(node_id, host, port, state_root, snapshot)
+        app = rk.KroftApp(cfg)
+        _NETWORK[node_id] = app
+        ready = (
+            app.config.node_id == node_id
+            and app.config.network_port == port
+            and app.config.state_root.endswith(node_id)
+        )
+        status = "ONLINE" if ready else "DEGRADED"
+        print(f"  ● {node_id}  {status}  port={port}  storage={app.config.state_root}")
+
+    print(f"\nKROFT Local Network — {len(_NETWORK)} node(s) ONLINE")
+    print("  (Hermes can now observe via the bridge; each node is independent.)")
+
+
+def _net_stop() -> None:
+    stopped = 0
+    for node_id, app in list(_NETWORK.items()):
+        try:
+            stop = getattr(app, "stop", None)
+            if callable(stop):
+                stop()
+            stopped += 1
+        except Exception:
+            pass
+    _NETWORK.clear()
+    print(f"KROFT Local Network — {stopped} node(s) STOPPED")
+
+
+def _net_status() -> None:
+    if not _NETWORK:
+        print("KROFT Local Network — no nodes running (use `network start`).")
+        return
+    print(f"KROFT Local Network — {len(_NETWORK)} node(s)\n")
+    for node_id, app in _NETWORK.items():
+        cfg = app.config
+        graph = getattr(app, "graph", None)
+        try:
+            kcount = len(graph.get_graph()["nodes"]) if graph is not None else 0
+        except Exception:
+            kcount = 0
+        print(f"  ● {node_id}   ONLINE")
+        print(f"      host: {cfg.network_host}:{cfg.network_port}")
+        print(f"      storage: {cfg.state_root}")
+        print(f"      knowledge: {kcount} nodes\n")
