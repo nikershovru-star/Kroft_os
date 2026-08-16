@@ -68,3 +68,52 @@ def test_federation_mesh_two_nodes_connected():
             rt_a.stop()
             rt_b.stop()
         assert not rt_a.is_running and not rt_b.is_running
+
+
+@pytest.mark.slow
+def test_federation_event_propagation_a_to_b():
+    """PHASE 6 — KROFT events actually traverse the mesh (not just TCP connect).
+
+    Proves the distributed IEventBus (wired in PHASE 5) carries Runtime-level
+    events across nodes: an event published on node A is delivered to a subscriber
+    on node B. No KROFT internals duplicated; pure IEventBus delegation.
+    """
+    received = []
+
+    with tempfile.TemporaryDirectory() as tmp:
+        va = str(Path(tmp) / "nodeA")
+        vb = str(Path(tmp) / "nodeB")
+        rt_a = build_runtime(node_id="A", vault=va, host="127.0.0.1",
+                             api_port=8271, network_port=8371,
+                             federation=True, peers=("127.0.0.1:8372",),
+                             llm="none", embedding="none")
+        rt_b = build_runtime(node_id="B", vault=vb, host="127.0.0.1",
+                             api_port=8272, network_port=8372,
+                             federation=True, peers=("127.0.0.1:8371",),
+                             llm="none", embedding="none")
+        try:
+            rt_a.start()
+            rt_b.start()
+            # B subscribes to a KROFT-domain topic.
+            rt_b.subscribe_event("kroft.knowledge.update", lambda ev: received.append(ev))
+            # Deterministic barrier: wait for mesh connect before publishing.
+            bus_a = rt_a.container.resolve("IEventBus")
+            bus_b = rt_b.container.resolve("IEventBus")
+            deadline = time.time() + 10.0
+            while time.time() < deadline:
+                if bus_a.peers() and bus_b.peers():
+                    break
+                time.sleep(0.1)
+            # A publishes a KROFT event; it must arrive at B over the mesh.
+            rt_a.publish_event("kroft.knowledge.update",
+                               {"node": "A", "op": "upsert", "id": "X.md"})
+            deadline = time.time() + 10.0
+            while time.time() < deadline:
+                if received:
+                    break
+                time.sleep(0.1)
+            assert received, "federation event did not propagate A->B"
+            assert received[0]["id"] == "X.md"
+        finally:
+            rt_a.stop()
+            rt_b.stop()

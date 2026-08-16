@@ -249,3 +249,16 @@ class KroftRuntime:
     def agent_interface(self) -> Optional[Any]:
         """Universal Agent Interface facade (PHASE 2) for external agents."""
         return self._agent_interface
+
+    # --- federation event surface (PHASE 6) ---------------------------------
+    # Thin delegation to the (possibly distributed) IEventBus resolved from the
+    # container. When federation is off this is the in-memory bus (no-op network);
+    # when on (PHASE 5) it is the TcpEventBus mesh, so publish_event fans out to
+    # peer nodes. K1-clean: only the IEventBus interface is touched.
+    def publish_event(self, topic: str, event: Dict[str, Any]) -> None:
+        if self._container is not None and self._container.has("IEventBus"):
+            self._container.resolve("IEventBus").publish(topic, event)
+
+    def subscribe_event(self, topic: str, handler: Callable[[Dict[str, Any]], None]) -> None:
+        if self._container is not None and self._container.has("IEventBus"):
+            self._container.resolve("IEventBus").subscribe(topic, handler)
