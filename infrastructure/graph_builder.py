@@ -168,3 +168,40 @@ class InMemoryGraphBuilder(IGraphBuilder):
                 if e.get("from") is not None
             ]
         return True
+
+    def load_from_dict(self, nodes: Dict[str, dict], edges: List[dict]) -> None:
+        """Load pre-parsed snapshot data into the builder (Foundation bridge).
+
+        Unlike restore() (which reads a file and DROPS the node ``type`` field),
+        this preserves ``type`` so Multi-Resolution ``nodes_by_type()`` works on
+        production snapshots that carry a top-level ``"type"`` (e.g. "unknown"),
+        not a Node dataclass. Used by the boot-bridge in container_builder.py to
+        make the Query API see Foundation nodes (ADR-033).
+
+        Does NOT clear existing nodes first — runtime nodes (handoff, promoted
+        facts) are preserved; only absent ids are added (idempotent merge).
+        """
+        with self._lock:
+            for nid, n in nodes.items():
+                if nid in self._nodes:
+                    continue  # keep existing runtime node on id collision
+                self._nodes[str(nid)] = {
+                    "id": str(n.get("id", nid)),
+                    "label": n.get("label", str(nid)),
+                    "type": n.get("type"),  # preserve production type
+                    "meta": dict(n.get("meta") or {}),
+                }
+            _seen = {(e.get("from"), e.get("to")) for e in self._edges}
+            for e in edges:
+                f = e.get("from") or e.get("source_id")
+                t = e.get("to") or e.get("target_id")
+                if f is None or t is None:
+                    continue
+                if (f, t) in _seen:
+                    continue
+                self._edges.append({
+                    "from": f,
+                    "to": t,
+                    "relation": e.get("relation") or e.get("type") or "links_to",
+                })
+                _seen.add((f, t))

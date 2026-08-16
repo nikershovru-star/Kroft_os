@@ -247,6 +247,36 @@ def build_container(vault_path: str, loader=None, desktop_adapter: str = "mock")
         except Exception as _err:  # never abort boot on foundation-load failure
             import sys as _sys
             print(f"[warn] foundation snapshot load skipped: {_err}", file=_sys.stderr)
+    # ── Foundation → IGraphBuilder bridge (ADR-033 boot-wiring) ─────────────
+    # GAP: run_kroft loads _snapshot.json into InMemoryGraphEngine (self.graph),
+    # but GraphQueryEngine is wired to IGraphBuilder (InMemoryGraphBuilder),
+    # which boots EMPTY. This bridge loads the SAME Foundation into IGraphBuilder
+    # so the Query API (nodes_by_type / nodes_by_metadata) sees production nodes.
+    # Only loads when the builder is still empty (preserves runtime nodes such
+    # as handoff artifacts and promoted facts; idempotent across re-builds).
+    _f_snap = _os.path.normpath(_os.path.join(
+        _os.path.dirname(__file__), "..", "KROFT_KNOWLEDGE_FOUNDATION", "_snapshot.json"))
+    _builder = c.resolve("IGraphBuilder")
+    if _builder is not None and _os.path.exists(_f_snap) \
+            and not _builder.get_graph().get("nodes"):
+        try:
+            import json as _json
+            with open(_f_snap, "r", encoding="utf-8") as _fh:
+                _data = _json.load(_fh)
+            # production snapshot shape: {"graph": {"nodes": [...], "edges": [...]}}
+            # (NOT top-level "nodes" — run_kroft._restore_graph_and_index reads
+            # data["graph"] the same way). nodes is a LIST -> dict keyed by id.
+            _raw_nodes = _data.get("graph", _data).get("nodes", [])
+            _nodes = {
+                n["id"]: n for n in _raw_nodes
+                if isinstance(n, dict) and "id" in n
+            } if isinstance(_raw_nodes, list) else _raw_nodes
+            _raw_edges = _data.get("graph", _data).get("edges", [])
+            _builder.load_from_dict(_nodes, _raw_edges)
+        except Exception as _err:  # graceful: never abort boot on snapshot issue
+            import sys as _sys2
+            print(f"[warn] IGraphBuilder foundation bridge skipped: {_err}",
+                  file=_sys2.stderr)
     return c
 
 
