@@ -15,9 +15,12 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from contracts.agent_orchestration import (
+    AgentMemoryHandoff,
     AgentResult,
     AgentState,
+    AgentWorkflow,
     IAgentLifecycle,
+    IAgentMemoryHandoff,
     IAgentOrchestrator,
 )
 from contracts.i_workflow import Workflow, WorkflowStatus
@@ -84,6 +87,7 @@ class AgentOrchestrator(IAgentOrchestrator):
         tenant_isolator: ITenantIsolator,
         max_per_tenant: int = 8,
         allow_auto_spawn: bool = True,
+        handoff: Optional[IAgentMemoryHandoff] = None,
     ) -> None:
         self._lifecycle = lifecycle
         self._capability = capability
@@ -92,14 +96,20 @@ class AgentOrchestrator(IAgentOrchestrator):
         self._allow_auto_spawn = allow_auto_spawn
         self._agent_role: Dict[str, Role] = {}
         self._busy: set = set()
+        self._handoff = handoff
 
     # -- IAgentOrchestrator ------------------------------------------------
 
     def submit_goal(
-        self, tenant_id: str, goal: str, required_capabilities: List[str]
+        self, tenant_id: str, goal: str, required_capabilities: List[str],
+        workflow: Optional["AgentWorkflow"] = None,
     ) -> List[AgentResult]:
         TenantId(tenant_id)  # validate tenant format (contracts.tenant)
         required = [Capability.parse(c) for c in required_capabilities]
+
+        # Workflow path: execute declarative multi-agent pipeline (ADR-033).
+        if workflow is not None:
+            return self._run_workflow(tenant_id, goal, workflow, required_capabilities)
 
         # 1. select a FREE matching agent from THIS tenant's pool only
         for agent_id in self._pool.members(tenant_id):
@@ -157,3 +167,94 @@ class AgentOrchestrator(IAgentOrchestrator):
             variables={"agent_id": agent_id, "capabilities": ",".join(required)},
         )
         return AgentResult(goal=goal, workflow=wf, status="DONE")
+
+    # -- Workflow execution (ADR-033) --------------------------------------
+
+    def _run_workflow(
+        self, tenant_id: str, goal: str, workflow: AgentWorkflow,
+        required_capabilities: List[str],
+    ) -> List[AgentResult]:
+        """Execute a declarative AgentWorkflow step-by-step with graph handoff.
+
+        Each step spawns/selects an agent for its division + capabilities, runs
+        it, and (on success) publishes its result via IAgentMemoryHandoff so the
+        NEXT step's agent can consume it. The orchestrator depends ONLY on the
+        handoff port — never on graph infrastructure directly (K1, TZ §14).
+        """
+        if not workflow.steps:
+            return []  # empty workflow: no execution, no graph write
+
+        results: List[AgentResult] = []
+        if self._handoff is None:
+            # No handoff adapter wired -> degrade to isolated per-step runs.
+            for step in workflow.steps:
+                agent_id = self._spawn_for_step(tenant_id, step, required_capabilities)
+                if agent_id is None:
+                    results.append(self._failed_result(goal, step))
+                    continue
+                results.append(self._run(agent_id, goal, step.required_capabilities))
+            return results
+
+        for idx, step in enumerate(workflow.steps):
+            agent_id = self._spawn_for_step(tenant_id, step, required_capabilities)
+            if agent_id is None:
+                results.append(self._failed_result(goal, step))
+                break  # cannot proceed without this agent
+            result = self._run(agent_id, goal, step.required_capabilities)
+            if result.status != "DONE":
+                results.append(result)
+                break  # failed intermediate agent: stop, do not hand off
+            # publish handoff ONLY when there is a NEXT step to consume it
+            # (the final step has no downstream consumer — TZ §13)
+            if idx + 1 < len(workflow.steps):
+                next_division = workflow.steps[idx + 1].agent_division
+                self._handoff.publish_handoff(
+                    AgentMemoryHandoff(
+                        workflow_id=workflow.id,
+                        step_id=step.handoff_key,
+                        producer_agent_id=agent_id,
+                        consumer_division=next_division,
+                        payload_ref=f"handoff:{workflow.id}:{step.handoff_key}",
+                    ),
+                    payload={"output": result.status, "agent_id": agent_id},
+                )
+            results.append(result)
+        return results
+
+    def _spawn_for_step(
+        self, tenant_id: str, step: "WorkflowStep",
+        required_capabilities: List[str],
+    ) -> Optional[str]:
+        """Select or spawn an agent satisfying the step's division + caps."""
+        required = [Capability.parse(c) for c in step.required_capabilities]
+        # 1. reuse a free matching agent from this tenant's pool
+        for agent_id in self._pool.members(tenant_id):
+            if agent_id in self._busy:
+                continue
+            if self._agent_satisfies(agent_id, required):
+                self._busy.add(agent_id)
+                return agent_id
+        # 2. auto-spawn if allowed
+        if self._allow_auto_spawn and not self._pool.is_full(tenant_id):
+            role = self._role_for(required)
+            if role is None:
+                return None
+            agent_id = f"{tenant_id}:agent-{len(self._pool.members(tenant_id)) + 1}"
+            self._lifecycle.spawn(
+                agent_id, tenant_id, role.value, step.handoff_key,
+                division=step.agent_division,
+            )
+            self._agent_role[agent_id] = role
+            self._pool.add(tenant_id, agent_id)
+            self._busy.add(agent_id)
+            return agent_id
+        return None
+
+    def _failed_result(self, goal: str, step: "WorkflowStep") -> AgentResult:
+        wf = Workflow(
+            id=f"wf-fail-{step.handoff_key}",
+            goal=goal,
+            status=WorkflowStatus.FAILED,
+            variables={"step": step.handoff_key},
+        )
+        return AgentResult(goal=goal, workflow=wf, status="FAILED")
