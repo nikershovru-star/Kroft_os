@@ -146,9 +146,30 @@ pytest tests/test_kroft_net_isolation.py tests/test_kroft_node_manager.py \
 Production snapshot (`KROFT_KNOWLEDGE_FOUNDATION/_snapshot.json`, SHA 3b36699d) НЕ
 изменён — все тесты используют TEMP state_root, re-embedding НЕ выполняется (ТЗ §32).
 
-## Next (He done)
+## KnowledgeEnvelope wire transfer + multi-hop (ТЗ §18/§19/§20) — KROFT-NET-05
 
-- KROFT-NET-05: wire KnowledgeEnvelope transfer между нодами (tcp_event_bus) + multi-hop
-- KROFT-NET-06: quarantine store + failure tests (ТЗ §29)
+`services/knowledge_envelope_router.py` — `KnowledgeEnvelopeRouter` оборачивает существующий
+`TcpEventBus` (carrier, НЕ новый transport — K5). Подписывается на топик `kroft.knowledge`.
+
+Send (MODE B SHARE, ТЗ §20):
+- подписывает envelope через `attach_signature` (HmacSigner, i_signature)
+- публикует wire-dict в `kroft.knowledge`
+
+Receive:
+1. loop-safety: drop если `self.node_id in seen_by`
+2. `verify_envelope(dict, signer, ReplayGuard)` — signature + version + size + replay (i_signature)
+3. если `recipient != self` и `ttl > 1` → forward (multi-hop): восстанавливает envelope,
+   `ttl-1`, добавляет себя в `seen_by`, публикует (ТЗ §18 A→B→C)
+4. если `recipient == self` → `accept_or_quarantine` (trust-gate) → ACCEPT: сохраняет в
+   `<state_root>/received/` + callback; QUARANTINE: отклоняет (KROFT-NET-06 добавит store)
+
+Replay key = (sender/origin, lamport). Re-sending the SAME envelope → второй rejected (ТЗ §29).
+
+**Доказано тестами:** `tests/test_knowledge_envelope_router.py` (3) — A→B direct accept,
+A→B→C multi-hop, replay rejected (real TCP, 3 nodes).
+
+## Next (не done)
+
+- KROFT-NET-06: quarantine store + failure tests (ТЗ §29: bad sig / low trust / invalid origin / TTL / node offline)
 - KROFT-NET-07: remote node (PC A → PC B через internet)
 - 5/10 nodes load test

@@ -195,3 +195,34 @@
 
 🟢 **KROFT-NET-01..04 DONE.** Следующий шаг (по ТЗ §41): KROFT-NET-05 (wire KnowledgeEnvelope transfer + multi-hop) → KROFT-NET-06 (quarantine + failure tests) → KROFT-NET-07 (remote node). Awaiting GO.
 
+---
+
+## KROFT-NET-05 — KnowledgeEnvelope wire transfer + multi-hop (ТЗ §18/§19/§20/§25/§29)
+
+**Forensic:** `TcpEventBus` (pub/sub TCP, `subscribe`/`publish`/`join`) — готовый carrier (K5, НЕ новый transport). `verify_envelope` + `ReplayGuard` (i_signature) — signature/version/size/replay в одном вызове. `RoutingHeader(target,ttl)` уже есть.
+
+**Реализация:** `services/knowledge_envelope_router.py` — `KnowledgeEnvelopeRouter` оборачивает `TcpEventBus`, слушает `kroft.knowledge`:
+- send: `attach_signature` (HmacSigner) + publish wire-dict.
+- receive: loop-safety (`seen_by`) → `verify_envelope(signer, ReplayGuard)` → multi-hop forward (`recipient != self`, `ttl>1`, append self to `seen_by`, `ttl-1`) → если `recipient==self`: `accept_or_quarantine` (trust-gate) → ACCEPT: persist в `<state_root>/received/` + callback.
+- Replay key = (sender, lamport) — тот же envelope → второй rejected.
+
+**Тесты:** `tests/test_knowledge_envelope_router.py` (3) — A→B direct accept, A→B→C multi-hop, replay rejected (real TCP, 3 nodes).
+
+**Definition of Done (ТЗ §39) — LOCAL NETWORK + EXCHANGE DONE:**
+- ✅ 2+ независимых KROFT одновременно, state/identity/snapshots изолированы
+- ✅ Hermes видит оба + обращается к конкретной ноде
+- ✅ A → B knowledge exchange (wire transfer через TcpEventBus)
+- ✅ signature verification (HmacSigner)
+- ✅ trust gate (accept_or_quarantine → QUARANTINE при low trust)
+- ✅ provenance preserved (envelope carries provenance chain)
+- ✅ LOD preserved (ResolutionLevel в envelope)
+- ✅ replay protection (ReplayGuard)
+- 🟡 quarantine/rejection — статус возвращается, НО store НЕ реализован (KROFT-NET-06)
+- 🟡 restart recovery — state_root переживает restart (KROFT-NET-02 доказал), received-store переживает (файлы)
+- ⏭ 5/10 nodes, remote node (KROFT-NET-07)
+
+**Критические ограничения соблюдены:** kernel/ НЕ тронут; TcpEventBus reuse (К5); crypto/ReplayGuard reuse; production snapshot НЕ изменён (TEMP state_root).
+
+🟢 **KROFT-NET-05 DONE.** Следующий (ТЗ §41): KROFT-NET-06 (quarantine store + failure tests) → KROFT-NET-07 (remote). Awaiting GO.
+
+
