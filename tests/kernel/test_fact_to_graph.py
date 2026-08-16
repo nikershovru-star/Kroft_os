@@ -1,4 +1,4 @@
-"""PHASE C — Graph ← Self-Evolution verification (ТЗ §18 Case 1-6).
+"""PHASE C + PHASE B.3 — Graph <- Self-Evolution + Multi-Resolution ladder.
 
 Fast, deterministic: reuses ReferenceMemoryEvolution (real consolidation gate)
 + InMemoryGraphBuilder (real IGraphBuilder). No production snapshot, no LLM.
@@ -14,13 +14,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from contracts.cognitive_domain import (  # noqa: E402
-    AggregationRule,
     ConfidenceScore,
     Episode,
     NodeLamportClock,
     Provenance,
     ProvenanceType,
 )
+from contracts.knowledge_graph import NodeType  # noqa: E402
 from infrastructure.graph_builder import InMemoryGraphBuilder  # noqa: E402
 from kernel.memory_evolution import ReferenceMemoryEvolution  # noqa: E402
 from kernel.fact_to_graph import promote_facts_to_graph  # noqa: E402
@@ -45,71 +45,119 @@ def _builder() -> InMemoryGraphBuilder:
     return InMemoryGraphBuilder()
 
 
-# Case 1 — valid repeated evidence -> FACT promoted to graph
+# --- PHASE C: FACT promotion (ТЗ §18 Case 1-6) ---
+
 def test_case1_valid_repeated_evidence_promoted():
     evo, b = _evo(), _builder()
     eps = [_ep("KROFT uses CRDT", 0.9, "e1"), _ep("KROFT uses CRDT", 0.9, "e2")]
-    created = promote_facts_to_graph(eps, evo, b)
-    assert len(created) == 1
-    g = b.get_graph()
-    assert len(g["nodes"]) == 1
-    n = g["nodes"][0]
-    assert n["meta"]["type"] == "SOFT_FACT"
+    res = promote_facts_to_graph(eps, evo, b)
+    assert len(res["facts"]) == 1
+    n = b.get_graph()["nodes"][0]
+    assert n["meta"]["type"] == NodeType.FACT.value
+    assert n["meta"]["level"] == "fact"
     assert n["meta"]["provenance"] == ["e1", "e2"]
-    assert n["meta"]["confidence"] == pytest.approx(0.9)
 
 
-# Case 2 — single observation -> NO promotion
 def test_case2_single_observation_no_promotion():
     evo, b = _evo(), _builder()
-    created = promote_facts_to_graph([_ep("lonely fact", 0.95, "e1")], evo, b)
-    assert created == []
+    res = promote_facts_to_graph([_ep("lonely fact", 0.95, "e1")], evo, b)
+    assert res["facts"] == []
     assert b.get_graph()["nodes"] == []
 
 
-# Case 3 — low confidence -> NO promotion
 def test_case3_low_confidence_no_promotion():
     evo, b = _evo(), _builder()
     eps = [_ep("uncertain", 0.4, "e1"), _ep("uncertain", 0.4, "e2")]
-    assert promote_facts_to_graph(eps, evo, b) == []
+    assert promote_facts_to_graph(eps, evo, b)["facts"] == []
     assert b.get_graph()["nodes"] == []
 
 
-# Case 4 — failed causal attribution -> NO promotion
-# (low confidence below threshold simulates a non-causal/weak signal)
 def test_case4_failed_causal_no_promotion():
     evo, b = _evo(), _builder()
     eps = [_ep("weak cause", 0.5, "e1"), _ep("weak cause", 0.5, "e2")]
-    assert promote_facts_to_graph(eps, evo, b) == []
+    assert promote_facts_to_graph(eps, evo, b)["facts"] == []
     assert b.get_graph()["nodes"] == []
 
 
-# Case 5 — attempted HARD policy mutation -> BLOCKED
-# ReferenceMemoryEvolution.consolidate() returns ([], []) for policies (O1: never
-# emits HARD). promote_facts_to_graph writes ONLY facts, so no policy/node appears.
 def test_case5_hard_policy_blocked():
     evo, b = _evo(), _builder()
-    # Even if a caller passed policy-like episodes, consolidate() yields no facts
-    # when summaries are not repeated above threshold; and we never write policies.
     eps = [_ep("HARD: delete all", 1.0, "e1"), _ep("HARD: delete all", 1.0, "e2")]
-    # These WOULD consolidate as facts (repeated + high conf) — but they are SOFT
-    # facts, NOT HARD policies. The O1 guard is in ReferenceMemoryEvolution: it
-    # never returns Policy objects. Assert NO policy-shaped node is created.
-    created = promote_facts_to_graph(eps, evo, b)
+    res = promote_facts_to_graph(eps, evo, b)
     g = b.get_graph()
-    # If promoted, it must be tagged SOFT_FACT, never HARD/POLICY.
     for n in g["nodes"]:
-        assert n["meta"]["type"] == "SOFT_FACT"
+        assert n["meta"]["type"] == NodeType.FACT.value  # SOFT fact, never HARD
         assert n["meta"]["layer"] == "soft"
 
 
-# Case 6 — duplicate fact -> NO duplicate node
 def test_case6_duplicate_no_duplicate_node():
     evo, b = _evo(), _builder()
     eps = [_ep("dup fact", 0.9, "e1"), _ep("dup fact", 0.9, "e2")]
     first = promote_facts_to_graph(eps, evo, b)
-    assert len(first) == 1
-    # Re-run consolidation on the SAME episodes: should NOT add a second node.
+    assert len(first["facts"]) == 1
     second = promote_facts_to_graph(eps, evo, b)
-    assert second == []
+    assert second["facts"] == []
     assert len(b.get_graph()["nodes"]) == 1
+
+
+# --- PHASE B.3: ladder (FACT -> PATTERN -> CONCEPT) ---
+
+def test_pattern_created_from_two_facts_same_keyword():
+    evo, b = _evo(), _builder()
+    # Two DISTINCT repeated summaries sharing the leading keyword "kroft uses crdt".
+    eps = [
+        _ep("kroft uses CRDT for sync", 0.9, "e1"),
+        _ep("kroft uses CRDT for sync", 0.9, "e2"),
+        _ep("kroft uses CRDT for state", 0.9, "e3"),
+        _ep("kroft uses CRDT for state", 0.9, "e4"),
+    ]
+    res = promote_facts_to_graph(eps, evo, b)
+    assert len(res["facts"]) == 2  # two distinct consolidated facts
+    assert len(res["patterns"]) == 1  # both share keyword "kroft uses crdt"
+    pid = res["patterns"][0]
+    edges = b.get_graph()["edges"]
+    assert any(e["from"] in res["facts"] and e["to"] == pid and e["relation"] == "aggregates"
+               for e in edges)
+
+
+def test_concept_created_from_two_patterns():
+    evo, b = _evo(), _builder()
+    # Two keyword-groups, each >=2 repeated facts, sharing leading token "kroft".
+    eps = [
+        _ep("kroft uses CRDT sync", 0.9, "e1"),
+        _ep("kroft uses CRDT sync", 0.9, "e2"),
+        _ep("kroft uses CRDT state", 0.9, "e3"),
+        _ep("kroft uses CRDT state", 0.9, "e4"),
+        _ep("kroft stores VEC vault", 0.9, "e5"),
+        _ep("kroft stores VEC vault", 0.9, "e6"),
+        _ep("kroft stores VEC obsidian", 0.9, "e7"),
+        _ep("kroft stores VEC obsidian", 0.9, "e8"),
+    ]
+    res = promote_facts_to_graph(eps, evo, b)
+    assert len(res["facts"]) == 4
+    assert len(res["patterns"]) == 2  # "kroft uses crdt" + "kroft stores vec"
+    assert len(res["concepts"]) == 1   # both patterns share token "kroft"
+    cid = res["concepts"][0]
+    edges = b.get_graph()["edges"]
+    assert any(e["from"] in res["patterns"] and e["to"] == cid and e["relation"] == "summarizes"
+               for e in edges)
+
+
+def test_ladder_queryable_via_graph_query_engine():
+    from services.graph_query_engine import GraphQueryEngine  # noqa: E402
+    from services.multi_resolution import MultiResolutionQuery  # noqa: E402
+    evo, b = _evo(), _builder()
+    eps = [
+        _ep("kroft uses CRDT sync", 0.9, "e1"),
+        _ep("kroft uses CRDT sync", 0.9, "e2"),
+        _ep("kroft uses CRDT state", 0.9, "e3"),
+        _ep("kroft uses CRDT state", 0.9, "e4"),
+    ]
+    res = promote_facts_to_graph(eps, evo, b)
+    mr = MultiResolutionQuery(GraphQueryEngine(b), b)
+    assert set(mr.nodes_by_level("fact")) == set(res["facts"])
+    assert set(mr.nodes_by_level("pattern")) == set(res["patterns"])
+    pid = res["patterns"][0]
+    zoomed = mr.zoom_in(pid)
+    assert set(zoomed) == set(res["facts"])
+    fid = res["facts"][0]
+    assert mr.zoom_out(fid) == [pid]

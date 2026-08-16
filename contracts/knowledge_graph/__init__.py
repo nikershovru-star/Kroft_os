@@ -15,18 +15,52 @@ _touch_counter = itertools.count(1)
 
 
 class NodeType(str, Enum):
+    # --- Multi-Resolution semantic ladder (Phase B, ТЗ) ---
+    OBSERVATION = "OBSERVATION"   # raw recorded experience / single observation
+    FACT = "FACT"                 # consolidated repeated observation (SOFT fact)
+    PATTERN = "PATTERN"           # group of related facts
+    CONCEPT = "CONCEPT"           # abstraction over patterns
+    # --- existing v2 types (preserved) ---
     ADR = "ADR"
     RFC = "RFC"
     COMPONENT = "COMPONENT"
     CAPABILITY = "CAPABILITY"
     EXPERIMENT = "EXPERIMENT"
     PLATFORM = "PLATFORM"
-    PATTERN = "PATTERN"
     LAW = "LAW"
     VIDEO = "VIDEO"
     AUDIO = "AUDIO"
     IMAGE = "IMAGE"
     NOTE = "NOTE"              # ТЗ-KNOWLEDGE-ENGINE-01: ingested document / Obsidian note
+
+
+# Semantic-ladder ordering for zoom direction (Concept -> Pattern -> Fact -> Observation).
+# Higher abstraction first; used by zoom_in/zoom_out to pick the right edge direction.
+LEVEL_ORDER = {
+    "observation": 0,
+    "fact": 1,
+    "pattern": 2,
+    "concept": 3,
+}
+
+
+def get_level(node: "Node") -> Optional[str]:
+    """Return the semantic level of a node.
+
+    Resolution order (Phase B ТЗ Фаза 1): explicit ``NodeType`` ladder member
+    (OBSERVATION/FACT/PATTERN/CONCEPT) takes precedence, else fall back to
+    ``metadata["level"]`` for back-compat with nodes that carry a level string
+    but no typed NodeType. Returns None when neither is present (old snapshots
+    load without error).
+    """
+    t = node.type if hasattr(node, "type") else None
+    if isinstance(t, NodeType) and t in (
+        NodeType.OBSERVATION, NodeType.FACT, NodeType.PATTERN, NodeType.CONCEPT
+    ):
+        return t.value.lower()
+    meta = getattr(node, "metadata", None) or {}
+    lvl = meta.get("level") if isinstance(meta, dict) else None
+    return str(lvl) if lvl else None
 
 
 class EdgeType(str, Enum):
