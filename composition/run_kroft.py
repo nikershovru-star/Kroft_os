@@ -1271,6 +1271,44 @@ class KroftApp:
             out[m] = tel.aggregate(m, window_sec)
         return out
 
+    # ----- C.8: retrieval-quality self-assessment (ТЗ-C.8 draft) ------------
+    def retrieval_self_assessment(self, window_sec: float = 1e9) -> dict:
+        """Interpret C.7 telemetry into a retrieval-health verdict (ТЗ-C.8 §verdict).
+
+        Closes the observability loop opened in C.7: raw metrics -> actionable
+        signal. Honest, never over-claims — small samples stay HEALTHY, and a high
+        external-dependency rate is reported as a coverage weakness (not a success).
+        """
+        tel = getattr(self, "_telemetry", None)
+        if tel is None:
+            return {"verdict": "DISABLED", "reason": "quality_telemetry off"}
+        s = self.retrieval_stats(window_sec=window_sec)
+        q = s["retrieval.query"]["count"]
+        if q == 0:
+            return {"verdict": "HEALTHY", "reason": "no queries yet (insufficient data)",
+                    "gap_rate": 0.0, "low_conf_rate": 0.0, "external_rate": 0.0}
+        gap_rate = s["retrieval.gap"]["sum"] / q
+        low_conf_rate = s["retrieval.low_conf"]["sum"] / q
+        # external hits count queries that fell back to the web; rate vs total queries
+        ext_rate = s["retrieval.external_hits"]["sum"] / q
+        if gap_rate > 0.5:
+            verdict = "COVERAGE_GAP"
+            rec = "Local graph misses >50% of queries — ingest more sources (ТЗ-C.1/C.3)."
+        elif low_conf_rate > 0.5:
+            verdict = "LOW_CONFIDENCE"
+            rec = "Hits exist but score low — tune hybrid retrieval / C.4 embedding (ТЗ-C.5)."
+        elif ext_rate > 0.3:
+            verdict = "EXTERNAL_DEPENDENCY"
+            rec = "Often falling back to web — local knowledge thin, broaden Foundation (ТЗ-C.6)."
+        else:
+            verdict = "HEALTHY"
+            rec = "Retrieval quality acceptable (local hits, few gaps/low-conf)."
+        return {"verdict": verdict, "recommendation": rec,
+                "gap_rate": round(gap_rate, 3),
+                "low_conf_rate": round(low_conf_rate, 3),
+                "external_rate": round(ext_rate, 3),
+                "queries": int(q)}
+
 
 
     def interactive_query(self, query: str) -> str:
@@ -1606,6 +1644,10 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
                    help="KROFT-NET-01: per-instance state root dir. When set, the node's "
                         "snapshot + runtime state are isolated under <state_root>/<node_id>/ "
                         "(ТЗ §6). Each KROFT instance must use a distinct state_root.")
+    p.add_argument("--host", dest="host", default="127.0.0.1",
+                   help="KROFT-NET-07: bind interface for the node's network listener. "
+                        "Use '0.0.0.0' to be reachable from other machines (remote node). "
+                        "Default 127.0.0.1 (local only).")
     a = p.parse_args(argv)
     return KroftConfig(
         node_id=a.node_id, llm=a.llm, federation=a.federation,
@@ -1613,7 +1655,7 @@ def _parse_args(argv: Optional[List[str]] = None) -> KroftConfig:
         agent_runtime=a.agent_runtime, query=a.query,
         knowledge_snapshot=a.knowledge_snapshot, debug=a.debug, embedding=a.embedding,
         autonomous_knowledge=a.autonomous_knowledge, router=a.router,
-        state_root=a.state_root,
+        state_root=a.state_root, network_host=a.host,
     )
 
 

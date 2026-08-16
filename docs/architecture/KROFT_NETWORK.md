@@ -192,7 +192,24 @@ Failure-тесты (`tests/test_knowledge_envelope_router.py`, 4):
 шлёт ОРИГИНАЛЬНЫЙ `event` dict (модифицируя `ttl`/`seen_by`), плюс guard против
 self-loop echo (`env.sender != self.node_id`).
 
+## Remote node readiness (ТЗ §34) — KROFT-NET-07
+
+Transport-слой REMOTE-READY. `TcpEventBus` (adapters/tcp_event_bus.py) уже принимает
+`host` (default `127.0.0.1`); узел, слушающий на `0.0.0.0`, доступен с других машин.
+`kroft_runtime_factory.build_runtime(host=..., federation=True, peers=[...])` уже
+поднимает `TcpEventBus(host=config.host)` и join-ит к peers — готовый remote-путь.
+
+Добавлено в KROFT-NET-07:
+- `KroftNodeManager.NodeSpec.host` + `start()` шлёт `--host` в `run_kroft.py`.
+- `run_kroft.py --host` CLI → `KroftConfig.network_host` (default `127.0.0.1`; `0.0.0.0` для remote).
+- `NodeStatus.host` (observability).
+
+Тест (`tests/test_kroft_remote_ready.py`, 2): узел A binds `0.0.0.0`, B коннектится
+через явный seed `127.0.0.1:portA` → envelope доставлен (та же механика что и internet,
+loopback вместо внешнего IP). Реальный cross-PC тест вне scope (нужны 2 машины +
+firewall/NAT hole — ops-задача вне кода).
+
 ## Next (не done)
 
-- KROFT-NET-07: remote node (PC A → PC B через internet)
 - 5/10 nodes load test
+- Observability dashboard (exchanges/quarantine/replay counts, ТЗ §28)

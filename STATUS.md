@@ -250,5 +250,33 @@ replay, low-trust→QUARANTINE, bad-sig→REJECT, TTL-exhausted graceful, node-o
 
 🟢 **KROFT-NET-06 DONE.** Следующий (ТЗ §41): KROFT-NET-07 (remote node). Awaiting GO.
 
+---
+
+## KROFT-NET-07 — Remote node readiness (ТЗ §34)
+
+**Forensic:** `TcpEventBus(host=...)` уже поддерживает bind interface (default 127.0.0.1).
+`kroft_runtime_factory.build_runtime(host=..., federation=True, peers=[...])` УЖЕ
+поднимает `TcpEventBus(host=config.host)` + join к peers — готовый remote-путь (K5, reuse).
+
+**Реализация:**
+- `KroftNodeManager.NodeSpec.host` + `start()` → `--host` в `run_kroft.py`.
+- `run_kroft.py --host` CLI → `KroftConfig.network_host` (default 127.0.0.1; `0.0.0.0` для remote).
+- `NodeStatus.host` (observability).
+
+**Тесты:** `tests/test_kroft_remote_ready.py` (2) — A binds `0.0.0.0`, B коннектится
+через явный seed → envelope доставлен (remote-ready binding доказан; loopback вместо
+внешнего IP). Реальный cross-PC тест вне scope (нужны 2 машины + firewall/NAT — ops).
+
+**Definition of Done (ТЗ §39) — LOCAL + REMOTE READY:**
+- ✅ isolation, Hermes multi-node, A→B exchange, signature, trust-gate, provenance, LOD, replay
+- ✅ quarantine store + failure handling
+- ✅ remote-ready: host binding (0.0.0.0) + explicit seed peers + config surface
+- ⏭ реальный cross-internet deploy (firewall/NAT — ops, вне кода)
+- ⏭ 5/10 nodes load test
+- ⏭ observability dashboard (ТЗ §28)
+
+🟢 **KROFT-NET-07 DONE (remote-ready).** Осталось: 5/10 nodes load test + observability dashboard.
+Awaiting GO для нагрузочного теста ИЛИ пуш.
+
 
 

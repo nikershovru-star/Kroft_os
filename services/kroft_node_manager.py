@@ -34,6 +34,7 @@ class NodeSpec:
     id: str
     role: str = "generic"
     port: int = 7101
+    host: str = "127.0.0.1"  # bind interface; "0.0.0.0" for remote-reachable (TZ §34 NET-07)
     state_root: str = ""
     extra_args: List[str] = field(default_factory=list)
 
@@ -50,6 +51,7 @@ class NodeStatus:
     running: bool
     pid: Optional[int] = None
     port: Optional[int] = None
+    host: Optional[str] = None
     state_root: Optional[str] = None
 
 
@@ -71,6 +73,7 @@ class KroftNodeManager:
                 id=raw["id"],
                 role=raw.get("role", "generic"),
                 port=int(raw.get("port", 7101)),
+                host=raw.get("host", "127.0.0.1"),
                 state_root=raw.get("state_root", ""),
                 extra_args=list(raw.get("extra_args", [])),
             )
@@ -89,6 +92,7 @@ class KroftNodeManager:
             "--node_id", spec.id,
             "--state-root", state_root,
             "--port", str(spec.port),
+            "--host", spec.host,
             "--no-demo",
             "--llm", "none",
             "--embedding", "none",
@@ -131,6 +135,7 @@ class KroftNodeManager:
             running=running,
             pid=proc.pid if running else None,
             port=spec.port if spec else None,
+            host=spec.host if spec else None,
             state_root=spec.resolved_state_root(self._base) if spec else None,
         )
 
