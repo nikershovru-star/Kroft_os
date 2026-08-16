@@ -1,0 +1,88 @@
+# KROFT_OS — Echo-pattern router policy (ТЗ-ECHO, E2)
+# Rule-based category routing. Loaded by services/model_router/yaml_policy.py.
+#
+# `priority` (top-level, ordered) breaks ties when a prompt matches >1 category
+# (G6: deterministic, not YAML-insertion-order). First category in this list whose
+# keyword matches wins.
+#
+# Keyword matching (G5): single-word keywords match on token boundary (so "def" does
+# NOT match "definition", "code" does NOT match "decode"); multi-word keywords (contain
+# a space) match as a phrase (substring). Keep single-word keywords free of being a
+# substring of an unrelated longer word.
+#
+# `providers` names MUST match a ProviderSpec.name known to the IModelRouter (OmniRouter)
+# at runtime. With `--router`, run_kroft builds a canonical OmniRouter whose local client
+# is named "local-ollama" and whose cloud client (KROFT_LLM_BASE_URL) is named "omni-route".
+# Unknown names are skipped at runtime (controlled, no crash).
+
+default: analytical
+
+priority:
+  - code
+  - analytical
+  - factual
+  - creative
+
+categories:
+  code:
+    keywords:
+      - python
+      - function
+      - bug
+      - refactor
+      - stack trace
+      - exception
+      - compile
+      - snippet
+      - "def "        # token-ish phrase: trailing space reduces false match vs "definition"
+      - "class "       # phrase: "class " not "classifier"
+    providers:
+      - local-ollama
+      - omni-route
+
+  creative:
+    keywords:
+      - poem
+      - story
+      - "write a"
+      - "write an"
+      - imagine
+      - song
+      - metaphor
+      - brainstorm
+      - "come up with"
+    providers:
+      - omni-route
+      - local-ollama
+
+  factual:
+    keywords:
+      - "what is"
+      - "who is"
+      - "when did"
+      - "where is"
+      - definition
+      - fact
+      - explain
+      - "how many"
+      - "how does"
+    providers:
+      - omni-route
+      - local-ollama
+
+  analytical:
+    keywords:
+      - analyze
+      - compare
+      - "why does"
+      - reason
+      - evaluate
+      - "pros and cons"
+      - "trade-off"
+      - "trade off"
+      - decision
+      - synthesize
+      - "root cause"
+    providers:
+      - omni-route
+      - local-ollama

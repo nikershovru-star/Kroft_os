@@ -51,6 +51,19 @@ class OmniRouter(IModelRouter):
     def providers(self) -> List[ProviderSpec]:
         return list(self._specs)
 
+    def client_for(self, name: str) -> Optional[ILlm]:
+        """Public name -> live ILlm client resolution (ТЗ-ECHO E2, G3 fix).
+
+        The Echo router maps a policy category to provider *names*; it needs the actual
+        underlying client without reaching into private ``_clients``. This is the single
+        canonical resolution point (K5: no second registry, no second transport). Returns
+        None if no provider with that name is configured.
+        """
+        for spec, client in zip(self._specs, self._clients):
+            if spec.name == name:
+                return client
+        return None
+
     def route(self, query: ModelQuery) -> Optional[ILlm]:
         """Return the first client by priority (deterministic). None if no providers."""
         if not self._clients:

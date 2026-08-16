@@ -35,7 +35,9 @@ class ProviderSpec:
     """
 
     name: str
-    base_url: str
+    base_url: str = ""             # empty allowed: routing-only specs (Echo policy) carry the
+                                    # name; the real endpoint is resolved by the IModelRouter that
+                                    # owns the live ILlm client (no fake URL in the routing layer).
     api_key_env: str = ""          # empty -> no key required (local/Ollama), else env var name
     priority: int = 100            # lower = tried first
     model: str = "auto"            # "auto" or explicit model id
