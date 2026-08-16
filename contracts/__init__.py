@@ -85,6 +85,18 @@ from .i_process import (
     ProcessStatus,
 )
 from .i_metrics import IMetricsCollector
+from .i_knowledge_resolution import (
+    ResolutionLevel,
+    ResolvedItem,
+    ResolvedView,
+    EvidenceRef,
+    IKnowledgeResolution,
+)
+from .i_identity import ITrustRegistry
+from .i_self_evolution_cycle import (
+    KnowledgeOrigin,
+    GraphFragment,
+)
 
 __all__ = [
     "IService",
@@ -170,4 +182,12 @@ __all__ = [
     "ProcessState",
     "ProcessStatus",
     "IMetricsCollector",
+    "ResolutionLevel",
+    "ResolvedItem",
+    "ResolvedView",
+    "EvidenceRef",
+    "IKnowledgeResolution",
+    "ITrustRegistry",
+    "KnowledgeOrigin",
+    "GraphFragment",
 ]
